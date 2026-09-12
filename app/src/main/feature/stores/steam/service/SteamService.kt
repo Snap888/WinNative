@@ -1,4 +1,5 @@
 package com.winlator.cmod.feature.stores.steam.service
+import com.winlator.cmod.feature.stores.steam.utils.Net
 import android.app.Service
 import android.content.Context
 import android.content.Intent
