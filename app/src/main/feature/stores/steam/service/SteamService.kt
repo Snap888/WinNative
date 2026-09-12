@@ -16,6 +16,7 @@ import com.winlator.cmod.app.service.DownloadService
 import com.winlator.cmod.app.service.NetworkMonitor
 import com.winlator.cmod.app.service.download.DownloadCoordinator
 import com.winlator.cmod.feature.shortcuts.LibraryShortcutUtils
+import com.winlator.cmod.feature.stores.common.InstallStore
 import com.winlator.cmod.feature.stores.steam.data.AppInfo
 import com.winlator.cmod.feature.stores.steam.data.CachedLicense
 import com.winlator.cmod.feature.stores.steam.data.DepotInfo
@@ -1052,6 +1053,7 @@ class SteamService : Service() {
                             instance?.applicationContext ?: DownloadService.appContext,
                             dirPath,
                             protectedRoots = steamProtectedInstallRoots(),
+                            owner = InstallStore.STEAM,
                         )
                     if (!deleteCheck.allowed) {
                         Timber.e("Refusing to uninstall Steam appId=$appId from '$dirPath': ${deleteCheck.reason}")
@@ -1491,6 +1493,7 @@ class SteamService : Service() {
                         instance?.applicationContext ?: DownloadService.appContext,
                         appDirPath,
                         protectedRoots = steamProtectedInstallRoots(),
+                        owner = InstallStore.STEAM,
                     )
 
                 // Guard against accidental root deletion if path resolution failed.
@@ -4091,6 +4094,7 @@ class SteamService : Service() {
                                 instance?.applicationContext ?: DownloadService.appContext,
                                 appDirPath,
                                 protectedRoots = steamProtectedInstallRoots(),
+                                owner = InstallStore.STEAM,
                             )
                         if (deleteCheck.allowed) {
                             MarkerUtils.removeMarker(appDirPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
