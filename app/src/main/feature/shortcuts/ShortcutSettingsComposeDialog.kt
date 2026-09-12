@@ -1397,10 +1397,6 @@ class ShortcutSettingsComposeDialog private constructor(
                 if (state.frameGenEnabled.value) "1" else "0",
                 container.getExtra("frameGen", "0"),
             )
-            // Only the Lossless Scaling engine is exposed here, and the two are
-            // mutually exclusive, so enabling it has to switch DIS off as well.
-            // Without this the shortcut keeps inheriting disFrameGen=1 from the
-            // container and the session starts on DIS instead.
             if (state.frameGenEnabled.value) {
                 hasContainerOverride = hasContainerOverride or saveOverride(
                     "disFrameGen",
@@ -2078,7 +2074,7 @@ class ShortcutSettingsComposeDialog private constructor(
         val bcnEmulationType = state.gfxBcnEmulationTypeEntries.value.getOrElse(state.gfxSelectedBcnEmulationType.intValue) { "compute" }
         val bcnEmulationCache = state.gfxBcnEmulationCacheEntries.value.getOrElse(state.gfxSelectedBcnEmulationCache.intValue) { "0" }
         val transcoder = state.gfxTranscoderEntries.value.getOrElse(state.gfxSelectedTranscoder.intValue) { "cpu" }
-        val quality = state.gfxQualityEntries.value.getOrElse(state.gfxSelectedQuality.intValue) { "low" }
+        val astcTranscoding = state.gfxAstcTranscodingValues.value.getOrElse(state.gfxSelectedAstcTranscoding.intValue) { "off" }
 
         return "vulkanVersion=$vulkanVersion;version=$version;blacklistedExtensions=$blacklisted;" +
                 "maxDeviceMemory=$maxDeviceMemory;presentMode=$presentMode;syncFrame=$syncFrame;" +
@@ -2086,7 +2082,7 @@ class ShortcutSettingsComposeDialog private constructor(
                 "bcnEmulation=$bcnEmulation;bcnEmulationType=$bcnEmulationType;" +
                 "bcnEmulationCache=$bcnEmulationCache;gpuName=$gpuName;" +
                 "compositorPresentMode=$compositorPresentMode;" +
-                "transcoder=$transcoder;quality=$quality"
+                "transcoder=$transcoder;astcTranscoding=$astcTranscoding"
     }
 
     private fun buildDxvkConfigFromState(): String {
@@ -2127,7 +2123,8 @@ class ShortcutSettingsComposeDialog private constructor(
         state.gfxBcnEmulationTypeEntries.value = context.resources.getStringArray(R.array.bcn_emulation_type_entries).toList()
         state.gfxBcnEmulationCacheEntries.value = context.resources.getStringArray(R.array.bcn_emulation_cache_entries).toList()
         state.gfxTranscoderEntries.value = context.resources.getStringArray(R.array.wrapper_transcoder_entries).toList()
-        state.gfxQualityEntries.value = context.resources.getStringArray(R.array.wrapper_quality_entries).toList()
+        state.gfxAstcTranscodingEntries.value = context.resources.getStringArray(R.array.wrapper_astc_transcoding_entries).toList()
+        state.gfxAstcTranscodingValues.value = context.resources.getStringArray(R.array.wrapper_astc_transcoding_values).toList()
 
         val gpuNames = mutableListOf("Device")
         try {
@@ -2156,7 +2153,7 @@ class ShortcutSettingsComposeDialog private constructor(
         selectByValue(state.gfxBcnEmulationTypeEntries.value, config["bcnEmulationType"] ?: "compute", state.gfxSelectedBcnEmulationType)
         selectByValue(state.gfxBcnEmulationCacheEntries.value, config["bcnEmulationCache"] ?: "0", state.gfxSelectedBcnEmulationCache)
         selectByValue(state.gfxTranscoderEntries.value, config["transcoder"] ?: "cpu", state.gfxSelectedTranscoder)
-        selectByValue(state.gfxQualityEntries.value, config["quality"] ?: "low", state.gfxSelectedQuality)
+        selectByValue(state.gfxAstcTranscodingValues.value, config["astcTranscoding"] ?: "off", state.gfxSelectedAstcTranscoding)
 
         state.gfxSyncFrame.value = config["syncFrame"] == "1"
         state.gfxDisablePresentWait.value = config["disablePresentWait"] == "1"
@@ -2490,7 +2487,8 @@ class ShortcutSettingsComposeDialog private constructor(
                 steamLauncherExtra == "1"
             }
             state.useLegacyLauncher.value = container.isUseColdClient || container.isUnpackFiles
-            state.steamOfflineMode.value = container.isSteamOfflineMode
+            state.steamOfflineMode.value = shortcut.getSettingExtra(
+                "steamOfflineMode", if (container.isSteamOfflineMode) "1" else "0") == "1"
             state.runtimePatcher.value = container.isRuntimePatcher
             state.useSteamInput.value = container.getExtra("useSteamInput", "0") == "1"
         }
