@@ -34,6 +34,7 @@ object LogManager {
 
     private var logcatProcess: Process? = null
     private var appLogProcess: Process? = null
+    private var systemLogProcess: Process? = null
     private var eventWatchProcess: Process? = null
 
     private val logTimestampFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
@@ -471,15 +472,36 @@ object LogManager {
                     arrayOf("logcat", "-f", logFile.absolutePath, "-r", "8192", "-n", "2", "--pid=$pid", "*:W"),
                 )
             closeProcessStdin(appLogProcess)
+            startSystemLogging(context)
             Timber.i("Application debug logging started (PID=$pid)")
         } catch (e: Exception) {
             logE(TAG,e) { "Failed to start application logging: ${e.message}" }
         }
     }
 
+    private fun startSystemLogging(context: Context) {
+        val logFile = File(getLogsDir(context), stamped("system.log"))
+        try {
+            systemLogProcess?.let(::destroyProcess)
+            systemLogProcess =
+                Runtime.getRuntime().exec(
+                    arrayOf(
+                        "logcat", "-f", logFile.absolutePath, "-r", "2048", "-n", "2",
+                        "ActivityManager:E", "AndroidRuntime:E", "InputDispatcher:E",
+                        "lowmemorykiller:I", "DEBUG:V", "libc:F", "*:S",
+                    ),
+                )
+            closeProcessStdin(systemLogProcess)
+        } catch (e: Exception) {
+            logE(TAG, e) { "Failed to start system logging: ${e.message}" }
+        }
+    }
+
     @JvmStatic
     fun stopAppLogging() {
         try {
+            systemLogProcess?.let(::destroyProcess)
+            systemLogProcess = null
             appLogProcess?.let(::destroyProcess)
             appLogProcess = null
         } catch (e: Exception) {
@@ -487,10 +509,21 @@ object LogManager {
         }
     }
 
+    private const val LOGCAT_COMMAND_TIMEOUT_MS = 1500L
+
     private fun runBlockingLogcatCommand(command: Array<String>) {
         val process = Runtime.getRuntime().exec(command)
         try {
-            process.waitFor()
+            val finished = process.waitFor(
+                LOGCAT_COMMAND_TIMEOUT_MS,
+                java.util.concurrent.TimeUnit.MILLISECONDS,
+            )
+            if (!finished) {
+                logW(TAG, null) {
+                    "logcat command ${command.joinToString(" ")} did not finish in " +
+                        "${LOGCAT_COMMAND_TIMEOUT_MS}ms; abandoning it"
+                }
+            }
         } finally {
             destroyProcess(process)
         }
