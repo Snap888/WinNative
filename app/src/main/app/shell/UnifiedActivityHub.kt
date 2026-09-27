@@ -158,10 +158,17 @@ import com.winlator.cmod.app.db.PluviaDatabase
 import com.winlator.cmod.app.service.DownloadService
 import com.winlator.cmod.app.service.download.DownloadCoordinator
 import com.winlator.cmod.app.update.UpdateService
+import com.winlator.cmod.feature.library.LibraryCache
+import com.winlator.cmod.feature.library.LibraryContentFilters
+import com.winlator.cmod.feature.library.LibraryItemType
 import com.winlator.cmod.feature.library.LibraryStoreLinks
 import com.winlator.cmod.feature.library.LibraryStoreOption
 import com.winlator.cmod.feature.library.LibraryStoreTransfer
+import com.winlator.cmod.feature.library.LinuxApps
 import com.winlator.cmod.feature.settings.InputControlsFragment
+import com.winlator.cmod.feature.stores.steam.enums.AppType
+import com.winlator.cmod.feature.settings.LinuxClientDialog
+import com.winlator.cmod.runtime.linux.LinuxClientInstaller
 import com.winlator.cmod.feature.settings.SettingsFocusZone
 import com.winlator.cmod.feature.settings.SettingsHost
 import com.winlator.cmod.feature.settings.SettingsNavBridge
@@ -225,6 +232,7 @@ import com.winlator.cmod.shared.android.RefreshRateUtils
 import com.winlator.cmod.shared.io.StorageUtils
 import com.winlator.cmod.shared.io.FileUtils
 import com.winlator.cmod.shared.ui.CarouselView
+import com.winlator.cmod.shared.ui.layout.isCompactWidth
 import com.winlator.cmod.shared.ui.layout.isPortraitLayout
 import com.winlator.cmod.shared.ui.layout.screenWidthDp
 import com.winlator.cmod.shared.ui.dialog.PopupDialog
@@ -337,8 +345,25 @@ internal fun UnifiedActivity.UnifiedHub() {
     val chatServiceEnabled by SteamService.chatServiceEnabledFlow.collectAsState()
     val isEpicLoggedIn by EpicAuthManager.isLoggedInFlow.collectAsState()
     val isGogLoggedIn by GOGAuthManager.isLoggedInFlow.collectAsState()
-    val steamApps by db.steamAppDao().getAllOwnedApps().collectAsState(initial = emptyList())
+    // Null until Room has answered, which is how the library tells "nothing owned" from "not read yet".
+    val steamAppsOrNull by db.steamAppDao().getAllOwnedApps().collectAsState(initial = null)
+    val steamApps = steamAppsOrNull ?: emptyList()
     val context = LocalContext.current
+    var showLinuxClient by rememberSaveable { mutableStateOf(false) }
+    val linuxClient by LinuxClientInstaller.state.collectAsState()
+    // An install finishing adds the Steam entry, which the Library has to read again to show.
+    LaunchedEffect(linuxClient) {
+        val found = linuxClient
+        if (found is LinuxClientInstaller.State.Installed) localLibraryRefreshKey++
+        // A newer runtime is put in front of the user once; after that it waits in Stores.
+        if (found is LinuxClientInstaller.State.UpdateAvailable && found.isNews) {
+            LinuxClientInstaller.dismissUpdate(context, found)
+            showLinuxClient = true
+        }
+    }
+    LaunchedEffect(showLinuxClient) {
+        if (!LinuxClientInstaller.isWorking) LinuxClientInstaller.refresh(context)
+    }
     val persona by SteamService.instance?.localPersona?.collectAsState()
         ?: remember { mutableStateOf(null) }
     val scope = rememberCoroutineScope()
@@ -384,8 +409,11 @@ internal fun UnifiedActivity.UnifiedHub() {
         }
     }
 
-    val epicApps by db.epicGameDao().getAll().collectAsState(initial = emptyList())
-    val gogApps by db.gogGameDao().getAll().collectAsState(initial = emptyList())
+    val epicAppsOrNull by db.epicGameDao().getAll().collectAsState(initial = null)
+    val gogAppsOrNull by db.gogGameDao().getAll().collectAsState(initial = null)
+    val epicApps = epicAppsOrNull ?: emptyList()
+    val gogApps = gogAppsOrNull ?: emptyList()
+    val storeListsReady = steamAppsOrNull != null && epicAppsOrNull != null && gogAppsOrNull != null
 
     val controllerState = rememberControllerConnectionState()
     val isControllerConnected = controllerState.isConnected
@@ -503,17 +531,7 @@ internal fun UnifiedActivity.UnifiedHub() {
 
     val filteredSteamApps =
         remember(steamApps, contentFilters.toMap()) {
-            steamApps.filter { app ->
-                when (app.type) {
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.game -> contentFilters["games"] == true
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.demo -> contentFilters["games"] == true
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.dlc -> contentFilters["dlc"] == true
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.application -> contentFilters["applications"] == true
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.tool -> contentFilters["tools"] == true
-                    com.winlator.cmod.feature.stores.steam.enums.AppType.config -> contentFilters["tools"] == true
-                    else -> contentFilters["games"] == true
-                }
-            }
+            steamApps.filter { app -> LibraryContentFilters.allows(app.type, contentFilters) }
         }
 
     var globalSettingsApp by remember { mutableStateOf<SteamApp?>(null) }
@@ -1012,6 +1030,8 @@ internal fun UnifiedActivity.UnifiedHub() {
                             steamApps = filteredSteamApps,
                             epicApps = epicApps,
                             gogApps = gogApps,
+                            storeListsReady = storeListsReady,
+                            contentFilters = contentFilters.toMap(),
                             layoutMode = libraryLayoutMode,
                             libraryRefreshKey = libraryRefreshKey,
                             shortcutRefreshKey = shortcutRefreshKey,
@@ -1210,10 +1230,22 @@ internal fun UnifiedActivity.UnifiedHub() {
     }
 
     if (showAddCustomGame) {
-        AddCustomGameDialog(onDismiss = {
-            showAddCustomGame = false
-            localLibraryRefreshKey++
-        })
+        AddCustomGameDialog(
+            onDismiss = {
+                showAddCustomGame = false
+                localLibraryRefreshKey++
+            },
+            onInstallLinuxClient = { showLinuxClient = true },
+        )
+    }
+
+    if (showLinuxClient) {
+        LinuxClientDialog(
+            state = linuxClient,
+            onStart = { LinuxClientInstaller.start(context) },
+            onCancelInstall = { LinuxClientInstaller.cancel() },
+            onDismiss = { showLinuxClient = false },
+        )
     }
 
     chatFriend?.let { cf ->
@@ -1249,7 +1281,8 @@ internal fun UnifiedActivity.UnifiedHub() {
             Box(
                 modifier =
                     Modifier
-                        .width(320.dp)
+                        .widthIn(max = 320.dp)
+                        .fillMaxWidth(0.9f)
                         .clip(RoundedCornerShape(20.dp))
                         .background(SurfaceDark)
                         .border(1.dp, Accent.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
@@ -1364,8 +1397,11 @@ internal fun UnifiedActivity.GlassesSettingsSheet(onDismiss: () -> Unit) {
                     Spacer(Modifier.width(10.dp))
                     Text(gm.modelName(), color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Two 'weight(1f)' columns inside a 0.82f-wide dialog leave about 130 dp each at
+                // phone width: the 60/90/120 Hz chips shrink to ~38 dp and the sliders become stubs.
+                // Stack them in portrait instead.
+                val glassesColumnA: @Composable (Modifier) -> Unit = { columnModifier ->
+                    Column(modifier = columnModifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             GlassesLabel(stringResource(R.string.glasses_panel_refresh))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1394,11 +1430,24 @@ internal fun UnifiedActivity.GlassesSettingsSheet(onDismiss: () -> Unit) {
                                 settings.threeD, Modifier.weight(1f)) { gm.set3D(it) }
                         }
                     }
-                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                }
+                val glassesColumnB: @Composable (Modifier) -> Unit = { columnModifier ->
+                    Column(modifier = columnModifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         GlassesPercentSlider(stringResource(R.string.session_drawer_output_brightness),
                             brightness, brightnessMax) { gm.setBrightness(it) }
                         GlassesPercentSlider(stringResource(R.string.session_drawer_output_volume),
                             volume, volumeMax) { gm.setVolume(it) }
+                    }
+                }
+                if (isPortraitLayout()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        glassesColumnA(Modifier.fillMaxWidth())
+                        glassesColumnB(Modifier.fillMaxWidth())
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        glassesColumnA(Modifier.weight(1f))
+                        glassesColumnB(Modifier.weight(1f))
                     }
                 }
             }
@@ -1523,6 +1572,10 @@ internal fun UnifiedActivity.TopBar(
     }
 
     val portraitTopBar = isPortraitLayout()
+    // With a controller paired, the left and right groups of the bar need more than its
+    // width at phone sizes. The badges are the least important part, so drop them there
+    // rather than letting the two groups collide.
+    val showControllerBadges = isControllerConnected && !isCompactWidth()
     val topBarWidth = screenWidthDp()
     val topBarView = androidx.compose.ui.platform.LocalView.current
     val topBarDensity = androidx.compose.ui.platform.LocalDensity.current
@@ -1625,7 +1678,7 @@ internal fun UnifiedActivity.TopBar(
                                 }
                             }
                         }
-                        if (isControllerConnected) {
+                        if (showControllerBadges) {
                             ControllerBadge(
                                 "L1",
                                 Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
@@ -1669,7 +1722,7 @@ internal fun UnifiedActivity.TopBar(
                         }
                     }
                 }
-                if (isControllerConnected) {
+                if (showControllerBadges) {
                     Spacer(Modifier.width(4.dp))
                     ControllerBadge(if (isPS) "\u2261" else "Start")
                 }
@@ -1740,7 +1793,7 @@ internal fun UnifiedActivity.TopBar(
                         }
                     }
                 }
-                if (isControllerConnected) {
+                if (showControllerBadges) {
                     Spacer(Modifier.width(4.dp))
                     ControllerBadge("L3")
                 }
@@ -1787,7 +1840,7 @@ internal fun UnifiedActivity.TopBar(
                 ) {
                     Icon(Icons.Outlined.FilterList, contentDescription = "Filter", tint = Accent, modifier = Modifier.size(24.dp))
                 }
-                if (isControllerConnected) {
+                if (showControllerBadges) {
                     Spacer(Modifier.width(4.dp))
                     ControllerBadge("Select")
                 }
@@ -1806,7 +1859,7 @@ internal fun UnifiedActivity.TopBar(
                 ) {
                     Icon(Icons.Outlined.People, contentDescription = "Friends", tint = Accent, modifier = Modifier.size(24.dp))
                 }
-                if (isControllerConnected && navRightInset <= 0.dp) {
+                if (showControllerBadges && navRightInset <= 0.dp) {
                     Spacer(Modifier.width(8.dp))
                     Box(
                         modifier =
@@ -1828,7 +1881,7 @@ internal fun UnifiedActivity.TopBar(
     }
 
     val guideOverflowContent: @Composable (Modifier) -> Unit = { guideModifier ->
-        if (isControllerConnected && navRightInset > 0.dp) {
+        if (showControllerBadges && navRightInset > 0.dp) {
             Box(
                 modifier =
                     guideModifier
@@ -1861,12 +1914,25 @@ internal fun UnifiedActivity.TopBar(
                     )
                     .height(UnifiedTopBarHeight),
         ) {
-            if (!portraitTopBar) {
+            if (portraitTopBar) {
+                // Both groups used to be absolutely aligned inside this Box with no width
+                // arbitration between them, so at phone width the right group (zIndex 2)
+                // painted over the search and settings buttons. A Row makes them share the bar.
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    leftContent(Modifier.fillMaxHeight())
+                    Spacer(Modifier.weight(1f))
+                    rightContent(Modifier.fillMaxHeight())
+                }
+                guideOverflowContent(Modifier.align(Alignment.CenterEnd))
+            } else {
                 tabsContent(Modifier.align(Alignment.Center).zIndex(1f))
+                leftContent(Modifier.align(Alignment.CenterStart).fillMaxHeight())
+                rightContent(Modifier.align(Alignment.CenterEnd).fillMaxHeight().zIndex(2f))
+                guideOverflowContent(Modifier.align(Alignment.CenterEnd))
             }
-            leftContent(Modifier.align(Alignment.CenterStart).fillMaxHeight())
-            rightContent(Modifier.align(Alignment.CenterEnd).fillMaxHeight().zIndex(2f))
-            guideOverflowContent(Modifier.align(Alignment.CenterEnd))
         }
 
         if (portraitTopBar) {
@@ -2005,6 +2071,8 @@ internal fun UnifiedActivity.LibraryCarousel(
     steamApps: List<SteamApp>,
     epicApps: List<EpicGame>,
     gogApps: List<GOGGame>,
+    storeListsReady: Boolean,
+    contentFilters: Map<String, Boolean>,
     layoutMode: LibraryLayoutMode,
     libraryRefreshKey: Int = 0,
     shortcutRefreshKey: Int = 0,
@@ -2016,9 +2084,14 @@ internal fun UnifiedActivity.LibraryCarousel(
     val context = LocalContext.current
     val libraryScope = rememberCoroutineScope()
 
-    var cachedShortcuts by remember { mutableStateOf<List<Shortcut>>(emptyList()) }
-    var customApps by remember { mutableStateOf<List<SteamApp>>(emptyList()) }
-    var customStoragePathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    // Where this screen left off; see LibraryCache.session.
+    val resumed = remember { LibraryCache.session }
+    var cachedShortcuts by remember { mutableStateOf(resumed?.shortcuts ?: emptyList()) }
+    var customApps by remember { mutableStateOf(resumed?.customApps ?: emptyList()) }
+    var customStoragePathByAppId by remember { mutableStateOf(resumed?.customStoragePaths ?: emptyMap()) }
+    // A scan that ran before the shortcuts or a store's rows were read would publish a library with
+    // those games missing, and the grid would drop them only to bring them back a moment later.
+    var shortcutsReady by remember { mutableStateOf(resumed != null) }
     val externalStorageState by com.winlator.cmod.feature.storage.ExternalStorage.state.collectAsState()
     var localLibraryRefreshKey by remember { mutableIntStateOf(0) }
     var shortcutsLoaded by remember { mutableStateOf(false) }
@@ -2092,6 +2165,14 @@ internal fun UnifiedActivity.LibraryCarousel(
                                 SteamApp(
                                     id = customId,
                                     name = displayName,
+                                    // The Steam client is how its games are reached, so it shows with
+                                    // them rather than behind the Applications filter, which starts off.
+                                    type =
+                                        if (LinuxApps.isSteamClientShortcut(shortcut)) {
+                                            AppType.game
+                                        } else {
+                                            LibraryItemType.of(shortcut).appType
+                                        },
                                     developer = "Custom",
                                     gameDir = gameDir,
                                 )
@@ -2109,31 +2190,42 @@ internal fun UnifiedActivity.LibraryCarousel(
         }
 
         shortcutsLoaded = true
+        shortcutsReady = true
     }
 
     // Move library filtering and file checks off the main thread.
-    var mergedInstalledApps by remember { mutableStateOf<List<SteamApp>>(emptyList()) }
-    var installedApps by remember { mutableStateOf<List<SteamApp>>(emptyList()) }
-    var stableInstalledApps by remember { mutableStateOf<List<SteamApp>>(emptyList()) }
-    var gogByPseudoId by remember { mutableStateOf<Map<Int, GOGGame>>(emptyMap()) }
+    var mergedInstalledApps by remember { mutableStateOf(resumed?.merged ?: emptyList()) }
+    var installedApps by remember { mutableStateOf(resumed?.apps ?: emptyList()) }
+    // What the library drew last time, shown until this launch's own scan has an answer.
+    val savedPicture = remember { resumed?.apps ?: LibraryCache.preloaded }
+    var stableInstalledApps by remember { mutableStateOf(savedPicture ?: emptyList()) }
+    var libraryCacheLoaded by remember { mutableStateOf(savedPicture != null) }
+    LaunchedEffect(Unit) {
+        if (libraryCacheLoaded) return@LaunchedEffect
+        val cached = withContext(Dispatchers.IO) { LibraryCache.load(context) }
+        if (stableInstalledApps.isEmpty()) stableInstalledApps = cached
+        libraryCacheLoaded = true
+    }
+    var gogByPseudoId by remember { mutableStateOf(resumed?.gogByPseudoId ?: emptyMap()) }
     var libraryStoreLinks by remember { mutableStateOf(LibraryStoreLinkResult()) }
-    var epicByPseudoId by remember { mutableStateOf<Map<Int, EpicGame>>(emptyMap()) }
-    var stableGogByPseudoId by remember { mutableStateOf<Map<Int, GOGGame>>(emptyMap()) }
-    var stableEpicByPseudoId by remember { mutableStateOf<Map<Int, EpicGame>>(emptyMap()) }
-    var customListArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var customHeroArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var customCarouselArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var customArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var customIconArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var customIconPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomIconArtworkPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomIconPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomHeroPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomCarouselPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var stableCustomListPathByAppId by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var epicByPseudoId by remember { mutableStateOf(resumed?.epicByPseudoId ?: emptyMap()) }
+    var stableGogByPseudoId by remember { mutableStateOf(resumed?.gogByPseudoId ?: emptyMap()) }
+    var stableEpicByPseudoId by remember { mutableStateOf(resumed?.epicByPseudoId ?: emptyMap()) }
+    val resumedArtwork = resumed?.artwork ?: LibraryCache.Artwork()
+    var customListArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.list) }
+    var customHeroArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.hero) }
+    var customCarouselArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.carousel) }
+    var customArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.cover) }
+    var customIconArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.iconArtwork) }
+    var customIconPathByAppId by remember { mutableStateOf(resumedArtwork.icon) }
+    var stableCustomArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.cover) }
+    var stableCustomIconArtworkPathByAppId by remember { mutableStateOf(resumedArtwork.iconArtwork) }
+    var stableCustomIconPathByAppId by remember { mutableStateOf(resumedArtwork.icon) }
+    var stableCustomHeroPathByAppId by remember { mutableStateOf(resumedArtwork.hero) }
+    var stableCustomCarouselPathByAppId by remember { mutableStateOf(resumedArtwork.carousel) }
+    var stableCustomListPathByAppId by remember { mutableStateOf(resumedArtwork.list) }
     var artworkCacheRefreshKey by remember { mutableIntStateOf(0) }
-    var libraryLoaded by remember { mutableStateOf(false) }
+    var libraryLoaded by remember { mutableStateOf(resumed != null) }
     // Suppress transient empty states before background recomputation starts.
     val scanInputToken =
         remember(
@@ -2141,14 +2233,18 @@ internal fun UnifiedActivity.LibraryCarousel(
             epicApps,
             gogApps,
             customApps,
+            contentFilters,
             customStoragePathByAppId,
             externalStorageState.connectivityKey,
             libraryRefreshKey,
             localLibraryRefreshKey,
+            storeListsReady,
+            shortcutsReady,
         ) { Any() }
     var processedScanToken by remember { mutableStateOf<Any?>(null) }
 
     LaunchedEffect(scanInputToken) {
+        if (!storeListsReady || !shortcutsReady) return@LaunchedEffect
         withContext(Dispatchers.IO) {
             val steamInstalled = steamApps.filter { SteamService.isAppInstalled(it.id) }
 
@@ -2294,7 +2390,11 @@ internal fun UnifiedActivity.LibraryCarousel(
             val storeInstallPaths =
                 installedRows.associate { row -> row.libraryId to row.installPath }
             val merged =
-                (steamInstalled + customApps + mappedEpic + mappedGog)
+                (
+                    steamInstalled +
+                        customApps.filter { LibraryContentFilters.allows(it.type, contentFilters) } +
+                        mappedEpic + mappedGog
+                )
                     .distinctBy { it.id }
                     .filterNot { it.id in storeLinks.hiddenLibraryIds }
                     .filterNot { app ->
@@ -2314,6 +2414,10 @@ internal fun UnifiedActivity.LibraryCarousel(
                         }
                     (allPlaytime["${searchKey}_last_played"] as? Long) ?: 0L
                 }
+
+            // Every store's rows and the shortcuts were read before this ran, so what it found is
+            // the library, empty or not. None of it needs the network.
+            LibraryCache.save(context, sorted)
 
             withContext(Dispatchers.Main) {
                 gogByPseudoId = gogMap
@@ -2461,6 +2565,44 @@ internal fun UnifiedActivity.LibraryCarousel(
         }
     }
 
+    LaunchedEffect(
+        libraryLoaded,
+        installedApps,
+        mergedInstalledApps,
+        gogByPseudoId,
+        epicByPseudoId,
+        cachedShortcuts,
+        customApps,
+        customStoragePathByAppId,
+        customArtworkPathByAppId,
+        customIconArtworkPathByAppId,
+        customIconPathByAppId,
+        customHeroArtworkPathByAppId,
+        customCarouselArtworkPathByAppId,
+        customListArtworkPathByAppId,
+    ) {
+        if (!libraryLoaded) return@LaunchedEffect
+        LibraryCache.session =
+            LibraryCache.Session(
+                apps = installedApps,
+                merged = mergedInstalledApps,
+                gogByPseudoId = gogByPseudoId,
+                epicByPseudoId = epicByPseudoId,
+                shortcuts = cachedShortcuts,
+                customApps = customApps,
+                customStoragePaths = customStoragePathByAppId,
+                artwork =
+                    LibraryCache.Artwork(
+                        cover = customArtworkPathByAppId,
+                        iconArtwork = customIconArtworkPathByAppId,
+                        icon = customIconPathByAppId,
+                        hero = customHeroArtworkPathByAppId,
+                        carousel = customCarouselArtworkPathByAppId,
+                        list = customListArtworkPathByAppId,
+                    ),
+            )
+    }
+
     LaunchedEffect(mergedInstalledApps, playtimeRefreshKey) {
         if (mergedInstalledApps.isEmpty()) {
             installedApps = emptyList()
@@ -2490,9 +2632,24 @@ internal fun UnifiedActivity.LibraryCarousel(
         installedApps.isEmpty() &&
             stableInstalledApps.isNotEmpty() &&
             (processedScanToken !== scanInputToken || awaitingShortcutScan)
-    val visibleInstalledApps = if (keepPreviousLibraryVisible) stableInstalledApps else installedApps
-    val visibleGogByPseudoId = if (keepPreviousLibraryVisible) stableGogByPseudoId else gogByPseudoId
-    val visibleEpicByPseudoId = if (keepPreviousLibraryVisible) stableEpicByPseudoId else epicByPseudoId
+    // The saved picture holds a card's id and name and nothing of its artwork. The stores' rows are
+    // read long before the scan has checked every install, so the cards are drawn from those.
+    val savedPictureApps =
+        remember(stableInstalledApps, steamApps) {
+            val owned = steamApps.associateBy { it.id }
+            stableInstalledApps.map { owned[it.id] ?: it }
+        }
+    val savedPictureGog =
+        remember(stableGogByPseudoId, gogApps) {
+            stableGogByPseudoId.ifEmpty { gogApps.filter { it.isInstalled }.associateBy { gogPseudoId(it.id) } }
+        }
+    val savedPictureEpic =
+        remember(stableEpicByPseudoId, epicApps) {
+            stableEpicByPseudoId.ifEmpty { epicApps.filter { it.isInstalled }.associateBy { 2000000000 + it.id } }
+        }
+    val visibleInstalledApps = if (keepPreviousLibraryVisible) savedPictureApps else installedApps
+    val visibleGogByPseudoId = if (keepPreviousLibraryVisible) savedPictureGog else gogByPseudoId
+    val visibleEpicByPseudoId = if (keepPreviousLibraryVisible) savedPictureEpic else epicByPseudoId
     val visibleCustomArtworkPathByAppId =
         if (keepPreviousLibraryVisible) stableCustomArtworkPathByAppId else customArtworkPathByAppId
     val visibleCustomIconArtworkPathByAppId =
@@ -2574,7 +2731,7 @@ internal fun UnifiedActivity.LibraryCarousel(
     // DB (steamApps/epicApps/gogApps become non-empty) or if other sources
     // (custom apps, other stores) already have installed games.
     val awaitingStoreSync =
-        installedApps.isEmpty() && (
+        visibleInstalledApps.isEmpty() && (
             (isLoggedIn && steamApps.isEmpty()) ||
                 (epicApps.isEmpty() && EpicService.hasStoredCredentials(context)) ||
                 (gogApps.isEmpty() && GOGAuthManager.isLoggedIn(context))
@@ -2582,9 +2739,10 @@ internal fun UnifiedActivity.LibraryCarousel(
     // Only block the surface while the first library result is unresolved.
     // After that, keep the current content/empty state visible during
     // background refreshes so the UI does not flicker back to a spinner.
-    val initialLibraryLoadPending = !libraryLoaded
+    val initialLibraryLoadPending = !libraryLoaded && (!libraryCacheLoaded || visibleInstalledApps.isEmpty())
     val waitingForFirstEmptyStateResolution =
-        installedApps.isEmpty() && (processedScanToken !== scanInputToken || awaitingStoreSync || awaitingShortcutScan)
+        visibleInstalledApps.isEmpty() &&
+            (processedScanToken !== scanInputToken || awaitingStoreSync || awaitingShortcutScan)
     val showLoading = initialLibraryLoadPending || waitingForFirstEmptyStateResolution
     if (showLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

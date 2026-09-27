@@ -20,6 +20,7 @@ alongside them.
 | 📦 **Install** | [Releases](https://github.com/WinNative-Emu/WinNative/releases) |
 | 🎮 **Retro consoles** | [docs/RETRO-CONSOLES.md](docs/RETRO-CONSOLES.md) — NES through PlayStation 2 |
 | 🎞️ **Frame generation** | [docs/FRAME-GENERATION.md](docs/FRAME-GENERATION.md) — LSFG and DIS |
+| 🖥️ **Wayland display server** | [docs/WAYLAND-DISPLAY.md](docs/WAYLAND-DISPLAY.md) — winewayland sessions on the embedded compositor |
 | 🔨 **Build from source** | [docs/BUILDING.md](docs/BUILDING.md) |
 | 🙏 **Credits & licenses** | [CREDITS.md](CREDITS.md) · [EMULATOR_CREDITS.md](EMULATOR_CREDITS.md) |
 | 💬 **Chat** | [Discord](https://discord.gg/uhTkvGfakU) |
@@ -61,7 +62,7 @@ authors, the **ARMSX2**, **PCSX2** and **Dolphin** teams, **PancakeTAS** (lsfg-v
 **Camille LaVey** of the **Eden Emulator Project** (the Vulkan LSFG port this one derives from),
 **qwertypower** of **DEVAR Entertainment LLC** (the open-source DIS engine), **OpenCV** and
 Till Kroeger (the DIS algorithm), **DXVK** (the `dxbc` translator), and **The412Banner**
-(DirectAudio, and with it microphone support).
+(DirectAudio and Steam Controller support), and the **SDL** contributors.
 
 That list is a summary, not the attribution itself. **[CREDITS.md](CREDITS.md)** carries the full
 acknowledgments, including exactly which files came from which upstream project, and

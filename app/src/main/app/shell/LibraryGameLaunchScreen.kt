@@ -55,6 +55,7 @@ import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Construction
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.DriveFileMove
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Refresh
@@ -113,7 +114,9 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.winlator.cmod.R
+import com.winlator.cmod.feature.library.LibraryStorageMove
 import com.winlator.cmod.shared.ui.layout.isPortraitLayout
+import com.winlator.cmod.shared.ui.layout.screenWidthDp
 import androidx.compose.runtime.CompositionLocalProvider
 import com.winlator.cmod.shared.ui.focus.controllerFocusGlow
 import com.winlator.cmod.shared.ui.outlinedSwitchColors
@@ -127,7 +130,7 @@ import java.util.Locale
 
 private val LaunchBlack = Color.Black
 private val LaunchCard = Color(0xFF12121B)
-private val LaunchAccent = Color(0xFF1A9FFF)
+internal val LaunchAccent = Color(0xFF1A9FFF)
 private val LaunchAccentGlow = Color(0xFF58A6FF)
 private val LaunchTextPrimary = Color(0xFFF0F4FF)
 private val LaunchTextSecondary = Color(0xFF93A6BC)
@@ -185,6 +188,12 @@ internal fun LibraryGameLaunchScreen(
     onVerifyFiles: () -> Unit = {},
     onCheckForUpdate: () -> Unit = {},
     onWorkshop: () -> Unit = {},
+    /**
+     * Where this game would go if moved, or null when there is nowhere to move it. Drives the one
+     * move entry, which only ever offers the other location.
+     */
+    moveTarget: LibraryStorageMove.Target? = null,
+    onMoveGame: () -> Unit = {},
     branches: List<StoreBranchOption> = emptyList(),
     selectedBranchId: String = "",
     isBranchSelectionEnabled: Boolean = true,
@@ -210,9 +219,19 @@ internal fun LibraryGameLaunchScreen(
     Box(Modifier.fillMaxSize()) {
         val edgePadding = 22.dp
         val bottomPadding = 20.dp
-        val actionIconSize = 46.dp
         val actionIconSpacing = 8.dp
-        val actionWidth = actionIconSize * actionIconCount + actionIconSpacing * (actionIconCount - 1).coerceAtLeast(0)
+        // Six icons at 46 dp plus their gaps come to 316 dp, which is exactly the room left
+        // on a 360 dp phone after the edge padding and none at all once the navigation-bar
+        // insets apply. Shrink the icons to whatever fits instead of overflowing the row.
+        val actionIconGaps = actionIconSpacing * (actionIconCount - 1).coerceAtLeast(0)
+        val actionRowMaxWidth = (screenWidthDp() - edgePadding * 2).coerceAtLeast(120.dp)
+        val actionIconSize =
+            if (actionIconCount > 0) {
+                minOf(46.dp, (actionRowMaxWidth - actionIconGaps) / actionIconCount)
+            } else {
+                46.dp
+            }
+        val actionWidth = actionIconSize * actionIconCount + actionIconGaps
         val playHeight = 56.dp
         val contentGap = 18.dp
         val horizontalNavInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
@@ -261,19 +280,32 @@ internal fun LibraryGameLaunchScreen(
             }
         }
 
+        // The horizontal scrim is tuned for the landscape left-hand content column. In
+        // portrait the content spans the full width, so its right-hand text would sit over
+        // the transparent band and lose contrast; darken from the bottom there instead.
+        val heroScrimStops =
+            arrayOf(
+                0.0f to LaunchBlack.copy(alpha = 0.9f),
+                0.36f to LaunchBlack.copy(alpha = 0.58f),
+                0.72f to LaunchBlack.copy(alpha = 0.18f),
+                1.0f to LaunchBlack.copy(alpha = 0.62f),
+            )
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.horizontalGradient(
-                        colorStops =
-                            arrayOf(
-                                0.0f to LaunchBlack.copy(alpha = 0.9f),
-                                0.36f to LaunchBlack.copy(alpha = 0.58f),
-                                0.72f to LaunchBlack.copy(alpha = 0.18f),
-                                1.0f to LaunchBlack.copy(alpha = 0.62f),
-                            ),
-                    ),
+                    if (isPortraitLayout()) {
+                        Brush.verticalGradient(
+                            colorStops =
+                                arrayOf(
+                                    0.0f to LaunchBlack.copy(alpha = 0.18f),
+                                    0.45f to LaunchBlack.copy(alpha = 0.58f),
+                                    1.0f to LaunchBlack.copy(alpha = 0.9f),
+                                ),
+                        )
+                    } else {
+                        Brush.horizontalGradient(colorStops = heroScrimStops)
+                    },
                 ),
         )
         Box(
@@ -339,6 +371,8 @@ internal fun LibraryGameLaunchScreen(
                 showCheats = onCheats != null,
                 cheatsEnabled = cheatsEnabled,
                 areSteamActionsEnabled = areSteamActionsEnabled,
+                moveTarget = moveTarget,
+                onMoveGame = onMoveGame,
                 onVerifyFiles = onVerifyFiles,
                 onCheckForUpdate = onCheckForUpdate,
                 onWorkshop = onWorkshop,
@@ -438,7 +472,10 @@ internal fun LibraryGameLaunchScreen(
                         LaunchAltEngineToggle(
                             label = altEngineLabel,
                             checked = altEngineEnabled,
-                            width = actionWidth,
+                            // In portrait the action block already fills the width; pinning the
+                            // toggle to actionWidth clipped it on narrow phones.
+                            modifier =
+                                if (portraitHero) Modifier.fillMaxWidth() else Modifier.width(actionWidth),
                             onCheckedChange = onAltEngineChange,
                         )
                     }
@@ -666,7 +703,7 @@ internal fun LaunchDangerConfirmMenu(
         expanded = expanded,
         onDismissRequest = onDismissRequest,
         offset = DpOffset(x = 0.dp, y = (-56).dp),
-        modifier = Modifier.width(286.dp),
+        modifier = Modifier.width(minOf(286.dp, screenWidthDp() - 32.dp)),
         shape = RoundedCornerShape(12.dp),
         containerColor = LaunchCard,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)),
@@ -763,7 +800,7 @@ internal fun LaunchDangerConfirmDialog(
                 Surface(
                     modifier =
                         Modifier
-                            .width(286.dp)
+                            .width(minOf(286.dp, screenWidthDp() - 32.dp))
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
@@ -928,6 +965,8 @@ private fun SourceTag(
     showCheats: Boolean = false,
     cheatsEnabled: Boolean = true,
     areSteamActionsEnabled: Boolean = true,
+    moveTarget: LibraryStorageMove.Target? = null,
+    onMoveGame: () -> Unit = {},
     storeOptions: List<LaunchStoreOption> = emptyList(),
     selectedStoreId: String = "",
     onSelectStore: (String) -> Unit = {},
@@ -987,6 +1026,20 @@ private fun SourceTag(
                 icon = Icons.Outlined.Storefront,
                 label = stringResource(R.string.library_games_store_change),
             ) { menuOpen = false; storeMenuOpen = true }
+            if (moveTarget != null) {
+                LaunchSourceMenuItem(
+                    icon = Icons.Outlined.DriveFileMove,
+                    label =
+                        stringResource(
+                            if (moveTarget == LibraryStorageMove.Target.APP_STORAGE) {
+                                R.string.library_games_move_to_app_storage_title
+                            } else {
+                                R.string.library_games_move_to_download_folder_title
+                            },
+                        ),
+                    enabled = areSteamActionsEnabled,
+                ) { menuOpen = false; onMoveGame() }
+            }
             if (menuEnabled || showAchievements || showCheats) {
                 Box(
                     Modifier
@@ -1363,12 +1416,11 @@ private fun GameStatChip(
 private fun LaunchAltEngineToggle(
     label: String,
     checked: Boolean,
-    width: Dp,
+    modifier: Modifier,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .width(width)
+        modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.06f))
             .clickable { onCheckedChange(!checked) }
