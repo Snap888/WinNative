@@ -270,6 +270,9 @@
     <string name="linux_client_busy">O cliente Steam para Linux ainda está sendo instalado. Tente novamente quando terminar.</string>
     <string name="linux_client_update_message">Há um ambiente Linux mais recente. A atualização mantém seu login na Steam, os jogos instalados, os saves e os contêineres.</string>
     <string name="linux_client_update_session_running">Uma sessão Linux está em execução. Saia dela e depois atualize.</string>
+    <string name="linux_client_uninstall_message">Desinstalar remove o ambiente Linux com o cliente Steam, seu login e o Proton, e os jogos e saves guardados nele. Os jogos nas suas outras bibliotecas Steam continuam instalados.</string>
+    <string name="linux_client_uninstall_session_running">Uma sessão Linux está em execução. Saia dela e depois desinstale.</string>
+    <string name="linux_client_stage_uninstall">Desinstalando o cliente Linux</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">A sessao Linux parou assim que comecou. O log esta em Configuracoes > Depuracao > Abrir gerenciador de logs; compartilhe-o para que a causa possa ser encontrada.</string>
@@ -2718,7 +2721,7 @@ Caminho instalado:
     <string name="session_drawer_frame_generation_enable">Gerar quadros</string>
     <string name="session_drawer_frame_generation_engine_off">Desligado</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Multiplicador</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Alvo adaptativo</string>
@@ -2726,7 +2729,7 @@ Caminho instalado:
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpola entre quadros renderizados com o Lossless Scaling. Movimento mais suave, mas um quadro extra de latência de entrada.</string>
     <string name="session_drawer_frame_generation_target_note">Sobe em direção ao alvo apenas enquanto ajudar de forma mensurável, em vez de manter um multiplicador fixo.</string>
-    <string name="session_drawer_frame_generation_missing">Instale o Lossless Scaling nas configurações do contêiner para usar o motor LSFG. O DIS não precisa de nada extra.</string>
+    <string name="session_drawer_frame_generation_missing">Instale o Lossless Scaling nas configurações do contêiner para usar o motor LSFG. O OpenFlow não precisa de nada extra.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpola entre quadros renderizados com Dense Inverse Search. Integrado; sem shaders externos.</string>
     <string name="session_drawer_dis_resolution_scale">Escala de resolução</string>
     <string name="session_drawer_dis_preset_fast">Rápido</string>
@@ -2737,7 +2740,7 @@ Caminho instalado:
     <string name="session_drawer_dis_target_fps_max">Frequência máx.</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Mostrar fluxo</string>
-    <string name="session_drawer_dis_debug_flow_note">Desenha os vetores de movimento estimados pelo DIS em vez do quadro gerado. Apenas para diagnóstico.</string>
+    <string name="session_drawer_dis_debug_flow_note">Desenha os vetores de movimento estimados pelo OpenFlow em vez do quadro gerado. Apenas para diagnóstico.</string>
     <string name="frame_generation_preset">Predefinição de qualidade</string>
     <string name="frame_generation_preset_ultra_performance">Ultra desempenho</string>
     <string name="frame_generation_preset_performance">Desempenho</string>

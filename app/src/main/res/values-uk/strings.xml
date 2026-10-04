@@ -274,6 +274,9 @@
     <string name="linux_client_busy">Клієнт Steam для Linux ще встановлюється. Спробуйте ще раз після завершення.</string>
     <string name="linux_client_update_message">Доступне новіше середовище Linux. Під час оновлення зберігаються вхід у Steam, встановлені ігри, збереження та контейнери.</string>
     <string name="linux_client_update_session_running">Запущено сеанс Linux. Завершіть його, а потім оновіть.</string>
+    <string name="linux_client_uninstall_message">Видалення стирає середовище Linux разом із клієнтом Steam, його входом в обліковий запис і Proton, а також ігри та збереження в ньому. Ігри в інших бібліотеках Steam залишаться встановленими.</string>
+    <string name="linux_client_uninstall_session_running">Запущено сеанс Linux. Завершіть його, а потім видаліть.</string>
+    <string name="linux_client_stage_uninstall">Видалення клієнта Linux</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Сеанс Linux зупинився одразу після запуску. Його журнал розташований у Налаштування > Налагодження > Відкрити менеджер журналів; поділіться ним, щоб можна було знайти причину.</string>
@@ -2724,7 +2727,7 @@
     <string name="session_drawer_frame_generation_enable">Генерувати кадри</string>
     <string name="session_drawer_frame_generation_engine_off">Вимк.</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Множник</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Адаптивна ціль</string>
@@ -2732,7 +2735,7 @@
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Інтерполює між відрендереними кадрами за допомогою Lossless Scaling. Рух плавніший, але затримка вводу зростає на один кадр.</string>
     <string name="session_drawer_frame_generation_target_note">Підвищується до цілі лише доки це дає вимірний виграш, замість утримання фіксованого множника.</string>
-    <string name="session_drawer_frame_generation_missing">Установіть Lossless Scaling у налаштуваннях контейнера, щоб використовувати рушій LSFG. DIS не потребує нічого додатково.</string>
+    <string name="session_drawer_frame_generation_missing">Установіть Lossless Scaling у налаштуваннях контейнера, щоб використовувати рушій LSFG. OpenFlow не потребує нічого додатково.</string>
     <string name="session_drawer_dis_frame_generation_note">Інтерполює між відрендереними кадрами методом Dense Inverse Search. Вбудовано; зовнішні шейдери не потрібні.</string>
     <string name="session_drawer_dis_resolution_scale">Масштаб роздільної здатності</string>
     <string name="session_drawer_dis_preset_fast">Швидко</string>
@@ -2743,7 +2746,7 @@
     <string name="session_drawer_dis_target_fps_max">Макс. частота оновлення</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Показати потік</string>
-    <string name="session_drawer_dis_debug_flow_note">Малює вектори руху, які оцінює DIS, замість згенерованого кадру. Лише для діагностики.</string>
+    <string name="session_drawer_dis_debug_flow_note">Малює вектори руху, які оцінює OpenFlow, замість згенерованого кадру. Лише для діагностики.</string>
     <string name="frame_generation_preset">Пресет якості</string>
     <string name="frame_generation_preset_ultra_performance">Ультрапродуктивність</string>
     <string name="frame_generation_preset_performance">Продуктивність</string>

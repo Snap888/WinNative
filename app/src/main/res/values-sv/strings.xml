@@ -271,6 +271,9 @@
     <string name="linux_client_busy">Linux Steam-klienten installeras fortfarande. Försök igen när den är klar.</string>
     <string name="linux_client_update_message">En nyare Linux-miljö finns tillgänglig. Uppdateringen behåller din Steam-inloggning, installerade spel, sparfiler och containrar.</string>
     <string name="linux_client_update_session_running">En Linux-session körs. Avsluta den och uppdatera sedan.</string>
+    <string name="linux_client_uninstall_message">Avinstallationen tar bort Linux-miljön med Steam-klienten, dess inloggning och Proton samt de spel och sparfiler som finns i den. Spel i dina andra Steam-bibliotek förblir installerade.</string>
+    <string name="linux_client_uninstall_session_running">En Linux-session körs. Avsluta den och avinstallera sedan.</string>
+    <string name="linux_client_stage_uninstall">Avinstallerar Linux-klienten</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Linux-sessionen stoppade så snart den startade. Loggen finns under Inställningar > Felsökning > Öppna logghanteraren; dela den så att orsaken kan hittas.</string>
@@ -2717,7 +2720,7 @@ Installerad sökväg:
     <string name="session_drawer_frame_generation_enable">Generera bilder</string>
     <string name="session_drawer_frame_generation_engine_off">Av</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Multiplikator</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Adaptivt mål</string>
@@ -2725,7 +2728,7 @@ Installerad sökväg:
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpolerar mellan renderade bildrutor med Lossless Scaling. Mjukare rörelse, men en extra bildruta med inmatningsfördröjning.</string>
     <string name="session_drawer_frame_generation_target_note">Stiger mot målet endast så länge det hjälper mätbart, i stället för att hålla en fast multiplikator.</string>
-    <string name="session_drawer_frame_generation_missing">Installera Lossless Scaling i containerinställningarna för att använda LSFG-motorn. DIS kräver inget extra.</string>
+    <string name="session_drawer_frame_generation_missing">Installera Lossless Scaling i containerinställningarna för att använda LSFG-motorn. OpenFlow kräver inget extra.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpolerar mellan renderade bildrutor med Dense Inverse Search. Inbyggd; inga externa shaders krävs.</string>
     <string name="session_drawer_dis_resolution_scale">Upplösningsskala</string>
     <string name="session_drawer_dis_preset_fast">Snabb</string>
@@ -2736,7 +2739,7 @@ Installerad sökväg:
     <string name="session_drawer_dis_target_fps_max">Max uppdateringsfrekvens</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Visa flöde</string>
-    <string name="session_drawer_dis_debug_flow_note">Ritar de rörelsevektorer som DIS beräknar i stället för den genererade bildrutan. Endast för diagnostik.</string>
+    <string name="session_drawer_dis_debug_flow_note">Ritar de rörelsevektorer som OpenFlow beräknar i stället för den genererade bildrutan. Endast för diagnostik.</string>
     <string name="frame_generation_preset">Kvalitetsförval</string>
     <string name="frame_generation_preset_ultra_performance">Ultraprestanda</string>
     <string name="frame_generation_preset_performance">Prestanda</string>

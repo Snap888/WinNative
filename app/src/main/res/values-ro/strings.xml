@@ -270,6 +270,9 @@
     <string name="linux_client_busy">Clientul Steam pentru Linux încă se instalează. Încearcă din nou după ce se termină.</string>
     <string name="linux_client_update_message">Este disponibil un mediu Linux mai nou. Actualizarea păstrează autentificarea Steam, jocurile instalate, salvările și containerele.</string>
     <string name="linux_client_update_session_running">O sesiune Linux este în desfășurare. Închide-o, apoi actualizează.</string>
+    <string name="linux_client_uninstall_message">Dezinstalarea elimină mediul Linux cu clientul Steam, autentificarea sa și Proton, precum și jocurile și salvările păstrate în el. Jocurile din celelalte biblioteci Steam rămân instalate.</string>
+    <string name="linux_client_uninstall_session_running">O sesiune Linux este în desfășurare. Închide-o, apoi dezinstalează.</string>
+    <string name="linux_client_stage_uninstall">Se dezinstalează clientul Linux</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Sesiunea Linux s-a oprit imediat dupa pornire. Jurnalul ei este in Setari > Depanare > Deschide managerul de jurnale; distribuie-l pentru a se putea gasi cauza.</string>
@@ -2717,7 +2720,7 @@ Cale instalata:
     <string name="session_drawer_frame_generation_enable">Generează cadre</string>
     <string name="session_drawer_frame_generation_engine_off">Oprit</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Multiplicator</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Țintă adaptivă</string>
@@ -2725,7 +2728,7 @@ Cale instalata:
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpolează între cadrele randate cu Lossless Scaling. Mișcare mai fluidă, dar un cadru suplimentar de latență la intrare.</string>
     <string name="session_drawer_frame_generation_target_note">Urcă spre țintă doar cât timp ajută în mod măsurabil, în loc să păstreze un multiplicator fix.</string>
-    <string name="session_drawer_frame_generation_missing">Instalează Lossless Scaling din setările containerului pentru a folosi motorul LSFG. DIS nu necesită nimic în plus.</string>
+    <string name="session_drawer_frame_generation_missing">Instalează Lossless Scaling din setările containerului pentru a folosi motorul LSFG. OpenFlow nu necesită nimic în plus.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpolează între cadrele randate cu Dense Inverse Search. Încorporat; fără shadere externe.</string>
     <string name="session_drawer_dis_resolution_scale">Scală rezoluție</string>
     <string name="session_drawer_dis_preset_fast">Rapid</string>
@@ -2736,7 +2739,7 @@ Cale instalata:
     <string name="session_drawer_dis_target_fps_max">Rată de reîmprospătare max.</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Arată fluxul</string>
-    <string name="session_drawer_dis_debug_flow_note">Desenează vectorii de mișcare estimați de DIS în locul cadrului generat. Doar pentru diagnosticare.</string>
+    <string name="session_drawer_dis_debug_flow_note">Desenează vectorii de mișcare estimați de OpenFlow în locul cadrului generat. Doar pentru diagnosticare.</string>
     <string name="frame_generation_preset">Presetare de calitate</string>
     <string name="frame_generation_preset_ultra_performance">Ultra performanță</string>
     <string name="frame_generation_preset_performance">Performanță</string>

@@ -271,6 +271,9 @@
     <string name="linux_client_busy">Linux Steam クライアントはまだインストール中です。完了してからもう一度お試しください。</string>
     <string name="linux_client_update_message">新しい Linux ランタイムがあります。更新しても Steam のサインイン、インストール済みのゲーム、セーブデータ、コンテナは保持されます。</string>
     <string name="linux_client_update_session_running">Linux セッションが実行中です。終了してから更新してください。</string>
+    <string name="linux_client_uninstall_message">アンインストールすると、Steam クライアント、そのサインインと Proton を含む Linux ランタイム、およびその中に保存されたゲームとセーブデータが削除されます。他の Steam ライブラリのゲームはインストールされたままです。</string>
+    <string name="linux_client_uninstall_session_running">Linux セッションが実行中です。終了してからアンインストールしてください。</string>
+    <string name="linux_client_stage_uninstall">Linux クライアントをアンインストール中</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Linux セッションは開始直後に停止しました。ログは 設定 > デバッグ > ログマネージャーを開く にあります。原因を特定できるよう共有してください。</string>
@@ -2717,7 +2720,7 @@
     <string name="session_drawer_frame_generation_enable">フレームを生成</string>
     <string name="session_drawer_frame_generation_engine_off">オフ</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">倍率</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">アダプティブ目標</string>
@@ -2725,7 +2728,7 @@
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Lossless Scaling でレンダリング済みフレーム間を補間します。動きは滑らかになりますが、入力遅延が 1 フレーム増えます。</string>
     <string name="session_drawer_frame_generation_target_note">固定倍率を保つのではなく、効果が測定できる間だけ目標に向けて上げていきます。</string>
-    <string name="session_drawer_frame_generation_missing">LSFG エンジンを使用するには、コンテナ設定で Lossless Scaling をインストールしてください。DIS には追加のものは不要です。</string>
+    <string name="session_drawer_frame_generation_missing">LSFG エンジンを使用するには、コンテナ設定で Lossless Scaling をインストールしてください。OpenFlow には追加のものは不要です。</string>
     <string name="session_drawer_dis_frame_generation_note">Dense Inverse Search で描画フレーム間を補間します。アプリ内蔵で外部シェーダーは不要です。</string>
     <string name="session_drawer_dis_resolution_scale">解像度スケール</string>
     <string name="session_drawer_dis_preset_fast">高速</string>
@@ -2736,7 +2739,7 @@
     <string name="session_drawer_dis_target_fps_max">最大リフレッシュレート</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">フローを表示</string>
-    <string name="session_drawer_dis_debug_flow_note">生成フレームの代わりに、DIS が推定した動きベクトルを描画します。診断専用です。</string>
+    <string name="session_drawer_dis_debug_flow_note">生成フレームの代わりに、OpenFlow が推定した動きベクトルを描画します。診断専用です。</string>
     <string name="frame_generation_preset">画質プリセット</string>
     <string name="frame_generation_preset_ultra_performance">ウルトラパフォーマンス</string>
     <string name="frame_generation_preset_performance">パフォーマンス</string>

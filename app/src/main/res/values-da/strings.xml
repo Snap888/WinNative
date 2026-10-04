@@ -270,6 +270,9 @@
     <string name="linux_client_busy">Linux Steam-klienten installeres stadig. Prøv igen, når den er færdig.</string>
     <string name="linux_client_update_message">Et nyere Linux-miljø er tilgængeligt. Opdateringen bevarer dit Steam-login, installerede spil, gemte spil og containere.</string>
     <string name="linux_client_update_session_running">En Linux-session kører. Afslut den, og opdater derefter.</string>
+    <string name="linux_client_uninstall_message">Afinstallation fjerner Linux-miljøet med Steam-klienten, dens login og Proton samt de spil og gemte data, der ligger i det. Spil i dine andre Steam-biblioteker forbliver installeret.</string>
+    <string name="linux_client_uninstall_session_running">En Linux-session kører. Afslut den, og afinstaller derefter.</string>
+    <string name="linux_client_stage_uninstall">Afinstallerer Linux-klienten</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Linux-sessionen stoppede, så snart den startede. Dens log ligger under Indstillinger > Fejlfinding > Åbn loghåndtering; del den, så årsagen kan findes.</string>
@@ -2729,7 +2732,7 @@ Installeret sti:
     <string name="session_drawer_frame_generation_enable">Generér billeder</string>
     <string name="session_drawer_frame_generation_engine_off">Fra</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Multiplikator</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Adaptivt mål</string>
@@ -2737,7 +2740,7 @@ Installeret sti:
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpolerer mellem gengivne billeder med Lossless Scaling. Blødere bevægelse, men ét ekstra billede med inputforsinkelse.</string>
     <string name="session_drawer_frame_generation_target_note">Stiger mod målet, kun mens det målbart hjælper, i stedet for at fastholde en fast multiplikator.</string>
-    <string name="session_drawer_frame_generation_missing">Installér Lossless Scaling i containerindstillingerne for at bruge LSFG-motoren. DIS kræver ikke noget ekstra.</string>
+    <string name="session_drawer_frame_generation_missing">Installér Lossless Scaling i containerindstillingerne for at bruge LSFG-motoren. OpenFlow kræver ikke noget ekstra.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpolerer mellem gengivne billeder med Dense Inverse Search. Indbygget; ingen eksterne shaders kræves.</string>
     <string name="session_drawer_dis_resolution_scale">Opløsningsskala</string>
     <string name="session_drawer_dis_preset_fast">Hurtig</string>
@@ -2748,7 +2751,7 @@ Installeret sti:
     <string name="session_drawer_dis_target_fps_max">Maks. opdateringshastighed</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Vis flow</string>
-    <string name="session_drawer_dis_debug_flow_note">Tegner de bevægelsesvektorer, DIS beregner, i stedet for det genererede billede. Kun til diagnostik.</string>
+    <string name="session_drawer_dis_debug_flow_note">Tegner de bevægelsesvektorer, OpenFlow beregner, i stedet for det genererede billede. Kun til diagnostik.</string>
     <string name="frame_generation_preset">Kvalitetsforudindstilling</string>
     <string name="frame_generation_preset_ultra_performance">Ultra ydeevne</string>
     <string name="frame_generation_preset_performance">Ydeevne</string>

@@ -271,6 +271,9 @@
     <string name="linux_client_busy">Linux Steam -asiakasta asennetaan yhä. Yritä uudelleen, kun asennus on valmis.</string>
     <string name="linux_client_update_message">Uudempi Linux-ympäristö on saatavilla. Päivitys säilyttää Steam-kirjautumisen, asennetut pelit, tallennukset ja säiliöt.</string>
     <string name="linux_client_update_session_running">Linux-istunto on käynnissä. Sulje se ja päivitä sitten.</string>
+    <string name="linux_client_uninstall_message">Asennuksen poisto poistaa Linux-ympäristön Steam-asiakkaineen, kirjautumisineen ja Protoneineen sekä sen sisällä olevat pelit ja tallennukset. Muiden Steam-kirjastojesi pelit pysyvät asennettuina.</string>
+    <string name="linux_client_uninstall_session_running">Linux-istunto on käynnissä. Sulje se ja poista asennus sitten.</string>
+    <string name="linux_client_stage_uninstall">Poistetaan Linux-asiakasta</string>
     <string name="linux_client_gpu_unsupported">The Linux client draws with the Turnip Vulkan driver, which needs an Adreno GPU. This device has a different GPU.</string>
     <string name="linux_client_driver_missing">The display driver of the Linux client is not installed, so the screen would stay black. Install it with Linux Client in Settings > Stores.</string>
     <string name="linux_session_failed">Linux-istunto pysähtyi heti käynnistyttyään. Sen loki on kohdassa Asetukset > Virheenkorjaus > Avaa lokien hallinta; jaa se, jotta syy löytyy.</string>
@@ -2717,7 +2720,7 @@ Asennuspolku:
     <string name="session_drawer_frame_generation_enable">Generoi ruutuja</string>
     <string name="session_drawer_frame_generation_engine_off">Pois</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">DIS</string>
+    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
     <string name="session_drawer_frame_generation_multiplier">Kerroin</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Mukautuva tavoite</string>
@@ -2725,7 +2728,7 @@ Asennuspolku:
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpoloi renderöityjen ruutujen välillä Lossless Scalingilla. Sulavampi liike, mutta yhden ruudun lisäviive syötteessä.</string>
     <string name="session_drawer_frame_generation_target_note">Nousee kohti tavoitetta vain, kun siitä on mitattavaa hyötyä, sen sijaan että pitäisi kiinteän kertoimen.</string>
-    <string name="session_drawer_frame_generation_missing">Asenna Lossless Scaling säiliön asetuksista käyttääksesi LSFG-moottoria. DIS ei tarvitse mitään lisäksi.</string>
+    <string name="session_drawer_frame_generation_missing">Asenna Lossless Scaling säiliön asetuksista käyttääksesi LSFG-moottoria. OpenFlow ei tarvitse mitään lisäksi.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpoloi renderöityjen ruutujen välillä Dense Inverse Searchilla. Sisäänrakennettu; ulkoisia varjostimia ei tarvita.</string>
     <string name="session_drawer_dis_resolution_scale">Resoluutioskaala</string>
     <string name="session_drawer_dis_preset_fast">Nopea</string>
@@ -2736,7 +2739,7 @@ Asennuspolku:
     <string name="session_drawer_dis_target_fps_max">Maks. virkistystaajuus</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Näytä liikevuo</string>
-    <string name="session_drawer_dis_debug_flow_note">Piirtää DIS:n arvioimat liikevektorit generoidun ruudun sijaan. Vain diagnostiikkaan.</string>
+    <string name="session_drawer_dis_debug_flow_note">Piirtää OpenFlow:n arvioimat liikevektorit generoidun ruudun sijaan. Vain diagnostiikkaan.</string>
     <string name="frame_generation_preset">Laatuesiasetus</string>
     <string name="frame_generation_preset_ultra_performance">Ultra-suorituskyky</string>
     <string name="frame_generation_preset_performance">Suorituskyky</string>
