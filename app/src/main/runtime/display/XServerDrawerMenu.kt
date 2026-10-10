@@ -1,5 +1,7 @@
 package com.winlator.cmod.runtime.display
 
+import androidx.compose.ui.platform.LocalContext
+import com.winlator.cmod.app.config.DeviceProfileSettings
 import android.app.Activity
 import android.content.Context
 import androidx.compose.animation.AnimatedContent
@@ -568,10 +570,10 @@ private const val ActionCardRevealStaggerMs = 28
 private const val ActionCardRevealDurationMs = 220
 
 internal val FrameGenMultipliers = listOf(2, 3, 4)
-internal val FrameGenTargetRates = listOf(60, 90, 120, 144, 165)
+internal val FrameGenTargetRates = listOf(60, 90, 120, 144, 165, 185)
 internal const val FrameGenFlowScaleMin = 25
 internal const val FrameGenFlowScaleMax = 100
-internal val DisFrameGenTargetRates = listOf(60, 90, 120, 144, 165)
+internal val DisFrameGenTargetRates = listOf(60, 90, 120, 144, 165, 185)
 internal const val DisFrameGenScaleMin = 64
 internal const val DisFrameGenScaleMax = 1080
 
@@ -1146,6 +1148,8 @@ interface XServerDrawerActionListener {
     fun onInputControlsReverseBindingOrderChanged(enabled: Boolean)
 
     fun onInputControlsEditClick()
+
+    fun onControllerTestClick()
 
     fun onScreenTouchModeChanged(mode: Int)
 
@@ -2112,17 +2116,28 @@ private fun ActionCardGrid(
     }
 
     val verticalPadding = (10f * paneScale).dp
+    val horizontalPadding = (10f * paneScale).dp
+    val maxAspect = DeviceProfileSettings.sessionActionCardMaxAspect(LocalContext.current)
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val rows = ((cards.size + ActionCardColumns - 1) / ActionCardColumns).coerceAtLeast(1)
+        val cardWidth =
+            (maxWidth - horizontalPadding * 2 - ActionCardSpacing * (ActionCardColumns - 1)) / ActionCardColumns
         val rowHeight =
-            ((maxHeight - verticalPadding * 2 - ActionCardSpacing * (rows - 1)) / rows)
-                .coerceAtLeast(ActionCardMinHeight * paneScale)
+            DeviceProfileSettings
+                .actionCardRowHeight(
+                    availableHeight = (maxHeight - verticalPadding * 2).value,
+                    cardWidth = cardWidth.value,
+                    rows = rows,
+                    spacing = ActionCardSpacing.value,
+                    minHeight = (ActionCardMinHeight * paneScale).value,
+                    maxAspect = maxAspect,
+                ).dp
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = (10f * paneScale).dp, vertical = verticalPadding),
+                    .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         ) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),

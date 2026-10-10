@@ -6,6 +6,8 @@ import android.os.IBinder
 import com.winlator.cmod.app.PluviaApp
 import com.winlator.cmod.app.db.download.DownloadRecord
 import com.winlator.cmod.app.service.download.DownloadCoordinator
+import com.winlator.cmod.feature.stores.common.InstallOwnership
+import com.winlator.cmod.feature.stores.common.InstallStore
 import com.winlator.cmod.feature.stores.epic.ui.util.SnackbarManager
 import com.winlator.cmod.feature.stores.common.StoreInstallPathSafety
 import com.winlator.cmod.feature.stores.gog.data.GOGCredentials
@@ -602,6 +604,12 @@ class GOGService : Service() {
                 // and clear installPath in the DB — making the game vanish from the library.
                 // Mirrors EpicService.isGameInstalled's early-return.
                 if (game.isInstalled && game.installPath.isNotBlank()) {
+                    if (InstallOwnership.isForeign(game.installPath, InstallStore.GOG)) {
+                        getInstance()?.gogManager?.updateGame(
+                            game.copy(isInstalled = false, installPath = ""),
+                        )
+                        return@runBlocking false
+                    }
                     return@runBlocking File(game.installPath).isDirectory
                 }
 
@@ -614,6 +622,7 @@ class GOGService : Service() {
                     candidatePaths.firstOrNull { path ->
                         path.isNotBlank() &&
                             File(path).isDirectory &&
+                            !InstallOwnership.isForeign(path, InstallStore.GOG) &&
                             MarkerUtils.hasMarker(path, Marker.DOWNLOAD_COMPLETE_MARKER) &&
                             !MarkerUtils.hasMarker(path, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
                     }
@@ -1566,6 +1575,7 @@ class GOGService : Service() {
                                     applicationContext,
                                     pathToDelete,
                                     protectedRoots = listOf(GOGConstants.defaultGOGGamesPath),
+                                    owner = InstallStore.GOG,
                                 )
                             if (deleteCheck.allowed) {
                                 MarkerUtils.removeMarker(pathToDelete, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
@@ -1600,6 +1610,15 @@ class GOGService : Service() {
     ): Int {
         Timber.d("[GOGService] onStartCommand() - action: ${intent?.action}")
 
+        // A null intent is Android restarting this service on its own after the process died.
+        // Nobody asked for it and there is no UI, so registering the keep-alive component below
+        // would leave a foreground service and its wakelock running for hours over nothing.
+        if (intent == null) {
+            Timber.i("[GOGService] Restarted by Android with no UI; stopping instead")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         SessionKeepAliveService.startComponent(this, SessionKeepAliveService.COMPONENT_GOG, "Connected")
 
         val shouldSync =
@@ -1615,17 +1634,19 @@ class GOGService : Service() {
                 }
 
                 null -> {
-                    // START_STICKY restart: sync only if initial sync is missing or throttle elapsed.
+                    // Started without an action, which is how the throttled path above asks for a
+                    // start with no sync: sync only if the initial one is missing or the throttle
+                    // has since elapsed.
                     val timeSinceLastSync = System.currentTimeMillis() - lastSyncTimestamp
                     val shouldResync = !hasPerformedInitialSync || timeSinceLastSync >= SYNC_THROTTLE_MILLIS
 
                     if (shouldResync) {
                         Timber.i(
-                            "[GOGService] Service restarted by Android - performing sync (hasPerformedInitialSync=$hasPerformedInitialSync, timeSinceLastSync=${timeSinceLastSync}ms)",
+                            "[GOGService] Started without a sync action - performing sync (hasPerformedInitialSync=$hasPerformedInitialSync, timeSinceLastSync=${timeSinceLastSync}ms)",
                         )
                         true
                     } else {
-                        Timber.d("[GOGService] Service restarted by Android - skipping sync (throttled)")
+                        Timber.d("[GOGService] Started without a sync action - skipping sync (throttled)")
                         false
                     }
                 }

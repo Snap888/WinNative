@@ -96,6 +96,8 @@ public class ControlElement {
   private short x;
   private short y;
   private boolean selected = false;
+  private boolean toggleLatched = false;
+  private boolean deferredReleasePending = false;
   private boolean toggleSwitch = false;
   private boolean swipeable = true;
   private boolean radialMenuExpanded = false;
@@ -103,6 +105,7 @@ public class ControlElement {
   private boolean isRadialBindingCurrentlyHeld = false;
   private boolean wasExpandedOnDown = false;
   private int currentPointerId = -1;
+  private int pressGeneration = 0;
   private boolean adaptiveShifted = false;
   private final Rect boundingBox = new Rect();
   private final Path path = new Path();
@@ -323,6 +326,18 @@ public class ControlElement {
     }
   }
 
+  public boolean isHighlighted() {
+    return selected || (toggleSwitch && toggleLatched);
+  }
+
+  public boolean releaseToggleLatch() {
+    if (!toggleSwitch || !toggleLatched) return false;
+    toggleLatched = false;
+    dispatchButtonBinding(false);
+    inputControlsView.invalidate();
+    return true;
+  }
+
   public String getText() {
     return text;
   }
@@ -449,7 +464,7 @@ return boundingBox;
     return customColor;
   }
 
-  /** Bumper/trigger labels follow the standard gamepad naming; null for every other binding. */
+  /** Bumper, trigger and guide labels follow the standard gamepad naming; null for the rest. */
   private static String bumperTriggerLabel(Binding binding) {
     if (binding == null) return null;
     switch (binding) {
@@ -461,6 +476,8 @@ return boundingBox;
         return "LT";
       case GAMEPAD_BUTTON_R2:
         return "RT";
+      case GAMEPAD_BUTTON_GUIDE:
+        return "WN";
       default:
         return null;
     }
@@ -536,7 +553,7 @@ return boundingBox;
   }
 
   private boolean isEngaged() {
-    return currentPointerId != -1 || (toggleSwitch && selected);
+    return currentPointerId != -1 || (toggleSwitch && toggleLatched);
   }
 
   // Shared draw caches. Drawing happens only on the UI thread, so static temps are safe.
@@ -612,7 +629,7 @@ return boundingBox;
   }
 
   public void draw(Canvas canvas) {
-    if (isAdaptiveHidden()) return;
+    if (isAdaptiveHidden() || isGuideOutsideLinuxSession()) return;
     VisualStyle style = inputControlsView.getVisualStyle();
     if (style == VisualStyle.GAMEHUB) {
       drawGameHub(canvas);
@@ -658,7 +675,7 @@ return boundingBox;
     int secondaryColor = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), highlightAlpha);
 
     paint.setColor(
-        (selected && accent == -1) ? secondaryColor : primaryColor);
+        (isHighlighted() && accent == -1) ? secondaryColor : primaryColor);
     paint.setStyle(Paint.Style.STROKE);
     float strokeWidth = snappingSize * 0.25f;
     paint.setStrokeWidth(strokeWidth);
@@ -711,7 +728,7 @@ return boundingBox;
 
           paint.setStyle(Paint.Style.STROKE);
           paint.setColor(
-              (selected && accent == -1)
+              (isHighlighted() && accent == -1)
                   ? secondaryColor
                   : primaryColor);
           paint.setStrokeWidth(strokeWidth);
@@ -819,7 +836,7 @@ return boundingBox;
 
           paint.setStyle(Paint.Style.STROKE);
           paint.setColor(
-              (selected && accent == -1)
+              (isHighlighted() && accent == -1)
                   ? secondaryColor
                   : primaryColor);
           canvas.drawCircle(cx, cy, radius, paint);
@@ -1129,7 +1146,7 @@ return boundingBox;
       frameColor = ColorUtils.setAlphaComponent(accent, (int) ((engaged ? 240 : 150) * a));
       frameWidth = hairline * (engaged ? 1.6f : 1f);
     }
-    if (selected && resolveAccentColor() == -1) {
+    if (isHighlighted() && resolveAccentColor() == -1) {
       frameColor =
           ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), (int) (235 * a));
     }
@@ -1649,7 +1666,7 @@ return boundingBox;
     boolean engaged = isEngaged();
     Rect boundingBox = getBoundingBox();
     int accent = resolveThemedAccent();
-    if (selected && resolveAccentColor() == -1) {
+    if (isHighlighted() && resolveAccentColor() == -1) {
       accent = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), 255);
     }
     float hairline = Math.max(1.5f, snappingSize * 0.09f * scale);
@@ -2117,7 +2134,7 @@ return boundingBox;
     boolean engaged = isEngaged();
     Rect boundingBox = getBoundingBox();
     int accent = resolveThemedAccent();
-    if (selected && resolveAccentColor() == -1) {
+    if (isHighlighted() && resolveAccentColor() == -1) {
       accent = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), 255);
     }
     int secondary = neonSecondary(accent);
@@ -2557,7 +2574,7 @@ return boundingBox;
     Rect boundingBox = getBoundingBox();
     int custom = resolveAccentColor();
     int accent = resolveThemedAccent();
-    if (selected && custom == -1) {
+    if (isHighlighted() && custom == -1) {
       accent = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), 255);
     }
     float hairline = Math.max(1.5f, snappingSize * 0.11f * scale);
@@ -3004,7 +3021,7 @@ return boundingBox;
     boolean engaged = isEngaged();
     Rect boundingBox = getBoundingBox();
     int accent = resolveThemedAccent();
-    if (selected && resolveAccentColor() == -1) {
+    if (isHighlighted() && resolveAccentColor() == -1) {
       accent = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), 255);
     }
     int labelColor = engaged
@@ -3330,7 +3347,7 @@ return boundingBox;
         ? ColorUtils.setAlphaComponent(accent, textAlpha)
         : Color.argb(textAlpha, 255, 255, 255);
 
-    if (selected && !hasAccent) {
+    if (isHighlighted() && !hasAccent) {
       int highlightAlpha = (int) (255 * overlayOpacity);
       strokeColor = ColorUtils.setAlphaComponent(inputControlsView.getSecondaryColor(), highlightAlpha);
     }
@@ -3770,7 +3787,19 @@ return boundingBox;
     return isAdaptiveStick() && !isEngaged();
   }
 
+  // Only a Linux session's Steam answers the guide button, so it stays out of the way elsewhere.
+  private boolean isGuideOutsideLinuxSession() {
+    if (inputControlsView.isGuideButtonShown()) return false;
+    boolean guide = false;
+    for (Binding binding : bindings) {
+      if (binding == Binding.GAMEPAD_BUTTON_GUIDE) guide = true;
+      else if (binding != Binding.NONE) return false;
+    }
+    return guide;
+  }
+
   private boolean acceptsTouchAt(float x, float y) {
+    if (isGuideOutsideLinuxSession()) return false;
     if (!isAdaptiveStick()) return containsPoint(x, y);
     Rect box = getBoundingBox();
     float reach = box.width() * ADAPTIVE_REACH;
@@ -3851,8 +3880,10 @@ return boundingBox;
       currentPointerId = pointerId;
       if (isAdaptiveStick()) shiftAdaptiveOrigin(x, y);
       if (type == Type.BUTTON) {
+        pressGeneration++;
+        deferredReleasePending = false;
         if (isKeepButtonPressedAfterMinTime()) touchTime = System.currentTimeMillis();
-        if (!toggleSwitch || !selected) {
+        if (!toggleSwitch || !toggleLatched) {
           dispatchButtonBinding(true);
         }
         inputControlsView.invalidate();
@@ -3903,9 +3934,6 @@ return boundingBox;
 
   public boolean handleTouchMove(int pointerId, float x, float y) {
     if (pointerId == currentPointerId && type == Type.BUTTON) {
-      if (!containsPoint(x, y)) {
-        handleTouchUp(pointerId, x, y);
-      }
       return true;
     }
 
@@ -4106,23 +4134,45 @@ return boundingBox;
 
   public boolean handleTouchUp(int pointerId, float x, float y) {
     if (pointerId != currentPointerId) return false;
+    releaseTouchState(x, y);
+    return true;
+  }
 
+  public int getCurrentPointerId() {
+    return currentPointerId;
+  }
+
+  public boolean isIdle() {
+    return currentPointerId == -1 && !deferredReleasePending && !(toggleSwitch && toggleLatched);
+  }
+
+  public boolean forceRelease() {
+    if (currentPointerId == -1) return false;
+    releaseTouchState(0, 0);
+    return true;
+  }
+
+  private void releaseTouchState(float x, float y) {
     if (type == Type.BUTTON) {
       if (isKeepButtonPressedAfterMinTime() && touchTime != null) {
         long held = System.currentTimeMillis() - (long) touchTime;
         long delay = Math.max(0L, BUTTON_MIN_TIME_TO_KEEP_PRESSED - held);
+        final int generation = ++pressGeneration;
+        deferredReleasePending = true;
         inputControlsView.postDelayed(
             () -> {
+              if (generation != pressGeneration) return;
+              deferredReleasePending = false;
               dispatchButtonBinding(false);
               inputControlsView.invalidate();
             },
             delay);
         touchTime = null;
       } else {
-        if (!toggleSwitch || selected) {
+        if (!toggleSwitch || toggleLatched) {
           dispatchButtonBinding(false);
         }
-        if (toggleSwitch) selected = !selected;
+        if (toggleSwitch) toggleLatched = !toggleLatched;
       }
       inputControlsView.invalidate();
     } else if (type == Type.RADIAL_MENU) {
@@ -4175,7 +4225,6 @@ return boundingBox;
     }
 
     currentPointerId = -1;
-    return true;
   }
 
   private int getRadialBindingIndexAt(float x, float y) {

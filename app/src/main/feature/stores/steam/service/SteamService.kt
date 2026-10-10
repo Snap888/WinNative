@@ -13,8 +13,10 @@ import com.winlator.cmod.app.PluviaApp
 import com.winlator.cmod.app.db.PluviaDatabase
 import com.winlator.cmod.app.db.download.DownloadRecord
 import com.winlator.cmod.app.service.DownloadService
+import com.winlator.cmod.app.service.NetworkMonitor
 import com.winlator.cmod.app.service.download.DownloadCoordinator
 import com.winlator.cmod.feature.shortcuts.LibraryShortcutUtils
+import com.winlator.cmod.feature.stores.common.InstallStore
 import com.winlator.cmod.feature.stores.steam.data.AppInfo
 import com.winlator.cmod.feature.stores.steam.data.CachedLicense
 import com.winlator.cmod.feature.stores.steam.data.DepotInfo
@@ -659,6 +661,9 @@ class SteamService : Service() {
                         paths += Paths.get(volumePath, "Steam", "steamapps", "common").pathString
                     }
                 }
+                paths +=
+                    com.winlator.cmod.feature.storage.ExternalStorage
+                        .connectedInstallRoots(InstallStore.STEAM)
                 return paths.distinct()
             }
 
@@ -1051,6 +1056,7 @@ class SteamService : Service() {
                             instance?.applicationContext ?: DownloadService.appContext,
                             dirPath,
                             protectedRoots = steamProtectedInstallRoots(),
+                            owner = InstallStore.STEAM,
                         )
                     if (!deleteCheck.allowed) {
                         Timber.e("Refusing to uninstall Steam appId=$appId from '$dirPath': ${deleteCheck.reason}")
@@ -1490,6 +1496,7 @@ class SteamService : Service() {
                         instance?.applicationContext ?: DownloadService.appContext,
                         appDirPath,
                         protectedRoots = steamProtectedInstallRoots(),
+                        owner = InstallStore.STEAM,
                     )
 
                 // Guard against accidental root deletion if path resolution failed.
@@ -3675,6 +3682,7 @@ class SteamService : Service() {
         fun logOut() {
             // Capture username before clearing anything
             val username = PrefManager.username
+            val steamId64 = PrefManager.steamUserSteamId64
 
             // ── Atomic state flip ──
             isLoggingOut = true
@@ -3726,6 +3734,15 @@ class SteamService : Service() {
 
             // Emit event synchronously so the UI can react in the same frame
             PluviaApp.events.emit(SteamEvent.LoggedOut(username))
+
+            // The Linux client was signed in with this account's token, so it goes with it. A client
+            // that is running owns its files and writes them back on exit; it is left to its own menu.
+            if (!SessionKeepAliveService.isLinuxSessionActive()) {
+                val appContext = PluviaApp.instance.applicationContext
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    com.winlator.cmod.runtime.linux.LinuxSteamLogin.clear(appContext, username, steamId64)
+                }
+            }
 
             // Session already disconnected above; just clear the local database (best-effort).
             instance?.let { svc ->
@@ -4090,6 +4107,7 @@ class SteamService : Service() {
                                 instance?.applicationContext ?: DownloadService.appContext,
                                 appDirPath,
                                 protectedRoots = steamProtectedInstallRoots(),
+                                owner = InstallStore.STEAM,
                             )
                         if (deleteCheck.allowed) {
                             MarkerUtils.removeMarker(appDirPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
@@ -4192,11 +4210,31 @@ class SteamService : Service() {
         }
     }
 
+    /** Whether the user asked chat to outlive the app, and there is a login for it to come back to. */
+    private fun wantsBackgroundChat(): Boolean =
+        PrefManager.chatStayRunningOnExit && PrefManager.refreshToken.isNotBlank()
+
     override fun onStartCommand(
         intent: Intent?,
         flags: Int,
         startId: Int,
     ): Int {
+        // A null intent is Android restarting this service on its own after the process died.
+        // Nobody asked for it and there is no UI, so coming back would only re-register the
+        // keep-alive component and leave a foreground service and its wakelock running for hours
+        // over nothing. Downloads do not need it: their state is in the database and
+        // DownloadCoordinator restores them on the next app start.
+        //
+        // Background chat is the one thing that does need it. When the user turns that on,
+        // stopManagedServices deliberately leaves this service started while onTaskRemoved kills
+        // the process anyway, so this restart is the only way chat ever comes back - refusing it
+        // would make the setting stop doing what it says.
+        if (intent == null && !wantsBackgroundChat()) {
+            Timber.i("Restarted by Android with no session, no UI and no background chat; stopping instead")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         // Notification intents
         when (intent?.action) {
             NotificationHelper.ACTION_EXIT -> {

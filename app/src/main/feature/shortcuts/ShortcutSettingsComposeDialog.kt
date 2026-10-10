@@ -24,15 +24,22 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.winlator.cmod.shared.ui.widget.EnvVarsView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
+import com.winlator.cmod.app.config.DeviceProfileSettings
 import com.winlator.cmod.runtime.display.environment.components.NetworkingSettings
+import com.winlator.cmod.runtime.wine.WineThemeManager
 import com.winlator.cmod.BuildConfig
 import com.winlator.cmod.R
 import com.winlator.cmod.app.PluviaApp
 import com.winlator.cmod.feature.library.DriveItem
+import com.winlator.cmod.feature.library.DISPLAY_SERVER_WAYLAND_INDEX
+import com.winlator.cmod.feature.library.DISPLAY_SERVER_X11_INDEX
+import com.winlator.cmod.feature.library.displayBackendFromIndex
+import com.winlator.cmod.feature.library.displayServerEntries
 import com.winlator.cmod.feature.library.EnvVarItem
 import com.winlator.cmod.feature.library.parseEnvVarItems
 import androidx.compose.runtime.getValue
@@ -47,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import com.winlator.cmod.shared.ui.focus.controllerMenuInput
 import com.winlator.cmod.feature.library.GameSettingsStateHolder
+import com.winlator.cmod.feature.library.LinuxApps
 import com.winlator.cmod.feature.library.WinComponentItem
 import com.winlator.cmod.feature.settings.DXVKConfigUtils
 import com.winlator.cmod.feature.settings.GraphicsDriverConfigUtils
@@ -62,6 +70,7 @@ import com.winlator.cmod.runtime.container.ContainerManager
 import com.winlator.cmod.runtime.container.Shortcut
 import com.winlator.cmod.runtime.content.ContentProfile
 import com.winlator.cmod.runtime.content.ContentsManager
+import com.winlator.cmod.runtime.content.DriverPackages
 import com.winlator.cmod.shared.android.AppUtils
 import com.winlator.cmod.shared.ui.toast.WinToast
 import com.winlator.cmod.shared.android.DirectoryPickerDialog
@@ -72,6 +81,7 @@ import com.winlator.cmod.runtime.wine.WineUtils
 import com.winlator.cmod.shared.io.FileUtils
 import com.winlator.cmod.shared.util.KeyValueSet
 import com.winlator.cmod.shared.android.RefreshRateUtils
+import com.winlator.cmod.shared.android.ScreenSizes
 import com.winlator.cmod.shared.theme.WinNativeTheme
 import com.winlator.cmod.shared.util.StringUtils
 import com.winlator.cmod.runtime.input.ui.InputControlsView
@@ -84,6 +94,8 @@ import com.winlator.cmod.feature.shortcuts.ShortcutsFragment
 import com.winlator.cmod.runtime.display.XServerDisplayActivity
 import com.winlator.cmod.runtime.input.controls.GestureProfileManager
 import com.winlator.cmod.runtime.input.controls.InputControlsManager
+import com.winlator.cmod.runtime.linux.LinuxDriverChoices
+import com.winlator.cmod.runtime.linux.LinuxProtons
 import com.winlator.cmod.runtime.audio.midi.MidiManager
 import com.winlator.cmod.runtime.display.winhandler.WinHandler
 import com.winlator.cmod.feature.artwork.SteamArtworkScraper
@@ -128,6 +140,9 @@ class ShortcutSettingsComposeDialog private constructor(
     // Preset ID lists (parallel to display name lists)
     private var box64PresetIds = mutableListOf<String>()
     private var fexcorePresetIds = mutableListOf<String>()
+    /** Tool names behind [GameSettingsStateHolder.linuxProtonEntries]; null until they are read. */
+    private var linuxProtonIds: List<String>? = null
+    private var linuxProtonRequest = 0
     private var shouldRefreshLibraryOnSave = false
 
     // SDL2 Compatibility env vars — must match ContainerDetailFragment.SDL2_ENV_VARS.
@@ -392,7 +407,10 @@ class ShortcutSettingsComposeDialog private constructor(
         state.disableXInput.value = shortcut.getExtra("disableXinput", "0") == "1"
         state.adaptiveJoysticks.value = getShortcutSetting(
             InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS,
-            container.getExtra(InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS, "0")
+            container.getExtra(
+                InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS,
+                DeviceProfileSettings.adaptiveJoysticksDefaultExtra(context),
+            ),
         ) == "1"
         state.shortcutExclusiveXInput.value = shortcut.getExtra("exclusiveXInput", "").let {
             if (it.isEmpty()) container.isExclusiveXInput() else it == "1"
@@ -400,7 +418,7 @@ class ShortcutSettingsComposeDialog private constructor(
         state.simTouchScreen.value = shortcut.getExtra("simTouchScreen", "0") == "1"
         state.screenTouchMode.intValue = shortcut.getExtra(
             "screenTouchMode",
-            if (shortcut.getExtra("simTouchScreen", "0") == "1") "1" else "0"
+            if (shortcut.getExtra("simTouchScreen", "0") == "1" || container.isGamescopeRuntime) "1" else "0"
         ).toIntOrNull() ?: 0
         val gestureProfiles = gestureProfileManager.profiles
         state.gestureProfileEntries.value =
@@ -613,6 +631,14 @@ class ShortcutSettingsComposeDialog private constructor(
         state.selectedZinkMode.intValue =
             if (getShortcutSetting("zinkMode", container.getZinkMode()) == "windows") 1 else 0
 
+        state.displayServerEntries.value = displayServerEntries(context)
+        state.selectedDisplayServer.intValue =
+            if (getShortcutSetting(Container.EXTRA_DISPLAY_BACKEND, container.getDisplayBackend()) ==
+                Container.DISPLAY_BACKEND_WAYLAND
+            ) DISPLAY_SERVER_WAYLAND_INDEX else DISPLAY_SERVER_X11_INDEX
+        state.gamescopeContainer.value = container.isGamescopeRuntime
+        loadLinuxProtons(container)
+
         // DX Wrapper
         val dxWrapperArr =
             context.resources.getStringArray(R.array.dxwrapper_entries).toList()
@@ -658,6 +684,7 @@ class ShortcutSettingsComposeDialog private constructor(
         isArm64EC = wineInfo.isArm64EC
         state.isArm64EC.value = isArm64EC
         state.wineVersionDisplay.value = formatWineVersionDisplay(wineInfo)
+        state.wineVersionIdentifier.value = wineVersionStr
 
         rebuildEmulatorLists()
         selectByIdentifier(
@@ -723,10 +750,9 @@ class ShortcutSettingsComposeDialog private constructor(
         state.desktopThemeEntries.value = desktopThemeArr
         // Desktop theme is stored as compound "THEME,TYPE,COLOR" — extract theme name
         val savedDesktopTheme = getShortcutSetting("desktopTheme", container.getDesktopTheme())
-        val themePart = savedDesktopTheme.split(",").firstOrNull()?.trim() ?: ""
-        // Match case-insensitively: enum is "LIGHT"/"DARK", entries are "Light"/"Dark"
-        val themeIdx = desktopThemeArr.indexOfFirst { it.equals(themePart, ignoreCase = true) }
-        state.selectedDesktopTheme.intValue = if (themeIdx >= 0) themeIdx else 0
+        state.selectedDesktopTheme.intValue =
+            WineThemeManager.ThemeInfo(savedDesktopTheme).theme.ordinal
+                .coerceIn(0, (desktopThemeArr.size - 1).coerceAtLeast(0))
 
         // Show Box64/FEXCore frames based on saved emulator selection immediately,
         // before the async content sync runs
@@ -893,6 +919,30 @@ class ShortcutSettingsComposeDialog private constructor(
         state.selectedFexcorePreset.intValue = if (idx >= 0) idx else 0
     }
 
+    private fun loadLinuxProtons(container: Container) {
+        val request = ++linuxProtonRequest
+        linuxProtonIds = null
+        state.linuxProtonEntries.value = emptyList()
+        // The client's own entry and native programs start no Proton; the container's choice covers Steam.
+        if (!container.isGamescopeRuntime || LinuxApps.isLinuxShortcut(shortcut)) return
+        val own = shouldUseShortcutOverrides(container)
+        val stored = if (own)
+            getShortcutSetting(Container.EXTRA_LINUX_PROTON, container.getLinuxProton())
+        else
+            container.getLinuxProton()
+        Thread({
+            // A change made in Steam's own Properties shows here too.
+            val saved = (if (own) LinuxProtons.choiceFor(context, shortcut) else null) ?: stored
+            val choices = LinuxProtons.choices(context)
+            activity.runOnUiThread {
+                if (request != linuxProtonRequest) return@runOnUiThread
+                linuxProtonIds = choices.map { it.first }
+                state.linuxProtonEntries.value = choices.map { it.second }
+                state.selectedLinuxProton.intValue = choices.indexOfFirst { it.first == saved }.coerceAtLeast(0)
+            }
+        }, "LinuxProtons").start()
+    }
+
     private fun loadBox64Versions(container: Container = shortcut.container) {
         val itemList: MutableList<String> = if (isArm64EC) {
             context.resources.getStringArray(R.array.wowbox64_version_entries).toMutableList()
@@ -1050,10 +1100,7 @@ class ShortcutSettingsComposeDialog private constructor(
 
     private fun loadEnvVars() {
         val container = shortcut.container
-        val envVarsStr = getShortcutSetting(
-            "envVars",
-            container?.getEnvVars() ?: Container.DEFAULT_ENV_VARS
-        )
+        val envVarsStr = getShortcutSetting("envVars", containerEnvVars(container))
         val items = parseEnvVarItems(envVarsStr)
         state.envVars.value = items
 
@@ -1073,21 +1120,16 @@ class ShortcutSettingsComposeDialog private constructor(
 
     private fun selectScreenSize(screenSize: String) {
         val entries = state.screenSizeEntries.value
-        // Try to match by identifier
-        val idx = entries.indexOfFirst {
-            StringUtils.parseIdentifier(it) == StringUtils.parseIdentifier(screenSize)
-        }
-        if (idx >= 0) {
+        val normalized = ScreenSizes.sanitize(screenSize, Container.DEFAULT_SCREEN_SIZE)
+        val idx = entries.indexOfFirst { StringUtils.parseIdentifier(it) == normalized }
+        if (idx > 0) {
             state.selectedScreenSize.intValue = idx
-        } else {
-            // Custom screen size
-            state.selectedScreenSize.intValue = 0 // "Custom" is at index 0
-            val parts = screenSize.split("x")
-            if (parts.size == 2) {
-                state.customWidth.value = parts[0]
-                state.customHeight.value = parts[1]
-            }
+            return
         }
+        state.selectedScreenSize.intValue = 0
+        val parts = normalized.split("x")
+        state.customWidth.value = parts[0]
+        state.customHeight.value = parts[1]
     }
 
 
@@ -1132,6 +1174,12 @@ class ShortcutSettingsComposeDialog private constructor(
             val zinkMode = if (state.selectedZinkMode.intValue == 1) "windows" else "unix"
             hasContainerOverride =
                 hasContainerOverride or saveOverride("zinkMode", zinkMode, container.getZinkMode())
+
+            hasContainerOverride = hasContainerOverride or saveOverride(
+                Container.EXTRA_DISPLAY_BACKEND,
+                displayBackendFromIndex(state.selectedDisplayServer.intValue),
+                container.getDisplayBackend()
+            )
 
             val graphicsDriverConfig = buildGraphicsDriverConfigFromState()
             hasContainerOverride = hasContainerOverride or saveOverride(
@@ -1215,7 +1263,7 @@ class ShortcutSettingsComposeDialog private constructor(
             // Env vars
             val envVarsStr = buildEnvVarsString()
             hasContainerOverride =
-                hasContainerOverride or saveOverride("envVars", envVarsStr, container.getEnvVars())
+                hasContainerOverride or saveOverride("envVars", envVarsStr, containerEnvVars(container))
 
             // FEXCore
             val fexcoreVersionEntries = state.fexcoreVersionEntries.value
@@ -1233,6 +1281,14 @@ class ShortcutSettingsComposeDialog private constructor(
             hasContainerOverride = hasContainerOverride or saveOverride(
                 "fexcorePreset", fexcorePreset, container.getFEXCorePreset()
             )
+
+            linuxProtonIds?.let { ids ->
+                hasContainerOverride = hasContainerOverride or saveOverride(
+                    Container.EXTRA_LINUX_PROTON,
+                    ids.getOrElse(state.selectedLinuxProton.intValue) { Container.LINUX_PROTON_DEFAULT },
+                    container.getLinuxProton()
+                )
+            }
 
             // Box64
             val box64VersionEntries = state.box64VersionEntries.value
@@ -1319,7 +1375,10 @@ class ShortcutSettingsComposeDialog private constructor(
             hasContainerOverride = hasContainerOverride or saveOverride(
                 InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS,
                 if (state.adaptiveJoysticks.value) "1" else "0",
-                container.getExtra(InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS, "0")
+                container.getExtra(
+                    InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS,
+                    DeviceProfileSettings.adaptiveJoysticksDefaultExtra(context),
+                ),
             )
 
             // Touchscreen mode
@@ -1450,8 +1509,12 @@ class ShortcutSettingsComposeDialog private constructor(
             if (state.desktopThemeEntries.value.isNotEmpty()) {
                 val desktopThemeEntries = state.desktopThemeEntries.value
                 val dtIdx = state.selectedDesktopTheme.intValue
-                val selectedLabel = if (dtIdx in desktopThemeEntries.indices) desktopThemeEntries[dtIdx] else ""
-                val themeName = selectedLabel.uppercase()
+                val themeName =
+                    if (dtIdx in desktopThemeEntries.indices) {
+                        WineThemeManager.Theme.values().getOrNull(dtIdx)?.name ?: "LIGHT"
+                    } else {
+                        "LIGHT"
+                    }
                 // Preserve existing compound value, only replace the theme portion
                 val existing = getShortcutSetting("desktopTheme", container.getDesktopTheme())
                 val parts = existing.split(",").toMutableList()
@@ -1546,6 +1609,10 @@ class ShortcutSettingsComposeDialog private constructor(
                 }
             } else {
                 shortcut.saveData()
+            }
+            if (container.isGamescopeRuntime || originalContainer.isGamescopeRuntime) {
+                LinuxProtons.updateChoices(context)
+                LinuxDriverChoices.update(context)
             }
             com.winlator.cmod.app.shell.UnifiedActivity.refreshLibrary()
         }
@@ -1939,6 +2006,8 @@ class ShortcutSettingsComposeDialog private constructor(
         val entries =
             context.resources.getStringArray(R.array.audio_driver_entries).toList()
                 .filter {
+                    // A Linux session has a PulseAudio server and DirectAudio's host, and nothing that speaks ALSA.
+                    if (container.isGamescopeRuntime) return@filter !it.equals("ALSA", true)
                     !it.equals("DirectAudio", true) ||
                         DirectAudioDriver.isSupportedFor(wineVersion) ||
                         DirectAudioDriver.isSelected(resolved)
@@ -1983,6 +2052,12 @@ class ShortcutSettingsComposeDialog private constructor(
         target.intValue = if (idx >= 0) idx else 0
     }
 
+    /** What the container hands a shortcut: a GameScope one leaves out what its sessions never read. */
+    private fun containerEnvVars(container: Container?): String {
+        val envVars = container?.getEnvVars() ?: Container.DEFAULT_ENV_VARS
+        return if (container?.isGamescopeRuntime == true) EnvVarsView.forGamescope(envVars) else envVars
+    }
+
     private fun saveOverride(
         extraName: String,
         newValue: String,
@@ -2003,22 +2078,18 @@ class ShortcutSettingsComposeDialog private constructor(
         val entries = state.screenSizeEntries.value
         val selectedIdx = state.selectedScreenSize.intValue
         if (selectedIdx !in entries.indices) return Container.DEFAULT_SCREEN_SIZE
-
-        val selectedValue = entries[selectedIdx]
-        return if (selectedValue.equals("custom", ignoreCase = true)) {
-            val w = state.customWidth.value.trim()
-            val h = state.customHeight.value.trim()
-            if (w.matches(Regex("[0-9]+")) && h.matches(Regex("[0-9]+"))) {
-                // Ensure even numbers
-                val width = (w.toInt() / 2) * 2
-                val height = (h.toInt() / 2) * 2
-                "${width}x${height}"
-            } else {
-                Container.DEFAULT_SCREEN_SIZE
+        if (selectedIdx == 0) {
+            val width = state.customWidth.value.trim().toIntOrNull()
+            val height = state.customHeight.value.trim().toIntOrNull()
+            if (width == null || height == null || width <= 0 || height <= 0) {
+                return Container.DEFAULT_SCREEN_SIZE
             }
-        } else {
-            StringUtils.parseIdentifier(selectedValue)
+            return ScreenSizes.format(width, height)
         }
+        return ScreenSizes.sanitize(
+            StringUtils.parseIdentifier(entries[selectedIdx]),
+            Container.DEFAULT_SCREEN_SIZE
+        )
     }
 
     private fun buildWinComponentsString(): String {
@@ -2161,74 +2232,59 @@ class ShortcutSettingsComposeDialog private constructor(
         state.graphicsDriverVersion.value = config["version"] ?: ""
     }
 
-    private fun loadGraphicsDriverVersions(container: Container = shortcut.container) {
-        val versions = mutableListOf<String>()
-        try {
-            val defaults = context.resources.getStringArray(R.array.wrapper_graphics_driver_version_entries)
-            for (ver in defaults) {
-                try {
-                    if (com.winlator.cmod.runtime.system.GPUInformation.isDriverSupported(ver, context))
-                        versions.add(ver)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "Error checking driver support: $ver", e)
-                }
-            }
-            try {
-                val adrenoManager = com.winlator.cmod.runtime.content.AdrenotoolsManager(context)
-                val installed = adrenoManager.enumarateInstalledDrivers()
-                if (installed != null) versions.addAll(installed)
-            } catch (e: Throwable) {
-                Log.w(TAG, "Error loading Adrenotools drivers", e)
-            }
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error loading wrapper versions", e)
-        }
-        if (versions.isEmpty()) versions.add("System")
+    private var extensionsRequest = 0
 
-        state.gfxDriverVersionEntries.value = versions
-
+    private fun savedGraphicsDriverConfig(container: Container = shortcut.container): Map<String, String> {
         val configStr = if (shouldUseShortcutOverrides(container))
             getShortcutSetting("graphicsDriverConfig", container.getGraphicsDriverConfig())
         else
             container.getGraphicsDriverConfig()
-        val config = GraphicsDriverConfigUtils.parseGraphicsDriverConfig(configStr)
-        val initialVersion = config["version"] ?: ""
-        if (initialVersion.isNotEmpty()) {
-            val idx = versions.indexOfFirst { it.equals(initialVersion, ignoreCase = true) }
-            if (idx >= 0) state.gfxSelectedDriverVersion.intValue = idx
-        }
+        return GraphicsDriverConfigUtils.parseGraphicsDriverConfig(configStr)
+    }
 
-        loadExtensionsForVersion(state.gfxSelectedDriverVersion.intValue)
+    private fun loadGraphicsDriverVersions(container: Container = shortcut.container) {
+        val savedVersion = savedGraphicsDriverConfig(container)["version"] ?: ""
+        state.gfxDriverVersionEntries.value = listOf(if (savedVersion.isNotEmpty()) savedVersion else "System")
+        state.gfxSelectedDriverVersion.intValue = 0
+        Thread({
+            val versions = if (container.isGamescopeRuntime) {
+                DriverPackages.linuxSelectionEntries(context)
+            } else {
+                com.winlator.cmod.runtime.system.GraphicsDriverCatalog.supportedVersions(context)
+            }
+            activity.runOnUiThread {
+                state.gfxDriverVersionEntries.value = versions
+                val idx = versions.indexOfFirst { it.equals(savedVersion, ignoreCase = true) }
+                state.gfxSelectedDriverVersion.intValue = if (idx >= 0) idx else 0
+                loadExtensionsForVersion(state.gfxSelectedDriverVersion.intValue)
+            }
+        }, "GraphicsDriverProbe").start()
     }
 
     private fun loadExtensionsForVersion(versionIndex: Int) {
-        val versions = state.gfxDriverVersionEntries.value
-        val version = versions.getOrElse(versionIndex) { return }
-        try {
-            val extensions = com.winlator.cmod.runtime.system.GPUInformation.enumerateExtensions(version, context)
-            if (extensions != null) {
-                state.gfxAvailableExtensions.value = extensions.toList()
-
-                // On initial load, set blacklisted from config; on version change, clear blacklist
-                val configStr = getShortcutSetting("graphicsDriverConfig", shortcut.container.getGraphicsDriverConfig())
-                val config = GraphicsDriverConfigUtils.parseGraphicsDriverConfig(configStr)
-                val savedVersion = config["version"] ?: ""
-                if (version == savedVersion) {
-                    val bl = config["blacklistedExtensions"] ?: ""
-                    state.gfxBlacklistedExtensions.value = if (bl.isNotEmpty()) bl.split(",").toSet() else emptySet()
-                } else {
-                    state.gfxBlacklistedExtensions.value = emptySet()
-                }
+        val version = state.gfxDriverVersionEntries.value.getOrElse(versionIndex) { return }
+        val request = ++extensionsRequest
+        Thread({
+            val extensions = if (shortcut.container.isGamescopeRuntime) {
+                emptyList()
             } else {
-                state.gfxAvailableExtensions.value = emptyList()
-                state.gfxBlacklistedExtensions.value = emptySet()
+                com.winlator.cmod.runtime.system.GraphicsDriverCatalog.extensions(context, version)
             }
-        } catch (e: Throwable) {
-            Log.e(TAG, "Error loading extensions for $version", e)
-            state.gfxAvailableExtensions.value = emptyList()
-            state.gfxBlacklistedExtensions.value = emptySet()
-        }
+            activity.runOnUiThread {
+                if (request != extensionsRequest) return@runOnUiThread
+                state.gfxAvailableExtensions.value = extensions
+                val config = savedGraphicsDriverConfig()
+                state.gfxBlacklistedExtensions.value =
+                    if (version == (config["version"] ?: "")) {
+                        val bl = config["blacklistedExtensions"] ?: ""
+                        if (bl.isNotEmpty()) bl.split(",").toSet() else emptySet()
+                    } else {
+                        emptySet()
+                    }
+            }
+        }, "GraphicsDriverExtensions").start()
     }
+
 
     private fun loadDxvkConfigState(container: Container = shortcut.container) {
         val configStr = if (shouldUseShortcutOverrides(container))
@@ -2364,6 +2420,12 @@ class ShortcutSettingsComposeDialog private constructor(
         isArm64EC = wineInfo.isArm64EC
         state.isArm64EC.value = isArm64EC
         state.wineVersionDisplay.value = formatWineVersionDisplay(wineInfo)
+        // The Wayland row keys its capability check on this, so it has to move with the container
+        // or the row keeps the previous container's verdict until the sheet is reopened.
+        state.wineVersionIdentifier.value = wineVersionStr
+        // Which pages and rows exist depends on this, so it moves with the container too.
+        state.gamescopeContainer.value = newContainer.isGamescopeRuntime
+        loadLinuxProtons(newContainer)
         rebuildEmulatorLists()
 
         selectByIdentifier(
@@ -2435,9 +2497,9 @@ class ShortcutSettingsComposeDialog private constructor(
         // Desktop theme is stored as compound "THEME,TYPE,COLOR".
         val desktopThemeArr = state.desktopThemeEntries.value
         if (desktopThemeArr.isNotEmpty()) {
-            val themePart = container.getDesktopTheme().split(",").firstOrNull()?.trim() ?: ""
-            val themeIdx = desktopThemeArr.indexOfFirst { it.equals(themePart, ignoreCase = true) }
-            state.selectedDesktopTheme.intValue = if (themeIdx >= 0) themeIdx else 0
+            state.selectedDesktopTheme.intValue =
+                WineThemeManager.ThemeInfo(container.getDesktopTheme()).theme.ordinal
+                    .coerceIn(0, desktopThemeArr.size - 1)
         }
 
         val directX = mutableListOf<WinComponentItem>()
@@ -2453,7 +2515,7 @@ class ShortcutSettingsComposeDialog private constructor(
         state.directXComponents.value = directX
         state.generalComponents.value = general
 
-        val containerEnvVarsStr = container.getEnvVars() ?: Container.DEFAULT_ENV_VARS
+        val containerEnvVarsStr = containerEnvVars(container)
         val items = parseEnvVarItems(containerEnvVarsStr)
         state.sdl2Compatibility.value = EnvVars(containerEnvVarsStr).get("SDL_XINPUT_ENABLED") == "1"
         state.envVars.value = if (state.sdl2Compatibility.value) {
@@ -2473,7 +2535,10 @@ class ShortcutSettingsComposeDialog private constructor(
             if ((inputType and WinHandler.FLAG_DINPUT_MAPPER_STANDARD.toInt()) == WinHandler.FLAG_DINPUT_MAPPER_STANDARD.toInt()) 0 else 1
         state.shortcutExclusiveXInput.value = container.isExclusiveXInput()
         state.adaptiveJoysticks.value =
-            container.getExtra(InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS, "0") == "1"
+            container.getExtra(
+                InputControlsView.EXTRA_ADAPTIVE_JOYSTICKS,
+                DeviceProfileSettings.adaptiveJoysticksDefaultExtra(context),
+            ) == "1"
         if (!state.shortcutExclusiveXInput.value) {
             state.enableXInput.value = true
             state.enableDInput.value = true

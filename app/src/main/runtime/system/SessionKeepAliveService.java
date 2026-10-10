@@ -72,6 +72,8 @@ public class SessionKeepAliveService extends Service {
 
     private static volatile XEnvironment activeEnvironment;
     private static volatile XServer activeXServer;
+    /* The active environment runs gamescope in the Linux runtime rather than Wine. */
+    private static volatile boolean linuxSessionActive;
 
     private static volatile boolean isContainerPaused = false;
 
@@ -186,6 +188,7 @@ public class SessionKeepAliveService extends Service {
         final XEnvironment env = activeEnvironment;
         activeEnvironment = null;
         activeXServer = null;
+        linuxSessionActive = false;
         if (env == null) return;
         new Thread(() -> {
             try {
@@ -210,6 +213,20 @@ public class SessionKeepAliveService extends Service {
 
     public static void setActiveXServer(XServer xServer) {
         activeXServer = xServer;
+    }
+
+    public static void clearActiveSession() {
+        activeEnvironment = null;
+        activeXServer = null;
+        linuxSessionActive = false;
+    }
+
+    public static boolean isLinuxSessionActive() {
+        return linuxSessionActive;
+    }
+
+    public static void setLinuxSessionActive(boolean active) {
+        linuxSessionActive = active;
     }
 
     public static void setPipMode(boolean inPip) {
@@ -391,7 +408,11 @@ public class SessionKeepAliveService extends Service {
                 String action = intent.getAction();
                 if (Intent.ACTION_SCREEN_OFF.equals(action)) {
                     isScreenLocked = true;
-                    acquireWakeLock();
+                    // Only hold the CPU for a session that is actually running, which is the one
+                    // thing this lock exists for. The service outlives the session whenever a
+                    // download or Steam chat keeps it alive, and the lock is released only when
+                    // the user unlocks - so without this an idle app holds the CPU awake all night.
+                    if (sessionActive.get()) acquireWakeLock();
                     LogManager.log(TAG, "Screen turned off / device locked");
                 } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
                     isScreenLocked = false;
@@ -420,11 +441,11 @@ public class SessionKeepAliveService extends Service {
         // Reset the stopping flag as we've received a new start command (or are resuming)
         serviceStopping = false;
 
-        // Always promote to foreground first so Android does not consider
-        // the start a violation (and so the notification reflects current
-        // reasons), even if the command immediately tells us to stop.
-        ensureForeground();
-        serviceRunning.set(true);
+        // A startForegroundService() request must be followed by a real
+        // startForeground() call. Do not trust the process-wide running flag
+        // here: a stop/restart race can leave it true after the service has
+        // already left the foreground.
+        ensureForeground(true);
 
         // Handle the Exit button from the notification
         if (ACTION_SESSION_STOP.equals(action)) {
@@ -467,6 +488,10 @@ public class SessionKeepAliveService extends Service {
     }
 
     private void ensureForeground() {
+        ensureForeground(false);
+    }
+
+    private void ensureForeground(boolean forceStart) {
         boolean containerActive = sessionActive.get();
         // Only show Exit button if app is in background AND container is running or user wants to keep steam chat alive.
 //        boolean showExit = isAppNotVisible() && (containerActive || PrefManager.INSTANCE.getChatStayRunningOnExit());    // Disabled because container "Exit" causes too much issues, ANR crash for example.
@@ -491,14 +516,16 @@ public class SessionKeepAliveService extends Service {
         }
 
         try {
-            // Only call startForeground the first time. Use notify() for updates.
-            if (!serviceRunning.get()) {
+            // startForeground() is required for every explicit service start.
+            // Otherwise, only call it the first time and use notify() for updates.
+            if (forceStart || !serviceRunning.get()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     startForeground(notificationId, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
                 }
                 else {
                     startForeground(notificationId, n);
                 }
+                serviceRunning.set(true);
             }
             else {
                 // Standard notification update
@@ -758,6 +785,7 @@ public class SessionKeepAliveService extends Service {
 
     private static void resetLocalState() {
         sessionActive.set(false);
+        clearActiveSession();
         isContainerPaused = false;
         synchronized (activeDownloads) { activeDownloads.clear(); }
         activeComponents.clear();

@@ -3,6 +3,7 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import android.util.Log
+import com.winlator.cmod.app.config.DeviceProfileSettings
 import com.winlator.cmod.app.db.PluviaDatabase
 import com.winlator.cmod.app.update.UpdateService
 import com.winlator.cmod.feature.stores.gog.service.GOGAuthManager
@@ -44,8 +45,15 @@ class PluviaApp : Application() {
         super.onCreate()
         instance = this
 
+        val systemUncaughtHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e("PluviaApp", "CRASH in thread ${thread.name}", throwable)
+            if (systemUncaughtHandler != null) {
+                systemUncaughtHandler.uncaughtException(thread, throwable)
+            } else {
+                android.os.Process.killProcess(android.os.Process.myPid())
+                kotlin.system.exitProcess(10)
+            }
         }
 
         // Initialize Timber in debug builds for app wide logging.
@@ -65,10 +73,15 @@ class PluviaApp : Application() {
         // Cached probe for devices whose native stack still needs system libjpeg preloaded.
         preloadSystemLibraries()
 
+        runCatching { DeviceProfileSettings.seedFromDetection(this) }
+            .onFailure { Log.w("PluviaApp", "device profile detection failed", it) }
+
         registerRefreshRateLifecycleCallbacks()
 
         PrefManager.install(this)
         GOGConstants.init(this)
+        com.winlator.cmod.feature.storage.ExternalStorage
+            .install(this)
 
         com.winlator.cmod.app.service.NetworkMonitor
             .init(this)

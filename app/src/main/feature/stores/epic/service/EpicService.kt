@@ -9,6 +9,8 @@ import com.winlator.cmod.app.db.download.DownloadRecord
 import com.winlator.cmod.app.service.DownloadService
 import com.winlator.cmod.app.service.download.DownloadCoordinator
 import com.winlator.cmod.feature.shortcuts.LibraryShortcutUtils
+import com.winlator.cmod.feature.stores.common.InstallOwnership
+import com.winlator.cmod.feature.stores.common.InstallStore
 import com.winlator.cmod.feature.stores.common.StoreArtworkCache
 import com.winlator.cmod.feature.stores.epic.data.EpicCredentials
 import com.winlator.cmod.feature.stores.epic.data.EpicGame
@@ -242,6 +244,7 @@ class EpicService : Service() {
                         context,
                         path,
                         protectedRoots = listOf(EpicConstants.defaultEpicGamesPath(context)),
+                        owner = InstallStore.EPIC,
                     )
                 if (!deleteCheck.allowed) {
                     Timber.tag("Epic").e("Safety Triggered: Refusing to delete install path '$path': ${deleteCheck.reason}")
@@ -385,6 +388,12 @@ class EpicService : Service() {
             val game = getEpicGameOf(appId) ?: return false
 
             if (game.isInstalled && game.installPath.isNotEmpty()) {
+                if (InstallOwnership.isForeign(game.installPath, InstallStore.EPIC)) {
+                    runBlocking(Dispatchers.IO) {
+                        getInstance()?.epicManager?.updateGame(game.copy(isInstalled = false, installPath = ""))
+                    }
+                    return false
+                }
                 return MarkerUtils.hasMarker(game.installPath, Marker.DOWNLOAD_COMPLETE_MARKER) &&
                     !MarkerUtils.hasMarker(game.installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
             }
@@ -395,6 +404,8 @@ class EpicService : Service() {
                         EpicConstants.getGameInstallPath(context, it)
                     }
                     ?: return false
+
+            if (InstallOwnership.isForeign(installPath, InstallStore.EPIC)) return false
 
             val isDownloadComplete = MarkerUtils.hasMarker(installPath, Marker.DOWNLOAD_COMPLETE_MARKER)
             val isDownloadInProgress = MarkerUtils.hasMarker(installPath, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
@@ -1249,6 +1260,7 @@ class EpicService : Service() {
                                     applicationContext,
                                     pathToDelete,
                                     protectedRoots = listOf(EpicConstants.defaultEpicGamesPath(applicationContext)),
+                                    owner = InstallStore.EPIC,
                                 )
                             if (deleteCheck.allowed) {
                                 MarkerUtils.removeMarker(pathToDelete, Marker.DOWNLOAD_IN_PROGRESS_MARKER)
@@ -1283,6 +1295,15 @@ class EpicService : Service() {
     ): Int {
         Timber.tag("EPIC").d("onStartCommand() - action: ${intent?.action}")
 
+        // A null intent is Android restarting this service on its own after the process died.
+        // Nobody asked for it and there is no UI, so registering the keep-alive component below
+        // would leave a foreground service and its wakelock running for hours over nothing.
+        if (intent == null) {
+            Timber.tag("EPIC").i("Restarted by Android with no UI; stopping instead")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         SessionKeepAliveService.startComponent(this, SessionKeepAliveService.COMPONENT_EPIC, "Connected")
 
         val shouldSync =
@@ -1298,7 +1319,9 @@ class EpicService : Service() {
                 }
 
                 null -> {
-                    // START_STICKY restart: sync only if initial sync is missing or throttle elapsed.
+                    // Started without an action, which is how the throttled path above asks for a
+                    // start with no sync: sync only if the initial one is missing or the throttle
+                    // has since elapsed.
                     val timeSinceLastSync = System.currentTimeMillis() - lastSyncTimestamp
                     val shouldResync = !hasPerformedInitialSync || timeSinceLastSync >= SYNC_THROTTLE_MILLIS
 
@@ -1307,11 +1330,11 @@ class EpicService : Service() {
                             .tag(
                                 "EPIC",
                             ).i(
-                                "Service restarted by Android - performing sync (hasPerformedInitialSync=$hasPerformedInitialSync, timeSinceLastSync=${timeSinceLastSync}ms)",
+                                "Started without a sync action - performing sync (hasPerformedInitialSync=$hasPerformedInitialSync, timeSinceLastSync=${timeSinceLastSync}ms)",
                             )
                         true
                     } else {
-                        Timber.tag("EPIC").d("Service restarted by Android - skipping sync (throttled)")
+                        Timber.tag("EPIC").d("Started without a sync action - skipping sync (throttled)")
                         false
                     }
                 }
