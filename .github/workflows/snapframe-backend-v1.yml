@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  SNAP_AI_ENGINE_REF: "aaf0c8472c2106244aeaae59f4a35d39a5352762"
+  SNAP_AI_ENGINE_REF: "12d89ff6b8adbb4da642912c13afec95f58bdc5e"
   NDK_VERSION: "29.0.14206865"
 
 jobs:
