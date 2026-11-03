@@ -1,0 +1,68 @@
+name: SnapFrameBackendV1 Android library CI
+
+on:
+  push:
+    branches: [snapframe-backend-v1]
+    paths:
+      - "app/src/main/cpp/**"
+      - ".github/workflows/snapframe-backend-v1.yml"
+  pull_request:
+    branches: [snapframe-backend-v1]
+    paths:
+      - "app/src/main/cpp/**"
+      - ".github/workflows/snapframe-backend-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SNAP_AI_ENGINE_REF: "aaf0c8472c2106244aeaae59f4a35d39a5352762"
+  NDK_VERSION: "29.0.14206865"
+
+jobs:
+  portable-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Snap888/Snap_AI_Engine
+          ref: ${{ env.SNAP_AI_ENGINE_REF }}
+          path: snap-ai-engine
+      - name: Configure portable SnapFrame
+        run: cmake -S snap-ai-engine/framegen -B build-host -DSNAP_FRAME_BUILD_TESTS=ON -DSNAP_FRAME_BUILD_EXAMPLE=OFF
+      - name: Build and test portable core
+        run: |
+          cmake --build build-host --parallel
+          ctest --test-dir build-host --output-on-failure
+
+  android-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: Snap888/Snap_AI_Engine
+          ref: ${{ env.SNAP_AI_ENGINE_REF }}
+          path: snap-ai-engine
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+      - name: Install Android NDK
+        run: sdkmanager --install "ndk;${{ env.NDK_VERSION }}"
+      - name: Configure SnapFrame Android arm64
+        run: |
+          cmake -S snap-ai-engine/framegen -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 \
+            -DSNAP_FRAME_BUILD_TESTS=OFF -DSNAP_FRAME_BUILD_EXAMPLE=OFF
+      - name: Build SnapFrame Android library
+        run: cmake --build build-android --parallel
+      - name: Upload SnapFrame library
+        uses: actions/upload-artifact@v4
+        with:
+          name: winnative-snapframe-android-arm64
+          path: build-android/**/*.a
+          if-no-files-found: error
+          retention-days: 14
