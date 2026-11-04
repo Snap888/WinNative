@@ -479,7 +479,7 @@ static int dev_init(void) {
                                    .queueFamilyIndex = g_qfam, .queueCount = 1, .pQueuePriorities = &prio};
     /* Frame generation (framegen_bridge.c): the LSFG chain needs the memory-model and
      * storage-image features enabled at device creation; the probe hands back the pNext chain
-     * for them, or NULL on a device that cannot run it (then OpenFlow Native alone is offered). A
+     * for them, or NULL on a device that cannot run it (then WFG Native alone is offered). A
      * driver that rejects the chain costs nothing: retried once without it, exactly as before. */
     const void *fg_features = vkp_framegen_device_features(g_inst, vk_loader_gipa(), g_pd);
     VkDeviceCreateInfo dci = {.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, .pNext = fg_features,
@@ -1849,6 +1849,10 @@ int vkp_surface_rotation_degrees(void) {
 }
 
 ANativeWindow *vkp_window(void) { return g_window; }
+
+void vkp_reset_first_frame(void) {
+    g_first_frame_done = 0;
+}
 
 void vkp_signal_first_frame(void) {
     if (g_first_frame_done) return;

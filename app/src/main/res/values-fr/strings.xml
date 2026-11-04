@@ -827,6 +827,10 @@ Par ex. <b>META</b> pour la <i>touche META</i>, \n
     <string name="input_controls_auto_hide_section">Commandes tactiles</string>
     <string name="input_controls_auto_hide_on_controller_title">Masquer automatiquement avec une manette</string>
     <string name="input_controls_auto_hide_on_controller_summary">Masquer les commandes tactiles lorsqu\'une manette est connectée</string>
+
+    <string name="input_controls_report_real_identity_title">Utiliser l\'identité réelle</string>
+    <string name="input_controls_report_real_identity_summary">Envoyer aux jeux le nom et les identifiants propres à cet appareil au lieu de simuler une manette Xbox 360.</string>
+
     <string name="session_gyroscope_title">Gyroscope</string>
     <string name="session_gyroscope_calibrate">Calibrer le gyroscope</string>
     <string name="session_gyroscope_enable_right_stick">Activer le mouvement gyroscopique du stick droit</string>
@@ -2723,7 +2727,7 @@ Chemin installé :
     <string name="session_drawer_frame_generation_enable">Générer des images</string>
     <string name="session_drawer_frame_generation_engine_off">Désactivé</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
+    <string name="session_drawer_frame_generation_engine_dis">WFG</string>
     <string name="session_drawer_frame_generation_multiplier">Multiplicateur</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Cible adaptative</string>
@@ -2731,18 +2735,17 @@ Chemin installé :
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Interpole entre les images rendues avec Lossless Scaling. Mouvement plus fluide, mais une image supplémentaire de latence d\'entrée.</string>
     <string name="session_drawer_frame_generation_target_note">Monte vers la cible uniquement tant que cela aide de façon mesurable, au lieu de conserver un multiplicateur fixe.</string>
-    <string name="session_drawer_frame_generation_missing">Installez Lossless Scaling dans les paramètres du conteneur pour utiliser le moteur LSFG. OpenFlow ne nécessite rien de plus.</string>
+    <string name="session_drawer_frame_generation_missing">Installez Lossless Scaling dans les paramètres du conteneur pour utiliser le moteur LSFG. WFG ne nécessite rien de plus.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpole entre les images rendues avec Dense Inverse Search. Intégré ; aucun shader externe requis.</string>
     <string name="session_drawer_dis_resolution_scale">Échelle de résolution</string>
     <string name="session_drawer_dis_preset_fast">Rapide</string>
     <string name="session_drawer_dis_preset_balance">Équilibré</string>
-    <string name="session_drawer_dis_preset_quality">Qualité</string>
     <string name="session_drawer_dis_resolution_scale_note">Le mouvement est analysé à %1$d pixels sur le côté le plus court de l\'image. Plus bas coûte moins cher ; plus haut suit mieux les détails petits ou rapides.</string>
     <string name="session_drawer_dis_target_fps">FPS cible</string>
     <string name="session_drawer_dis_target_fps_max">Fréquence max.</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Afficher le flux</string>
-    <string name="session_drawer_dis_debug_flow_note">Dessine les vecteurs de mouvement estimés par OpenFlow au lieu de l\'image générée. Diagnostic uniquement.</string>
+    <string name="session_drawer_dis_debug_flow_note">Dessine les vecteurs de mouvement estimés par WFG au lieu de l\'image générée. Diagnostic uniquement.</string>
     <string name="frame_generation_preset">Préréglage de qualité</string>
     <string name="frame_generation_preset_ultra_performance">Ultra performance</string>
     <string name="frame_generation_preset_performance">Performance</string>
