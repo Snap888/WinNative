@@ -55,6 +55,7 @@ import com.winlator.cmod.feature.stores.steam.enums.Marker;
 import com.winlator.cmod.feature.stores.steam.utils.MarkerUtils;
 import com.winlator.cmod.feature.stores.steam.utils.PrefManager;
 import com.winlator.cmod.feature.stores.steam.utils.SteamUtils;
+import com.winlator.cmod.feature.stores.steam.workshop.WorkshopModsGenerator;
 
 import androidx.preference.PreferenceManager;
 import com.winlator.cmod.R;
@@ -66,6 +67,7 @@ import com.winlator.cmod.feature.setup.SetupWizardActivity;
 import com.winlator.cmod.runtime.container.Container;
 import com.winlator.cmod.runtime.display.environment.components.LinuxProgramLauncherComponent;
 import com.winlator.cmod.runtime.linux.LinuxRuntime;
+import com.winlator.cmod.runtime.linux.ProotFastPath;
 import com.winlator.cmod.runtime.display.environment.components.NetworkingSettings;
 import com.winlator.cmod.runtime.container.ContainerManager;
 import com.winlator.cmod.runtime.container.Shortcut;
@@ -522,7 +524,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private Thread waylandRendererThread;
     /* The process behind the window the compositor is showing, from the compositor itself. */
     private volatile int waylandGamePid;
-    private static final int[] DIS_FLOW_MIN_SIDES = {180, 252, 360};
+    private static final int[] DIS_FLOW_MIN_SIDES = {180, 252};
     private static final int DIS_FRAME_GEN_SCALE_DEFAULT = 180;
 
     private int disFrameGenScale = DIS_FRAME_GEN_SCALE_DEFAULT;
@@ -645,6 +647,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private boolean waylandMode;
     /* The container boots gamescope in the Linux runtime; the compositor is its display. */
     private boolean gamescopeMode;
+    /** The Linux session runs the Steam client (winnative-session steam). */
+    private volatile boolean linuxSteamSession;
     private WaylandSession waylandSession;
     private final java.util.concurrent.atomic.AtomicInteger waylandFrameSerial =
             new java.util.concurrent.atomic.AtomicInteger();
@@ -2710,6 +2714,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         extractGraphicsDriverFiles();
                         resolveAudioDriver();
                         changeWineAudioDriver();
+                        applyColorCursorRegistry();
 
                         try {
                             if (steamFuture != null) steamFuture.get();
@@ -4099,6 +4104,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 cleanupActivityCallbacks("exit");
                 // Teardown blocks for seconds (cloud upload + clean-shutdown wait); run off the UI thread or the closing splash freezes. UI-touching calls are marshalled back.
                 new Thread(() -> {
+                    askLinuxSteamToExit();
                     sanitizeSteamStateForNextSession("exit", true);
                     if (midiHandler != null) midiHandler.stop();
                     stopWinHandler("exit");
@@ -4131,6 +4137,20 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 }, "XServerExitCleanup").start();
             }, 1000);
         });
+    }
+
+    /**
+     * The Linux Steam client, asked to shut down before anything of the session is ended: the
+     * teardown below matches its web helper's processes as session processes and would kill them
+     * first. Worker thread; returns at once when no client is running.
+     */
+    private void askLinuxSteamToExit() {
+        XEnvironment env = environment;
+        if (!linuxSteamSession || env == null) return;
+        LinuxProgramLauncherComponent launcher = env.getComponent(LinuxProgramLauncherComponent.class);
+        if (launcher == null) return;
+        launcher.askSteamToExit(new File(GuestProgramLauncherComponent.getWaylandRuntimeDir(this),
+                LinuxRuntime.STEAM_STOP_REQUEST));
     }
 
     private void closeAfterSessionExit() {
@@ -7696,6 +7716,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                             .installSteampipeBridgeIntoApp(this, gameDir);
                     com.winlator.cmod.feature.stores.steam.utils.SteamUtils
                             .invalidateInstallScan(this, appId, gameDir);
+                    setupSteamSettingsForAllDirs(gameDir, appId, language, isOfflineMode,
+                            useSteamInput, ticketBase64);
+                    SteamUtils.enrichSteamSettings(this, appId,
+                            new File(gameInstallPath, "steam_settings"));
                     Log.d("XServerDisplayActivity",
                             "Bionic Steam: " + steampipeSwapped
                             + " steam_api*.dll(s) replaced with steampipe bridge");
@@ -8288,6 +8312,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             overrideEnvVars.clear();
         }
 
+        applyColorCursors();
+
         environment = new XEnvironment(this, imageFs);
         environment.addComponent(
                 new SysVSharedMemoryComponent(
@@ -8334,8 +8360,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             if (DirectAudioDriver.INSTANCE.shouldExposeMic(this, micRequested)) {
                 envVars.put(DirectAudioDriver.ENV_MIC, "1");
             }
-            Log.d("XServerDisplayActivity", "DirectAudio: micRequested=" + micRequested +
-                    " micExposed=" + envVars.has(DirectAudioDriver.ENV_MIC));
+            if (LogManager.isDebugEnabled()) {
+                LogManager.log(TAG, "DirectAudio: micRequested=" + micRequested +
+                        " micExposed=" + envVars.has(DirectAudioDriver.ENV_MIC));
+            }
         }
 
         // Wine cannot enumerate Android network interfaces; Steam treats that as offline.
@@ -8954,9 +8982,21 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (!com.winlator.cmod.runtime.linux.LinuxClientInstaller.hasCompositorDriver(this)) {
             throw new LinuxSessionUnavailable(getString(R.string.linux_client_driver_missing));
         }
+        // A container made before it was a Linux one still carries the Android side's variables,
+        // so it is read here as a Linux session reads it rather than as it was saved.
+        EnvVars userEnv = new EnvVars(EnvVarsView.forGamescope(effectiveUserEnv().toString()));
+        // The games the client starts run under FEX, which a Wine session configures from the
+        // container's preset. Nothing did so here, so anything the client launched ran on FEX's
+        // bare defaults - single-block translation, no store ordering - and a multithreaded x86
+        // title can sit at its loading screen for good waiting on a store it never sees. The
+        // user's own variables are merged over the preset, so an explicit one still wins.
+        EnvVars sessionEnv = FEXCorePresetManager.getEnvVars(this, effectiveFEXCorePreset());
+        FEXCorePresetManager.normalizeSmcChecksEnvVars(sessionEnv, userEnv);
+        sessionEnv.putAll(userEnv);
+        boolean fastPath = ProotFastPath.enabled(sessionEnv);
         try {
             LinuxRuntime.writeAccounts(this);
-            LinuxRuntime.syncSessionFiles(this);
+            LinuxRuntime.syncSessionFiles(this, fastPath);
             // A session that is being rejoined has its client running, and the files are the client's then.
             if (!reusingSession) com.winlator.cmod.runtime.linux.LinuxSteamLogin.seed(this);
             if (!reusingSession) LinuxRuntime.clearSharedMemory(this);
@@ -8966,6 +9006,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         com.winlator.cmod.runtime.linux.LinuxProtons.INSTANCE.reconcile(this);
         com.winlator.cmod.runtime.linux.LinuxDriverChoices.write(this);
         List<String> session = linuxSessionArgs();
+        linuxSteamSession = LinuxRuntime.MODE_STEAM.equals(session.get(0));
         File runtimeDir = GuestProgramLauncherComponent.getWaylandRuntimeDir(this);
         runtimeDir.mkdirs();
 
@@ -8982,6 +9023,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         guest.add("XDG_RUNTIME_DIR=" + runtimeDir.getPath());
         guest.add("XDG_SESSION_TYPE=wayland");
         guest.add("WAYLAND_DISPLAY=wayland-0");
+        int fastPathAt = guest.size();
         guest.add("GAMESCOPE_FORCE_GENERAL_QUEUE=1");
         // The session's own preloads are named by /etc/ld.so.preload in the runtime, not here:
         // the Steam client rebuilds LD_PRELOAD for every process it starts and appends its overlay
@@ -9004,9 +9046,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         guest.add("LIBGL_KOPPER_DRI2=true");
         File icd = LinuxRuntime.vulkanIcd(this, graphicsDriverConfig != null ? graphicsDriverConfig.get("version") : null);
         if (icd != null) guest.add("VK_ICD_FILENAMES=" + icd.getPath());
-        // A container made before it was a Linux one still carries the Android side's variables,
-        // so it is read here as a Linux session reads it rather than as it was saved.
-        EnvVars userEnv = new EnvVars(EnvVarsView.forGamescope(effectiveUserEnv().toString()));
         // The client, its web helper and native games only know PulseAudio, so it runs whatever
         // the entry chose; DirectAudio takes the Windows games off it. The server is built from the
         // entry's own variables: the activity's hold only the few a Wine session starts with.
@@ -9018,14 +9057,20 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         UnixSocketConfig.createSocket(rootPath, UnixSocketConfig.PULSE_SERVER_PATH),
                         pulseOptions));
         if (DirectAudioDriver.INSTANCE.isSelected(audioDriver)) addLinuxDirectAudio(rootPath, guest);
-        // The games the client starts run under FEX, which a Wine session configures from the
-        // container's preset. Nothing did so here, so anything the client launched ran on FEX's
-        // bare defaults - single-block translation, no store ordering - and a multithreaded x86
-        // title can sit at its loading screen for good waiting on a store it never sees. The
-        // user's own variables are merged over the preset, so an explicit one still wins.
-        EnvVars sessionEnv = FEXCorePresetManager.getEnvVars(this, effectiveFEXCorePreset());
-        FEXCorePresetManager.normalizeSmcChecksEnvVars(sessionEnv, userEnv);
-        sessionEnv.putAll(userEnv);
+        // Mesa's shader cache as one database instead of a file per entry. Every lookup in the
+        // file cache is an open and every store an open and a rename, each a proot stop, for every
+        // pipeline DXVK, vkd3d-proton and Zink compile or find; the database is opened once and
+        // read and written with pread/pwrite, which proot never sees.
+        guest.add("MESA_DISK_CACHE_DATABASE=1");
+        // glibc's per-thread rseq registration is refused by Android's app seccomp policy, so
+        // every thread start paid a SIGSYS that proot answers; the malloc top pad grows the heap
+        // 16 MB at a time instead of 128 KB, and every brk(2) is a proot stop too.
+        guest.add("GLIBC_TUNABLES=glibc.pthread.rseq=0:glibc.malloc.top_pad=16777216");
+        // Proton's gamepad-navigation helper. Under FEX it cannot load the session's aarch64
+        // preloads, so its socket and memfd calls reach Android's seccomp filter raw, and sessions
+        // died seconds later on a broken Wayland pipe. The session navigates with pads itself.
+        guest.add("PROTON_USE_XALIA=0");
+        // The container's own variables come after the session's, so an explicit one still wins.
         for (String entry : sessionEnv.toStringArray()) {
             if (!entry.startsWith("PROOT_NO_SECCOMP=")) guest.add(entry);
         }
@@ -9061,8 +9106,22 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             binds.addAll(com.winlator.cmod.runtime.linux.LinuxSteamShortcuts.sync(this));
         }
         com.winlator.cmod.runtime.linux.LinuxEpicTokens.start(this);
-        List<String> command = LinuxRuntime.command(this, imageFs, runtimeDir,
-                android.os.Environment.getExternalStorageDirectory(), devInputDir, binds, guest);
+        List<String> prootBinds = LinuxRuntime.binds(this, imageFs, runtimeDir,
+                android.os.Environment.getExternalStorageDirectory(), devInputDir, binds);
+        // The fast path is told exactly the rootfs and binds proot is given (ProotFastPath).
+        if (fastPath) {
+            File linuxRoot = LinuxRuntime.rootDir(this);
+            String key = ProotFastPath.key(linuxRoot, prootBinds);
+            if (key != null) {
+                guest.addAll(fastPathAt, ProotFastPath.guestEnv(linuxRoot, prootBinds, key));
+                hostEnv.put("PROOT_FASTPATH", key);
+                Log.i(TAG, "proot: fast path on (" + prootBinds.size() + " binds)");
+            } else {
+                Log.w(TAG, "proot: fast path off - " + prootBinds.size() + " binds (it holds "
+                        + ProotFastPath.MAX_BINDS + ") or a path it cannot be told");
+            }
+        }
+        List<String> command = LinuxRuntime.command(this, prootBinds, guest);
         final long startedAt = android.os.SystemClock.elapsedRealtime();
         LinuxProgramLauncherComponent launcher = new LinuxProgramLauncherComponent(
                 command, hostEnv, LinuxRuntime.rootDir(this), linuxLog, (status) -> {
@@ -9277,6 +9336,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             @Override
             public void onFirstFrame() {
                 onFirstGuestWindow();
+                if (linuxSteamSession) {
+                    Context app = getApplicationContext();
+                    new Thread(() -> LinuxRuntime.steamClientShown(app), "SteamClientShown").start();
+                }
             }
 
             @Override
@@ -12341,6 +12404,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
         if (hasSteamDll) {
             SteamUtils.writeCompleteSettingsDir(dir, appId, language, isOffline, useSteamInput, ticketBase64);
+            WorkshopModsGenerator.INSTANCE.generate(this, appId, new File(dir, "steam_settings"));
         }
 
         for (File file : files) {
@@ -13535,6 +13599,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 }
             }
 
+            WorkshopModsGenerator.INSTANCE.syncToSteamLibrary(this, appId, steamappsDir);
+
             ensureSteamLibraryFoldersConfig(steamDir, steamappsDir);
 
             File steamworksAcf = new File(steamappsDir, "appmanifest_228980.acf");
@@ -14024,8 +14090,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (directAudioAvailable != null) return directAudioAvailable;
         String wineIdentifier =
                 wineInfo != null ? wineInfo.identifier() : container.getWineVersion();
-        directAudioAvailable = DirectAudioDriver.INSTANCE.install(this, imageFs, wineIdentifier);
-        Log.d("XServerDisplayActivity", "DirectAudio install for wine '" + wineIdentifier
+        LogManager.log(TAG, "DirectAudio: install start, wine='" + wineIdentifier + "'");
+        try {
+            directAudioAvailable = DirectAudioDriver.INSTANCE.install(this, imageFs, wineIdentifier);
+        } catch (Throwable t) {
+            LogManager.logE(TAG,
+                    "DirectAudio: install threw for '" + wineIdentifier + "' — onCreate dies here", t);
+            directAudioAvailable = false;
+        }
+        LogManager.log(TAG, "DirectAudio install for wine '" + wineIdentifier
                 + "' available=" + directAudioAvailable);
         return directAudioAvailable;
     }
@@ -14038,7 +14111,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         try {
             DirectAudioHost.stage(this, LinuxRuntime.rootDir(this));
         } catch (IOException e) {
-            Log.w("XServerDisplayActivity", "DirectAudio could not be staged for the Linux session", e);
+            LogManager.logW(TAG, "DirectAudio could not be staged for the Linux session", e);
             runOnUiThread(() -> android.widget.Toast.makeText(
                     this, R.string.directaudio_unavailable, android.widget.Toast.LENGTH_LONG).show());
             return;
@@ -14052,17 +14125,48 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (micExposed) guest.add(DirectAudioDriver.ENV_MIC + "=1");
         environment.addComponent(
                 new DirectAudioHost(socket, micExposed));
+
+        // pathLen is not paranoia: nativeStart in wn_aaudio_host.c returns JNI_FALSE when the path
+        // is ≥ sizeof(sun_path) (108 bytes), and rootPath + SOCKET_PATH is app-relative — long 
+        // container names can trip it. The host then never listens, while the guest still gets WN_DIRECTAUDIO=1.
+        LogManager.log(TAG,
+                "DirectAudio: host socket=" + socket.getPath()
+                        + "\n pathLen=" + socket.getPath().length()
+                        + "\n mic=" + micExposed);
     }
 
     private void resolveAudioDriver() {
         // A Linux session stages its own build of the driver, see setupLinuxSession().
-        if (gamescopeMode || !DirectAudioDriver.INSTANCE.isSelected(audioDriver)) return;
+        if (gamescopeMode || !DirectAudioDriver.INSTANCE.isSelected(audioDriver)) {
+            LogManager.log(TAG, "DirectAudio: gamescopeMode: " + gamescopeMode + "\n"
+                    + "isSelected: " + DirectAudioDriver.INSTANCE.isSelected(audioDriver) + "\n"
+                    + "resolveAudioDriver first return.");
+            return;
+        }
         if (ensureDirectAudioInstalled()) return;
-        Log.w("XServerDisplayActivity", "DirectAudio is unavailable for this container; falling back to "
+        LogManager.logW(TAG, "DirectAudio is unavailable for this container; falling back to "
                 + Container.DEFAULT_AUDIO_DRIVER + " so mmdevapi keeps a loadable backend");
         audioDriver = Container.DEFAULT_AUDIO_DRIVER;
         runOnUiThread(() -> android.widget.Toast.makeText(
                 this, R.string.directaudio_unavailable, android.widget.Toast.LENGTH_LONG).show());
+    }
+
+    private void applyColorCursors() {
+        if (waylandMode || gamescopeMode) return;
+        String toggle = envVars.get("BANNER_X11_RENDER");
+        if (toggle != null && (toggle.equals("0") || toggle.equalsIgnoreCase("false"))) return;
+        xServer.enableRenderCursors();
+    }
+
+    private void applyColorCursorRegistry() {
+        if (waylandMode) return;
+        File userRegFile = new File(imageFs.getRootDir(), ImageFs.WINEPREFIX + "/user.reg");
+        if (!userRegFile.exists()) return;
+        try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
+            registryEditor.setStringValue("Software\\Wine\\X11 Driver", "ClientSideWithRender", "N");
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to disable client-side RENDER", e);
+        }
     }
 
     private void changeWineAudioDriver() {

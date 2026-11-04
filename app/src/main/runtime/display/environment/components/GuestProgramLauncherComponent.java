@@ -21,7 +21,9 @@ import com.winlator.cmod.runtime.display.environment.EnvironmentComponent;
 import com.winlator.cmod.runtime.display.environment.ImageFs;
 import com.winlator.cmod.runtime.display.wayland.WineWaylandSupport;
 import com.winlator.cmod.runtime.input.controls.FakeInputWriter;
+import com.winlator.cmod.runtime.input.controls.GamepadIdentityStore;
 import com.winlator.cmod.runtime.system.GPUInformation;
+import com.winlator.cmod.runtime.system.LogManager;
 import com.winlator.cmod.runtime.system.ProcessHelper;
 import com.winlator.cmod.runtime.wine.EnvVars;
 import com.winlator.cmod.runtime.wine.WineInfo;
@@ -37,7 +39,7 @@ import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GuestProgramLauncherComponent extends EnvironmentComponent {
-  private static final String TAG = "GuestProgramLauncherComponent";
+  private static final String TAG = "GuestLauncher";
   private static final String DEPENDENCY_LOG_TAG = "CurlDeps";
   private static final long DEPENDENCY_CHECK_TIMEOUT_MS = 1500L;
   private static final Object lock = new Object();
@@ -426,7 +428,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       finalCommand = box64Path + " " + command;
     }
     try {
-      Log.d("GuestProgramLauncherComponent", "Shell command is " + finalCommand);
+      Log.d(TAG, "Shell command is " + finalCommand);
       final java.lang.Process process =
           Runtime.getRuntime()
               .exec(
@@ -492,7 +494,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     if (shortcut != null) box64Version = shortcut.getSettingExtra("box64Version", box64Version);
 
     Log.i(
-        "GuestProgramLauncherComponent",
+        TAG,
         "Launch runtime selected: Box64 version=" + box64Version);
 
     File rootDir = imageFs.getRootDir();
@@ -500,17 +502,17 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     if (box64Missing || !box64Version.equals(container.getExtra("box64Version"))) {
       if (box64Version.isEmpty()) {
-        Log.w("GuestProgramLauncherComponent", "No Box64 version selected; skipping content extraction");
+        Log.w(TAG, "No Box64 version selected; skipping content extraction");
       } else {
         ContentProfile profile = contentsManager.getProfileByEntryName("box64-" + box64Version);
         if (profile != null) {
           Log.i(
-              "GuestProgramLauncherComponent",
+              TAG,
               "Loading Box64 content profile: version=" + box64Version);
           contentsManager.applyContent(profile);
         } else {
           Log.w(
-              "GuestProgramLauncherComponent",
+              TAG,
               "Box64 content profile not installed; no bundled Box64 archive will be loaded: version="
                   + box64Version);
         }
@@ -519,7 +521,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       container.saveData();
     } else {
       Log.i(
-          "GuestProgramLauncherComponent",
+          TAG,
           "Box64 already loaded for launch: version=" + box64Version);
     }
 
@@ -565,7 +567,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         usesFexcore && unixLibsPref && contentsManager.fexcoreVersionHasUnixLibs(fexcoreVersion);
 
     Log.i(
-        "GuestProgramLauncherComponent",
+        TAG,
         "Launch runtime selected: emulator="
             + emulator
             + " emulator64="
@@ -584,29 +586,29 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     if (usesFexcore && fexcoreDllsMissing) {
       Log.w(
-          "GuestProgramLauncherComponent",
+          TAG,
           "FEXCore DLLs missing from system32 (libwow64fex.dll or libarm64ecfex.dll), forcing re-extraction");
     }
     if (usesWowbox64 && wowbox64DllMissing) {
       Log.w(
-          "GuestProgramLauncherComponent",
+          TAG,
           "wowbox64.dll missing from system32, forcing re-extraction");
     }
 
     if (usesWowbox64
         && (wowbox64DllMissing || !wowbox64Version.equals(container.getExtra("box64Version")))) {
       if (wowbox64Version.isEmpty()) {
-        Log.w("GuestProgramLauncherComponent", "No WowBox64 version selected; skipping content extraction");
+        Log.w(TAG, "No WowBox64 version selected; skipping content extraction");
       } else {
         ContentProfile profile = contentsManager.getProfileByEntryName("wowbox64-" + wowbox64Version);
         if (profile != null) {
           Log.i(
-              "GuestProgramLauncherComponent",
+              TAG,
               "Loading WowBox64 content profile: version=" + wowbox64Version);
           contentsManager.applyContent(profile);
         } else {
           Log.w(
-              "GuestProgramLauncherComponent",
+              TAG,
               "WowBox64 content profile not installed; no bundled WowBox64 archive will be loaded: version="
                   + wowbox64Version);
         }
@@ -615,7 +617,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       containerDataChanged = true;
     } else if (usesWowbox64) {
       Log.i(
-          "GuestProgramLauncherComponent",
+          TAG,
           "WowBox64 already loaded for launch: version=" + wowbox64Version);
     }
 
@@ -630,16 +632,16 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
       if (needsExtraction) {
         if (fexcoreVersion.isEmpty()) {
-          Log.w("GuestProgramLauncherComponent", "No FEXCore version selected; skipping content extraction");
+          Log.w(TAG, "No FEXCore version selected; skipping content extraction");
         } else if (profile != null) {
           Log.i(
-              "GuestProgramLauncherComponent",
+              TAG,
               "Loading FEXCore content profile: version=" + fexcoreVersion + " mode=" + wantMode);
           contentsManager.applyContent(profile);
           if (!fexUnixLibsActive) contentsManager.removeAppliedUnixLibs(profile);
         } else {
           Log.w(
-              "GuestProgramLauncherComponent",
+              TAG,
               "FEXCore content profile not installed; no bundled FEXCore archive will be loaded: version="
                   + fexcoreVersion);
         }
@@ -648,7 +650,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         containerDataChanged = true;
       } else {
         Log.i(
-            "GuestProgramLauncherComponent",
+            TAG,
             "FEXCore already loaded for launch: version=" + fexcoreVersion + " mode=" + wantMode);
       }
 
@@ -825,11 +827,11 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
   public void stop() {
     synchronized (lock) {
       if (pid != -1) {
-        Log.d("GuestProgramLauncherComponent", "Stopping guest process pid=" + pid);
+        Log.d(TAG, "Stopping guest process pid=" + pid);
         Process.killProcess(pid);
         pid = -1;
       } else {
-        Log.d("GuestProgramLauncherComponent", "Stop requested with no tracked guest process");
+        Log.d(TAG, "Stop requested with no tracked guest process");
       }
       dependencyCheckScheduled.set(false);
     }
@@ -967,49 +969,9 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     if (!byIdDir.exists()) byIdDir.mkdirs();
 
     int numControllers = getConfiguredControllerCount();
+
     for (int slot = 0; slot < numControllers; slot++) {
-      int vendorId = 0x1234 + slot;
-      int productId = 0x5678 + slot;
-      int eventMinor = 64 + slot;
-      String name = "Generic HID Gamepad " + slot;
-      File udevData = new File(udevDataDir, "c13:" + eventMinor);
-      String vendor = String.format(java.util.Locale.US, "%04x", vendorId);
-      String product = String.format(java.util.Locale.US, "%04x", productId);
-      String symlink = "input/by-id/usb-WinNative_Generic_HID_Gamepad_" + slot + "-event-joystick";
-      String content =
-          "I:"
-              + slot
-              + "\n"
-              + "N:input/event"
-              + slot
-              + "\n"
-              + "S:"
-              + symlink
-              + "\n"
-              + "E:DEVNAME=/dev/input/event"
-              + slot
-              + "\n"
-              + "E:ID_INPUT=1\n"
-              + "E:ID_INPUT_JOYSTICK=1\n"
-              + "E:ID_BUS=usb\n"
-              + "E:ID_VENDOR=WinNative\n"
-              + "E:ID_VENDOR_ID="
-              + vendor
-              + "\n"
-              + "E:ID_MODEL=Generic_HID_Gamepad_"
-              + slot
-              + "\n"
-              + "E:ID_MODEL_ID="
-              + product
-              + "\n"
-              + "E:ID_SERIAL=WinNative_Generic_HID_Gamepad_"
-              + slot
-              + "\n"
-              + "E:NAME=\""
-              + name
-              + "\"\n"
-              + "E:TAGS=:uaccess:\n";
-      FileUtils.writeString(udevData, content);
+      GamepadIdentityStore.configureSlot(slot, udevDataDir);
 
       File eventNode = new File(devInputDir, "event" + slot);
       if (!eventNode.exists()) {
@@ -1069,7 +1031,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     if (renderer.contains("Mali")) envVars.put("BOX64_MMAP32", "0");
 
     if (envVars.get("BOX64_MMAP32").equals("1") && !wineInfo.isArm64EC()) {
-      Log.d("GuestProgramLauncherComponent", "Disabling map memory placed");
+      Log.d(TAG, "Disabling map memory placed");
       envVars.put("WRAPPER_DISABLE_PLACED", "1");
     }
 
@@ -1117,7 +1079,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     String winePath = imageFs.getWinePath() + "/bin";
 
-    Log.d("GuestProgramLauncherComponent", "WinePath is " + winePath);
+    Log.d(TAG, "WinePath is " + winePath);
 
     envVars.put("PATH", winePath + ":" + rootDir.getPath() + "/usr/bin");
 
@@ -1298,13 +1260,17 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     if (DirectAudioDriver.INSTANCE.isSelected(effectiveAudioDriver)) {
       File audioShimDest = ensureImageFsNativeLibrary(context, imageFs, "libwaudio.so");
       if (audioShimDest != null && audioShimDest.exists()) {
-        Log.d("GuestLauncher", "DirectAudio: libwaudio shim staged in usr/lib");
+        if (!ld_preload.isEmpty()) {
+          ld_preload = ld_preload + ":";
+        }
+        ld_preload = ld_preload + audioShimDest.getAbsolutePath();
+        LogManager.log(TAG, "DirectAudio (" + DirectAudioDriver.IDENTIFIER + "): libwaudio.so staged in usr/lib and added to LD_PRELOAD");
       } else {
-        Log.w("GuestLauncher", "DirectAudio selected but libwaudio.so missing — audio may be silent");
+        LogManager.logW(TAG, "DirectAudio selected but libwaudio.so missing — audio may be silent");
       }
     }
 
-    Log.d("GuestLauncher", "Final LD_PRELOAD: " + ld_preload);
+    LogManager.log(TAG, "Final LD_PRELOAD: " + ld_preload);
     envVars.put("LD_PRELOAD", ld_preload);
 
     // Preserve the launcher-owned preload/input paths while restoring the
@@ -1347,7 +1313,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
           envVars.put("HODLL", "wowbox64.dll");
         } else {
           if (!"fexcore".equals(emu32)) {
-            Log.w("GuestProgramLauncherComponent",
+            Log.w(TAG,
                     "Unrecognized arm64ec 32-bit emulator='" + emulator
                             + "', defaulting HODLL=libwow64fex.dll");
           }
@@ -1370,7 +1336,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     }
 
     Log.d(
-        "GuestProgramLauncherComponent",
+        TAG,
         "Launch env excerpt: "
             + "ADRENOTOOLS_DRIVER_PATH="
             + envVars.get("ADRENOTOOLS_DRIVER_PATH")
@@ -1454,7 +1420,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         }
       }
     } catch (Exception e) {
-      Log.w("GuestProgramLauncherComponent", "Failed to repair runtime executable permissions", e);
+      Log.w(TAG, "Failed to repair runtime executable permissions", e);
     }
   }
 

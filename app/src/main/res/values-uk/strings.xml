@@ -833,6 +833,10 @@
     <string name="input_controls_auto_hide_section">Сенсорне керування</string>
     <string name="input_controls_auto_hide_on_controller_title">Автоприховування з контролером</string>
     <string name="input_controls_auto_hide_on_controller_summary">Приховувати сенсорне керування, коли під\'єднано контролер</string>
+
+    <string name="input_controls_report_real_identity_title">Використовувати справжні дані пристрою</string>
+    <string name="input_controls_report_real_identity_summary">Надсилати іграм власну назву та ідентифікатори цього пристрою замість імітації контролера Xbox 360.</string>
+
     <string name="session_gyroscope_title">Гіроскоп</string>
     <string name="session_gyroscope_calibrate">Калібрувати гіроскоп</string>
     <string name="session_gyroscope_enable_right_stick">Увімкнути гіроскопічний рух правого стіка</string>
@@ -2727,7 +2731,7 @@
     <string name="session_drawer_frame_generation_enable">Генерувати кадри</string>
     <string name="session_drawer_frame_generation_engine_off">Вимк.</string>
     <string name="session_drawer_frame_generation_engine_lsfg">LSFG</string>
-    <string name="session_drawer_frame_generation_engine_dis">OpenFlow</string>
+    <string name="session_drawer_frame_generation_engine_dis">WFG</string>
     <string name="session_drawer_frame_generation_multiplier">Множник</string>
     <string name="session_drawer_frame_generation_multiplier_value">%1$dx</string>
     <string name="session_drawer_frame_generation_target">Адаптивна ціль</string>
@@ -2735,18 +2739,17 @@
     <string name="session_drawer_frame_generation_target_value">%1$d fps</string>
     <string name="session_drawer_frame_generation_note">Інтерполює між відрендереними кадрами за допомогою Lossless Scaling. Рух плавніший, але затримка вводу зростає на один кадр.</string>
     <string name="session_drawer_frame_generation_target_note">Підвищується до цілі лише доки це дає вимірний виграш, замість утримання фіксованого множника.</string>
-    <string name="session_drawer_frame_generation_missing">Установіть Lossless Scaling у налаштуваннях контейнера, щоб використовувати рушій LSFG. OpenFlow не потребує нічого додатково.</string>
+    <string name="session_drawer_frame_generation_missing">Установіть Lossless Scaling у налаштуваннях контейнера, щоб використовувати рушій LSFG. WFG не потребує нічого додатково.</string>
     <string name="session_drawer_dis_frame_generation_note">Інтерполює між відрендереними кадрами методом Dense Inverse Search. Вбудовано; зовнішні шейдери не потрібні.</string>
     <string name="session_drawer_dis_resolution_scale">Масштаб роздільної здатності</string>
     <string name="session_drawer_dis_preset_fast">Швидко</string>
     <string name="session_drawer_dis_preset_balance">Баланс</string>
-    <string name="session_drawer_dis_preset_quality">Якість</string>
     <string name="session_drawer_dis_resolution_scale_note">Рух аналізується за %1$d пікселями по короткій стороні кадру. Менше — дешевше, більше — краще відстежує дрібні та швидкі деталі.</string>
     <string name="session_drawer_dis_target_fps">Цільовий FPS</string>
     <string name="session_drawer_dis_target_fps_max">Макс. частота оновлення</string>
     <string name="session_drawer_dis_target_fps_value">%1$d fps</string>
     <string name="session_drawer_dis_debug_flow">Показати потік</string>
-    <string name="session_drawer_dis_debug_flow_note">Малює вектори руху, які оцінює OpenFlow, замість згенерованого кадру. Лише для діагностики.</string>
+    <string name="session_drawer_dis_debug_flow_note">Малює вектори руху, які оцінює WFG, замість згенерованого кадру. Лише для діагностики.</string>
     <string name="frame_generation_preset">Пресет якості</string>
     <string name="frame_generation_preset_ultra_performance">Ультрапродуктивність</string>
     <string name="frame_generation_preset_performance">Продуктивність</string>
