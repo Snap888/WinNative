@@ -1153,9 +1153,9 @@ static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkI
 }
 
 static void destroy_scene_image(void) {
-    if (g_scene.view) g_vk.DestroyImageView(g_dev, g_scene.view, NULL);
     if (g_scene.img) hdrc_forget_image(g_scene.img); /* the HDR pass may have drawn into it */
     if (g_scene.img) blendp_forget_image(g_scene.img);
+    if (g_scene.view) g_vk.DestroyImageView(g_dev, g_scene.view, NULL);
     if (g_scene.img) g_vk.DestroyImage(g_dev, g_scene.img, NULL);
     if (g_scene.mem) g_vk.FreeMemory(g_dev, g_scene.mem, NULL);
     memset(&g_scene, 0, sizeof(g_scene));
@@ -1197,9 +1197,9 @@ static int ensure_scene_image(int w, int h) {
 /* One of the HDR composition's device-local images at this size and format. 0 = ready. */
 static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImageUsageFlags usage, const char *what) {
     if (s->img && s->w == w && s->h == h && s->fmt == fmt) return 0;
-    if (s->view) g_vk.DestroyImageView(g_dev,s->view,NULL);
     if (s->img) hdrc_forget_image(s->img);
     if (s->img) blendp_forget_image(s->img);
+    if (s->view) g_vk.DestroyImageView(g_dev,s->view,NULL);
     if (s->img) g_vk.DestroyImage(g_dev, s->img, NULL);
     if (s->mem) g_vk.FreeMemory(g_dev, s->mem, NULL);
     memset(s, 0, sizeof(*s));
@@ -1718,8 +1718,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
              * base under an HDR picture) must not flip the chain's format back every frame. */
             vkp_effects_set_formats(scene_fmt, scene_fmt);
             result = vkp_effects_run(cmd, scene_img, scene_w, scene_h, mapped_w, mapped_h, &rw, &rh);
-            VkImageView effects_view = vkp_effects_view(result);
-            if (effects_view) result_view = effects_view;
+            result_view = vkp_effects_view(result);
             result_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         }
         /* Hand-off: from here the frame lives in GENERAL - the frame-generation engines copy and
