@@ -3960,7 +3960,8 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* 
     (void)env; (void)clazz;
     VkRenderer* r = (VkRenderer*)(intptr_t)handle;
     if (!r || !r->physical_device || !r->device || !r->framegen_supported
-        || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM) return JNI_FALSE;
+        || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
+        || r->swapchain_image_count <= 2u) return JNI_FALSE;
     VkPhysicalDeviceProperties props;
     memset(&props, 0, sizeof(props));
     vkGetPhysicalDeviceProperties(r->physical_device, &props);
