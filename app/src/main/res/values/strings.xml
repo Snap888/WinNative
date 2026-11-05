@@ -960,7 +960,7 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="settings_frame_generation_engine">Engine</string>
     <string name="settings_frame_generation_engine_lsfg">LSFG (Lossless Scaling)</string>
     <string name="settings_frame_generation_engine_snapframe">SnapFrame (Wayland / Turnip)</string>
-    <string name="settings_frame_generation_snapframe_note">SnapFrame is the native Vulkan frame generator in WinNative's Wayland compositor. It supports x2, x3 and x4 phases and adapts Flow Scale with Snap AI GPU timing.</string>
+    <string name="settings_frame_generation_snapframe_note">SnapFrame is the native Vulkan frame generator for the WinNative Wayland compositor. It supports 2x, 3x and 4x phases and adapts Flow Scale with Snap AI GPU timing.</string>
     <string name="settings_frame_generation_snapframe_unavailable">SnapFrame requires a Wayland compositor session. Turnip format and timestamp capabilities are checked when the game starts.</string>
     <string name="settings_frame_generation_importing">Looking for Lossless Scaling…</string>
     <string name="settings_frame_generation_ready">Lossless Scaling shaders ready.</string>
