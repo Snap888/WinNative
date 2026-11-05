@@ -177,7 +177,7 @@ fail:snap_frame_vk_destroy(e);return NULL;
 }
 void snap_frame_vk_destroy(SnapFrameVk*e){
     if(!e)return;resources_destroy(e);pipeline_destroy(e,&e->luma);pipeline_destroy(e,&e->pyramid);
-    pipeline_destroy(e,&e->flow);pipeline_destroy(e,&e->consistency);pipeline_destroy(e,&e->warp8);pipeline_destroy(e,&e->warp16);
+    pipeline_destroy(e,&e->flow);pipeline_destroy(e,&e->consistency);pipeline_destroy(e,&e->warp8);pipeline_destroy(e,&e->warp16);pipeline_destroy(e,&e->debug);
     if(e->query_pool)g_vk.DestroyQueryPool(e->device,e->query_pool,NULL);
     if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);
     if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);
