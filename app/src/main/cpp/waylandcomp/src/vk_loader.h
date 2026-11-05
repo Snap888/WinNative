@@ -55,6 +55,8 @@ int vk_loader_open(const char *driver_path, const char *library_name,
                    const char *native_lib_dir);
 void vk_loader_load_instance(VkInstance instance);
 void vk_loader_load_device(VkDevice device);
+/* Bind this dispatch table to an already-created Vulkan device owned by another renderer. */
+int vk_loader_bind_external(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkDevice device);
 /* The driver's vkGetInstanceProcAddr (NULL before vk_loader_open): for modules that resolve their
  * own entry points, e.g. the frame-generation engines (framegen_engine.cpp). */
 PFN_vkGetInstanceProcAddr vk_loader_gipa(void);
