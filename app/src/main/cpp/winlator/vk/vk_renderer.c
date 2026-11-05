@@ -3967,16 +3967,15 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* 
     vkGetPhysicalDeviceProperties(r->physical_device, &props);
     if (!props.limits.timestampComputeAndGraphics || props.limits.timestampPeriod <= 0.0f)
         return JNI_FALSE;
-    const VkFormat formats[] = { VK_FORMAT_R16_SFLOAT, VK_FORMAT_R16G16_SFLOAT,
+    const VkFormat formats[] = { VK_FORMAT_R16_SFLOAT,
         VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM };
-    const VkFormatFeatureFlags base = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
-                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
-    for (uint32_t i = 0; i < 4; i++) {
+    const VkFormatFeatureFlags need = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    for (uint32_t i = 0; i < 3; i++) {
         VkFormatProperties fp;
         memset(&fp, 0, sizeof(fp));
         vkGetPhysicalDeviceFormatProperties(r->physical_device, formats[i], &fp);
-        VkFormatFeatureFlags need = base;
-        if (i >= 2) need |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
         if ((fp.optimalTilingFeatures & need) != need) return JNI_FALSE;
     }
     return JNI_TRUE;
