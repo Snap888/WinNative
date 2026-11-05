@@ -168,7 +168,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
        !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
        !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
-       !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,12))goto fail;
+       !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,20))goto fail;
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
        !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3)||
        !alloc_sets(e,&e->debug,1))goto fail;
@@ -312,7 +312,7 @@ void snap_frame_vk_debug_into(SnapFrameVk*e,VkCommandBuffer cmd,VkImage out,
        ||!cmd||!out||!out_view||!w||!h||e->format!=VK_FORMAT_R8G8B8A8_UNORM)return;
     VkImageView views[3]={e->forward.view,e->mask.view,out_view};
     update_set(e,&e->debug,0,3,3,views);
-    struct {uint32_t width,height;float magnitude_scale;} pc={w,h,0.075f};
+    struct {uint32_t width,height,flow_width,flow_height;float magnitude_scale;} pc={w,h,e->active_flow_w,e->active_flow_h,0.075f};
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->debug.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->debug.layout,0,1,
                                &e->debug.sets[0],0,NULL);
