@@ -170,6 +170,10 @@ internal fun FrameGenEngineSection(
             paneScale = paneScale,
         )
 
+        if (!snapFrameAvailable) {
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_unavailable), paneScale)
+        }
+
         when (engine) {
             FrameGenEngine.OFF ->
                 if (!lsfgAvailable) {

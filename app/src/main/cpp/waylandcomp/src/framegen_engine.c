@@ -9,6 +9,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <time.h>
 
 #define DIS_FLOW_MIN_SIDE_DEFAULT 180u
@@ -18,6 +19,7 @@ static VkDevice g_dev;
 static VkrLsfg *g_lsfg;
 static VkrDis *g_dis;
 static SnapFrameVk *g_snap;
+static pthread_mutex_t g_snap_lock = PTHREAD_MUTEX_INITIALIZER;
 static int g_kind = -1;
 static int g_chain_ok;
 static int g_chain_failed;
@@ -126,8 +128,9 @@ int fge_start(int kind, const char *cache_path) {
         g_dis = vkr_dis_create(g_dev, g_pd);
         if (!g_dis) return -1;
     } else if (kind == VKP_FG_ENGINE_SNAPFRAME) {
-        g_snap = snap_frame_vk_create(g_dev, g_pd);
-        if (!g_snap) return -1;
+        SnapFrameVk *created = snap_frame_vk_create(g_dev, g_pd);
+        if (!created) return -1;
+        pthread_mutex_lock(&g_snap_lock); g_snap = created; pthread_mutex_unlock(&g_snap_lock);
     } else {
         if (!cache_path || !*cache_path) return -1;
         g_lsfg = vkr_lsfg_create(g_dev, g_pd, cache_path);
@@ -144,7 +147,9 @@ int fge_start(int kind, const char *cache_path) {
 void fge_stop(void) {
     if (g_lsfg) { vkr_lsfg_destroy(g_lsfg); g_lsfg = NULL; }
     if (g_dis) { vkr_dis_destroy(g_dis); g_dis = NULL; }
+    pthread_mutex_lock(&g_snap_lock);
     if (g_snap) { snap_frame_vk_destroy(g_snap); g_snap = NULL; }
+    pthread_mutex_unlock(&g_snap_lock);
     g_kind = -1;
     g_chain_ok = 0;
     g_chain_failed = 0;
@@ -241,7 +246,10 @@ void fge_forget_targets(void) {
 
 void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
     *accepted = 0.0f; *source_rate = 0.0f; *thermal = -1.0f;
-    if (g_snap) { float stages[5], total=0.0f; if (snap_frame_vk_get_telemetry(g_snap,stages,&total)) { *accepted=total; *source_rate=stages[2]; } }
+    pthread_mutex_lock(&g_snap_lock);
+    SnapFrameVk *snap = g_snap;
+    if (snap) { float stages[5], total=0.0f; if (snap_frame_vk_get_telemetry(snap,stages,&total)) { *accepted=total; *source_rate=stages[2]; } }
+    pthread_mutex_unlock(&g_snap_lock);
 }
 
 const char *fge_engine_name(int kind) {
@@ -254,8 +262,11 @@ void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); 
 void fge_device_lost(void) {
     /* A lost VkDevice must not be touched for cleanup. The driver reclaims its objects. */
     g_lsfg = NULL; g_dis = NULL;
+    pthread_mutex_lock(&g_snap_lock);
     if (g_snap) snap_frame_vk_abandon(g_snap);
-    g_snap = NULL; g_dev = VK_NULL_HANDLE;
+    g_snap = NULL;
+    pthread_mutex_unlock(&g_snap_lock);
+    g_dev = VK_NULL_HANDLE;
     g_kind = -1; g_chain_ok = 0; g_chain_failed = 0; g_source = VK_NULL_HANDLE;
 }
 
