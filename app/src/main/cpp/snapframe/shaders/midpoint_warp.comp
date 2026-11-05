@@ -5,7 +5,7 @@
 // sampled with nearest-cell semantics to avoid mixing foreground/background
 // vectors across moving silhouettes.
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-layout(push_constant) uniform PC { float phase; float flowToFullPixels; } pc;
+layout(push_constant) uniform PC { float phase; float flowToFullPixels; uint flowWidth; uint flowHeight; } pc;
 layout(set = 0, binding = 0) uniform sampler2D previousColor;
 layout(set = 0, binding = 1) uniform sampler2D currentColor;
 layout(set = 0, binding = 2) uniform sampler2D currentToPrevious;
@@ -24,7 +24,7 @@ void main() {
     if (any(greaterThanEqual(p, extent))) return;
 
     vec2 uv = (vec2(p) + vec2(0.5)) / vec2(extent);
-    ivec2 flowExtent = textureSize(currentToPrevious, 0);
+    ivec2 flowExtent = ivec2(pc.flowWidth, pc.flowHeight);
     ivec2 flowCell = nearestFlowCell(uv, flowExtent);
 
     // Keep each block estimate intact; interpolating vectors across a motion
