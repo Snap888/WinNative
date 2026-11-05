@@ -18,7 +18,6 @@
 #include "vkr_dis.h"
 #include "../lsfg/vkr_lsfg.h"
 #include "../../../snapframe/include/snap_frame_vk.h"
-#include "../../../waylandcomp/src/vk_loader.h"
 
 #define LOG_TAG "FgPresent"
 #define FG_LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -1240,10 +1239,6 @@ FgPresenter* fg_create(JNIEnv* env, jobject context, const char* driver_name,
         goto fail;
     }
     if (!fg_create_device(fg)) goto fail;
-    if (vk_loader_bind_external(vkd.GetInstanceProcAddr, fg->instance, fg->device) != 0) {
-        FG_LOGE("SnapFrame could not bind to the X11 presenter's Vulkan device");
-        goto fail;
-    }
     if (!fg_create_frames(fg)) goto fail;
     if (!fg_create_swapchain(fg)) goto fail;
     if (!fg_create_targets(fg)) goto fail;
