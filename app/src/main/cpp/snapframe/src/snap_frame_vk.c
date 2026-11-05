@@ -318,7 +318,10 @@ void snap_frame_vk_debug_into(SnapFrameVk*e,VkCommandBuffer cmd,VkImage out,
                                &e->debug.sets[0],0,NULL);
     g_vk.CmdPushConstants(cmd,e->debug.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),&pc);
     g_vk.CmdDispatch(cmd,div_up(w,8),div_up(h,8),1);
-    barrier_compute(cmd);
+    VkMemoryBarrier to_transfer={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT,.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT};
+    g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,0,1,&to_transfer,0,NULL,0,NULL);
 }
 
 
