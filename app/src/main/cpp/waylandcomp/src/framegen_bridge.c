@@ -437,7 +437,12 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
                           0, 0, NULL, 0, NULL, nb, bars);
 
     /* Frame N in; the shared passes (the whole flow pyramid) run only when generating. */
-    n_gen = fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, n_gen);
+    SnapFrameVulkanOutputSlot snap_outputs[SNAP_FRAME_MAX_MULTIPLIER-1] = {{0}};
+    for (uint32_t i=0;i<n_gen && i<SNAP_FRAME_MAX_MULTIPLIER-1;i++) {
+        snap_outputs[i].image=g_ring[i].img;snap_outputs[i].view=g_ring[i].view;
+        snap_outputs[i].layout=VK_IMAGE_LAYOUT_GENERAL;snap_outputs[i].final_layout=VK_IMAGE_LAYOUT_GENERAL;
+    }
+    n_gen = fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, fmt, n_gen, snap_outputs);
     g_planned = n_gen;
     for (uint32_t g = 0; g < n_gen; g++) {
         fge_generate(cmd, g, n_gen, g_ring[g].img, g_ring[g].view, (uint32_t)w, (uint32_t)h);

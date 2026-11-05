@@ -4,6 +4,8 @@
 #include "framegen_engine.h"
 #include "framegen_bridge.h"
 #include "snap_frame_vk.h"
+#include "snap_frame/snap_frame.h"
+#include "snap_frame/snap_frame_vulkan.h"
 #include "vkr_dis.h"
 #include "lsfg/vkr_lsfg.h"
 
@@ -19,6 +21,12 @@ static VkDevice g_dev;
 static VkrLsfg *g_lsfg;
 static VkrDis *g_dis;
 static SnapFrameVk *g_snap;
+static SnapFrameEngine *g_snap_core;
+typedef struct SnapFrameHost { SnapFrameVk *vk; uint32_t multiplier; } SnapFrameHost;
+static SnapFrameHost g_snap_host;
+static uint64_t g_snap_frame_id;
+static VkQueue g_queue;
+static uint32_t g_qfam;
 static pthread_mutex_t g_snap_lock = PTHREAD_MUTEX_INITIALIZER;
 static int g_kind = -1;
 static int g_chain_ok;
@@ -87,9 +95,9 @@ const void *fge_probe(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
 
 void fge_device_ready(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysicalDevice pd,
                       VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled) {
-    (void)queue; (void)qfam; (void)features_enabled;
+    (void)features_enabled;
     g_pd = pd;
-    g_dev = dev;
+    g_dev = dev; g_queue = queue; g_qfam = qfam;
     if (!vkd.CreateInstance) vkd_bind_proc(gipa, inst);
 }
 
@@ -112,7 +120,35 @@ int fge_format_ok(VkFormat fmt) {
                                 | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
 }
 
+static SnapFrameStatus snap_backend_initialize(void *user,const SnapFrameEngineConfig *cfg){
+    SnapFrameHost*h=(SnapFrameHost*)user;if(!h||!h->vk||!cfg)return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
+    h->multiplier=cfg->multiplier;return SNAP_FRAME_OK;
+}
+static void snap_backend_shutdown(void *user){(void)user;}
+static SnapFrameStatus snap_backend_update(void *user,const SnapFrameEngineConfig *cfg){
+    SnapFrameHost*h=(SnapFrameHost*)user;if(!h||!cfg)return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
+    h->multiplier=cfg->multiplier;return SNAP_FRAME_OK;
+}
+static void snap_backend_reset(void *user,uint32_t reason){
+    (void)reason;SnapFrameHost*h=(SnapFrameHost*)user;if(h&&h->vk)snap_frame_vk_reset_history(h->vk);
+}
+static SnapFrameStatus snap_backend_process(void *user,const SnapFrameFrameInput *input,SnapFrameFrameOutput *output){
+    SnapFrameHost*h=(SnapFrameHost*)user;
+    if(!h||!h->vk||!output||!snap_frame_vulkan_frame_valid(input))return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
+    const SnapFrameVulkanFrame*f=(const SnapFrameVulkanFrame*)input->native_frame;
+    for(uint32_t i=0;i<f->output_capacity;i++)if(!f->outputs[i].image||!f->outputs[i].view)return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
+    int ready=snap_frame_vk_process(h->vk,f->command_buffer,f->source_image,f->source_view,f->output_capacity);
+    output->generated_frames=ready?f->output_capacity:0;
+    float stages[5],total=0.0f;
+    if(snap_frame_vk_get_telemetry(h->vk,stages,&total)){
+        output->preprocess_gpu_ms=stages[0]+stages[1];output->flow_gpu_ms=stages[2];
+        output->consistency_gpu_ms=stages[3];output->warp_gpu_ms=stages[4];
+    }
+    return SNAP_FRAME_OK;
+}
+
 static void apply_config(void) {
+    if(g_snap_core){SnapFrameEngineConfig cfg;snap_frame_default_config(&cfg);cfg.enabled=1;cfg.multiplier=g_multiplier;cfg.flow_scale_percent=(uint32_t)(g_flow_scale*100.0f);cfg.quality=SNAP_FRAME_QUALITY_BALANCED;(void)snap_frame_set_config(g_snap_core,&cfg);}
     if (g_lsfg) {
         vkr_lsfg_configure(g_lsfg, g_multiplier, g_target_fps, g_flow_scale, g_refresh_hz, 0.0f);
     } else if (g_dis) {
@@ -131,6 +167,14 @@ int fge_start(int kind, const char *cache_path) {
         SnapFrameVk *created = snap_frame_vk_create(g_dev, g_pd);
         if (!created) return -1;
         pthread_mutex_lock(&g_snap_lock); g_snap = created; pthread_mutex_unlock(&g_snap_lock);
+        g_snap_host.vk=created;g_snap_host.multiplier=g_multiplier;g_snap_frame_id=0;
+        SnapFrameEngineConfig cfg;snap_frame_default_config(&cfg);cfg.enabled=1;cfg.multiplier=g_multiplier;
+        cfg.flow_scale_percent=(uint32_t)(g_flow_scale*100.0f);cfg.quality=SNAP_FRAME_QUALITY_BALANCED;
+        SnapFrameBackendV1 backend={0};backend.struct_size=sizeof(backend);backend.api_version=SNAP_FRAME_API_VERSION;
+        backend.user_data=&g_snap_host;backend.initialize=snap_backend_initialize;backend.shutdown=snap_backend_shutdown;
+        backend.update_config=snap_backend_update;backend.reset_history=snap_backend_reset;backend.process_frame=snap_backend_process;
+        g_snap_core=snap_frame_create(&cfg,&backend);
+        if(!g_snap_core){pthread_mutex_lock(&g_snap_lock);g_snap=NULL;pthread_mutex_unlock(&g_snap_lock);snap_frame_vk_destroy(created);g_snap_host.vk=NULL;return -1;}
     } else {
         if (!cache_path || !*cache_path) return -1;
         g_lsfg = vkr_lsfg_create(g_dev, g_pd, cache_path);
@@ -145,6 +189,8 @@ int fge_start(int kind, const char *cache_path) {
 }
 
 void fge_stop(void) {
+    if(g_snap_core){snap_frame_destroy(g_snap_core);g_snap_core=NULL;}
+    g_snap_host.vk=NULL;
     if (g_lsfg) { vkr_lsfg_destroy(g_lsfg); g_lsfg = NULL; }
     if (g_dis) { vkr_dis_destroy(g_dis); g_dis = NULL; }
     pthread_mutex_lock(&g_snap_lock);
@@ -203,14 +249,25 @@ uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rat
     return 0;
 }
 
-uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens) {
+uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, VkFormat fmt, uint32_t gens, const SnapFrameVulkanOutputSlot *outputs) {
     if (!g_chain_ok) return 0;
     g_source = source;
-    if (g_snap) {
-        uint64_t now=now_ns();
-        if (g_last_plan_ns && now-g_last_plan_ns > 500000000ull) snap_frame_vk_reset_history(g_snap);
+    if (g_snap && g_snap_core) {
+        uint64_t now=now_ns();uint32_t scene_cut=(g_last_plan_ns&&now-g_last_plan_ns>500000000ull)?1u:0u;
         g_last_plan_ns=now;
-        return snap_frame_vk_process(g_snap,cmd,source,source_view,gens) ? gens : 0u;
+        SnapFrameVulkanFrame native={0};native.struct_size=sizeof(native);native.interop_version=SNAP_FRAME_VULKAN_INTEROP_VERSION;
+        native.physical_device=g_pd;native.device=g_dev;native.queue=g_queue;native.queue_family_index=g_qfam;
+        native.command_buffer=cmd;native.source_image=source;native.source_view=source_view;
+        native.source_layout=VK_IMAGE_LAYOUT_GENERAL;native.source_format=fmt;native.extent=(VkExtent2D){w,h};
+        native.output_capacity=gens>SNAP_FRAME_MAX_MULTIPLIER-1?SNAP_FRAME_MAX_MULTIPLIER-1:gens;
+        for(uint32_t i=0;i<native.output_capacity;i++)native.outputs[i]=outputs[i];
+        native.frame_id=++g_snap_frame_id;native.timestamp_ns=now;native.scene_cut=scene_cut;
+        SnapFrameFrameInput input={0};input.struct_size=sizeof(input);input.frame_id=native.frame_id;
+        input.timestamp_ns=now;input.width=w;input.height=h;input.format=(uint32_t)fmt;input.scene_cut=scene_cut;
+        input.native_frame=(uintptr_t)&native;
+        SnapFrameFrameOutput output={0};output.struct_size=sizeof(output);
+        SnapFrameStatus status=snap_frame_process(g_snap_core,&input,&output);
+        return status==SNAP_FRAME_OK?output.generated_frames:0u;
     }
     if (g_lsfg) {
         vkr_lsfg_process(g_lsfg, cmd, source, w, h, gens);
@@ -261,12 +318,14 @@ void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); 
 
 void fge_device_lost(void) {
     /* A lost VkDevice must not be touched for cleanup. The driver reclaims its objects. */
+    if(g_snap_core){snap_frame_destroy(g_snap_core);g_snap_core=NULL;}
+    g_snap_host.vk=NULL;
     g_lsfg = NULL; g_dis = NULL;
     pthread_mutex_lock(&g_snap_lock);
     if (g_snap) snap_frame_vk_abandon(g_snap);
     g_snap = NULL;
     pthread_mutex_unlock(&g_snap_lock);
-    g_dev = VK_NULL_HANDLE;
+    g_dev = VK_NULL_HANDLE;g_queue=VK_NULL_HANDLE;g_qfam=0;
     g_kind = -1; g_chain_ok = 0; g_chain_failed = 0; g_source = VK_NULL_HANDLE;
 }
 
