@@ -1,5 +1,5 @@
 file(READ "${SOURCE_FILE}" source)
-foreach(forbidden "QueueSubmit" "QueuePresentKHR" "WaitForFences" "CreateSemaphore" "DestroySemaphore" "vkQueueSubmit" "vkQueuePresentKHR")
+foreach(forbidden "QueueSubmit" "QueuePresentKHR" "WaitForFences" "DeviceWaitIdle" "QueueWaitIdle" "CreateSemaphore" "DestroySemaphore" "vkQueueSubmit" "vkQueuePresentKHR")
     string(FIND "${source}" "${forbidden}" found)
     if(NOT found EQUAL -1)
         message(FATAL_ERROR "SnapFrame backend must not own WSI or queue submission: found ${forbidden}")

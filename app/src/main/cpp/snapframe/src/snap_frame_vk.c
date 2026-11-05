@@ -189,7 +189,8 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
         snap_frame_vk_flow_extent(e->forward.w,e->forward.h,e->flow_percent,&e->active_flow_w,&e->active_flow_h);
         return 1;
     }
-    g_vk.DeviceWaitIdle(e->device);resources_destroy(e);
+    /* render_impl has completed the previous frame's fence before this callback; keep resize non-blocking. */
+    resources_destroy(e);
     uint32_t lw[3],lh[3];lw[0]=w>1?w/2:1;lh[0]=h>1?h/2:1;
     for(uint32_t i=1;i<3;i++){lw[i]=lw[i-1]>1?lw[i-1]/2:1;lh[i]=lh[i-1]>1?lh[i-1]/2:1;}
     uint32_t fw=lw[2],fh=lh[2];
