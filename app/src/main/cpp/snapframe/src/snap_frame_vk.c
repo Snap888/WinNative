@@ -1,4 +1,5 @@
 #include "snap_frame_vk.h"
+#include "snap_ai/snap_ai.h"
 #include "vk_loader.h"
 #include "snap_luma_downsample_comp.spv.h"
 #include "snap_pyramid_downsample_comp.spv.h"
@@ -20,8 +21,12 @@ struct SnapFrameVk {
     VkSampler sampler; VkDescriptorPool pool;
     struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16;
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
-    uint32_t width,height,flow_percent; VkFormat format;
+    uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
+    VkQueryPool query_pool; float timestamp_period_ms;
+    uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4]; uint32_t query_slot;
+    float stage_gpu_ms[5],last_gpu_ms; int telemetry_valid;
+    SnapAIHandle *ai;
     int prepared,history_valid;
 };
 
@@ -130,9 +135,20 @@ static void resources_destroy(SnapFrameVk*e){
     e->width=e->height=0;e->prepared=0;e->history_valid=0;e->pending_source=VK_NULL_HANDLE;e->pending_source_view=VK_NULL_HANDLE;
 }
 SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
-    if(!d||!pd||!g_vk.CreateComputePipelines||!g_vk.CmdDispatch||!g_vk.CmdCopyImage)return NULL;
+    if(!d||!pd||!g_vk.CreateComputePipelines||!g_vk.CmdDispatch||!g_vk.CmdCopyImage||
+       !g_vk.CreateQueryPool||!g_vk.GetQueryPoolResults||!g_vk.CmdResetQueryPool||!g_vk.CmdWriteTimestamp)return NULL;
     SnapFrameVk*e=(SnapFrameVk*)calloc(1,sizeof(*e));if(!e)return NULL;e->device=d;e->physical=pd;
     g_vk.GetPhysicalDeviceMemoryProperties(pd,&e->memprops);
+    VkPhysicalDeviceProperties props; memset(&props,0,sizeof(props));
+    g_vk.GetPhysicalDeviceProperties(pd,&props);
+    if(!props.limits.timestampComputeAndGraphics || props.limits.timestampPeriod<=0.0f)goto fail;
+    e->timestamp_period_ms=props.limits.timestampPeriod/1000000.0f;
+    SnapAIConfig ai_cfg; snap_ai_default_config(&ai_cfg);
+    ai_cfg.min_flow_scale=0.25f; ai_cfg.max_flow_scale=1.0f;
+    ai_cfg.target_gpu_budget_ms=5.0f; ai_cfg.hysteresis=0.08f; ai_cfg.warmup_frames=8;
+    e->ai=snap_ai_create(&ai_cfg); if(!e->ai)goto fail;
+    VkQueryPoolCreateInfo qi={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,.queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=40};
+    if(g_vk.CreateQueryPool(d,&qi,NULL,&e->query_pool)!=VK_SUCCESS)goto fail;
     VkSamplerCreateInfo si={.sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,.magFilter=VK_FILTER_LINEAR,.minFilter=VK_FILTER_LINEAR,
       .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,.addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.maxLod=0};
@@ -142,10 +158,10 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     if(g_vk.CreateDescriptorPool(d,&pi,NULL,&e->pool)!=VK_SUCCESS)goto fail;
     if(!pipeline_create(e,&e->luma,snap_luma_downsample_comp,snap_luma_downsample_comp_size,2,1,0)||
        !pipeline_create(e,&e->pyramid,snap_pyramid_downsample_comp,snap_pyramid_downsample_comp_size,2,1,0)||
-       !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,0)||
-       !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,0)||
-       !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,8)||
-       !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,8))goto fail;
+       !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,8)||
+       !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
+       !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
+       !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16))goto fail;
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
        !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3))goto fail;
     return e;
@@ -154,16 +170,26 @@ fail:snap_frame_vk_destroy(e);return NULL;
 void snap_frame_vk_destroy(SnapFrameVk*e){
     if(!e)return;resources_destroy(e);pipeline_destroy(e,&e->luma);pipeline_destroy(e,&e->pyramid);
     pipeline_destroy(e,&e->flow);pipeline_destroy(e,&e->consistency);pipeline_destroy(e,&e->warp8);pipeline_destroy(e,&e->warp16);
-    if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);free(e);
+    if(e->query_pool)g_vk.DestroyQueryPool(e->device,e->query_pool,NULL);
+    if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);
+    if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);
+    if(e->ai)snap_ai_destroy(e->ai);
+    free(e);
 }
 int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint32_t scale){
     if(!e||!w||!h||(fmt!=VK_FORMAT_R8G8B8A8_UNORM&&fmt!=VK_FORMAT_R16G16B16A16_SFLOAT))return 0;
     if(scale<25)scale=25;if(scale>100)scale=100;
-    if(e->prepared&&e->width==w&&e->height==h&&e->format==fmt&&e->flow_percent==scale)return 1;
+    if(e->prepared&&e->width==w&&e->height==h&&e->format==fmt){
+        if(e->manual_flow_percent!=scale){e->manual_flow_percent=scale;e->flow_percent=scale;}
+        e->active_flow_w=e->forward.w*e->flow_percent/100u;
+        e->active_flow_h=e->forward.h*e->flow_percent/100u;
+        if(!e->active_flow_w)e->active_flow_w=1;if(!e->active_flow_h)e->active_flow_h=1;
+        return 1;
+    }
     g_vk.DeviceWaitIdle(e->device);resources_destroy(e);
     uint32_t lw[3],lh[3];lw[0]=w>1?w/2:1;lh[0]=h>1?h/2:1;
     for(uint32_t i=1;i<3;i++){lw[i]=lw[i-1]>1?lw[i-1]/2:1;lh[i]=lh[i-1]>1?lh[i-1]/2:1;}
-    uint32_t fw=lw[2]*scale/100,fh=lh[2]*scale/100;if(!fw)fw=1;if(!fh)fh=1;
+    uint32_t fw=lw[2],fh=lh[2];
     if(!image_create(e,&e->history,w,h,fmt))goto fail;
     for(uint32_t i=0;i<3;i++)if(!image_create(e,&e->prev[i],lw[i],lh[i],VK_FORMAT_R16_SFLOAT)||
         !image_create(e,&e->curr[i],lw[i],lh[i],VK_FORMAT_R16_SFLOAT))goto fail;
@@ -174,25 +200,80 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
 fail:resources_destroy(e);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
-void snap_frame_vk_reset_history(SnapFrameVk*e){if(e)e->history_valid=0;}
+void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);}}
+static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
+    if(!e->query_pending[slot])return;
+    uint64_t values[20];memset(values,0,sizeof(values));
+    VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*10u,10u,sizeof(values),values,
+        sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+    e->query_pending[slot]=0;
+    if(r!=VK_SUCCESS)return;
+    float total=0.0f;
+    for(uint32_t i=0;i<5;i++){
+        uint64_t begin=values[(i*2u)*2u],begin_ok=values[(i*2u)*2u+1u];
+        uint64_t end=values[(i*2u+1u)*2u],end_ok=values[(i*2u+1u)*2u+1u];
+        if(!begin_ok||!end_ok||end<begin)return;
+        e->stage_gpu_ms[i]=(float)(end-begin)*e->timestamp_period_ms;
+        total+=e->stage_gpu_ms[i];
+    }
+    e->last_gpu_ms=total;e->telemetry_valid=total>0.0f;
+    if(e->telemetry_valid&&e->ai){
+        SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
+        metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
+        metrics.motion_magnitude=0.35f;metrics.motion_complexity=0.45f;
+        metrics.flow_confidence=0.80f;metrics.gpu_pressure=total/5.0f;
+        metrics.artifact_risk=0.05f;metrics.telemetry_valid=1;
+        SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
+        if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK&&decision.mode!=SNAP_AI_MODE_BYPASS){
+            uint32_t scale=(uint32_t)(decision.flow_scale*100.0f+0.5f);
+            if(scale<25)scale=25;if(scale>100)scale=100;
+            e->flow_percent=scale;
+        }
+    }
+}
+static void write_timestamp(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t query){
+    g_vk.CmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,e->query_pool,e->query_slot*10u+query);
+}
+
 int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageView src_view,uint32_t n){
     if(!e||!e->prepared||!cmd||!src||!src_view)return 0;e->pending_source=src;e->pending_source_view=src_view;transition_fresh(e,cmd);
     if(!e->history_valid){copy_history(e,cmd,src);return 0;}
     if(n==0){copy_history(e,cmd,src);return 0;}
+    e->query_slot=(uint32_t)(e->frame_serial%4u);collect_query_slot(e,e->query_slot);
+    g_vk.CmdResetQueryPool(cmd,e->query_pool,e->query_slot*10u,10u);
+    e->query_frame_id[e->query_slot]=++e->frame_serial;e->query_pending[e->query_slot]=1;
+    e->active_flow_w=e->forward.w*e->flow_percent/100u;e->active_flow_h=e->forward.h*e->flow_percent/100u;
+    if(!e->active_flow_w)e->active_flow_w=1;if(!e->active_flow_h)e->active_flow_h=1;
     VkImageView v[6];
+    write_timestamp(e,cmd,0);
     v[0]=e->history.view;v[1]=e->prev[0].view;update_set(e,&e->luma,0,2,1,v);
     v[0]=src_view;v[1]=e->curr[0].view;update_set(e,&e->luma,1,2,1,v);
-    dispatch(cmd,&e->luma,0,e->prev[0].w,e->prev[0].h);dispatch(cmd,&e->luma,1,e->curr[0].w,e->curr[0].h);barrier_compute(cmd);
+    dispatch(cmd,&e->luma,0,e->prev[0].w,e->prev[0].h);dispatch(cmd,&e->luma,1,e->curr[0].w,e->curr[0].h);barrier_compute(cmd);write_timestamp(e,cmd,1);
+    write_timestamp(e,cmd,2);
     for(uint32_t i=1;i<3;i++){
       v[0]=e->prev[i-1].view;v[1]=e->prev[i].view;update_set(e,&e->pyramid,i-1,2,1,v);
       v[0]=e->curr[i-1].view;v[1]=e->curr[i].view;update_set(e,&e->pyramid,i+1,2,1,v);
       dispatch(cmd,&e->pyramid,i-1,e->prev[i].w,e->prev[i].h);dispatch(cmd,&e->pyramid,i+1,e->curr[i].w,e->curr[i].h);barrier_compute(cmd);
     }
+    write_timestamp(e,cmd,3);write_timestamp(e,cmd,4);
     v[0]=e->prev[2].view;v[1]=e->curr[2].view;v[2]=e->forward.view;update_set(e,&e->flow,0,3,3,v);
     v[0]=e->curr[2].view;v[1]=e->prev[2].view;v[2]=e->backward.view;update_set(e,&e->flow,1,3,3,v);
-    dispatch(cmd,&e->flow,0,e->forward.w,e->forward.h);dispatch(cmd,&e->flow,1,e->backward.w,e->backward.h);barrier_compute(cmd);
+    uint32_t flow_pc[2]={e->active_flow_w,e->active_flow_h};
+    g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.pipeline);
+    g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[0],0,NULL);
+    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));
+    g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[1],0,NULL);
+    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
+    write_timestamp(e,cmd,5);write_timestamp(e,cmd,6);
     v[0]=e->forward.view;v[1]=e->backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
-    update_set(e,&e->consistency,0,4,11,v);dispatch(cmd,&e->consistency,0,e->mask.w,e->mask.h);barrier_compute(cmd);
+    update_set(e,&e->consistency,0,4,11,v);
+    g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.pipeline);
+    g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
+    g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
+    write_timestamp(e,cmd,7);e->telemetry_valid=0;
     return 1;
 }
 void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uint32_t count,VkImage out,VkImageView out_view){
@@ -200,10 +281,13 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
     struct sf_pipeline*p=e->format==VK_FORMAT_R8G8B8A8_UNORM?&e->warp8:&e->warp16;
     VkImageView v[6]={e->history.view,e->pending_source_view,e->forward.view,e->backward.view,e->mask.view,out_view};
     update_set(e,p,phase,6,31,v);
-    struct {float phase,flow_to_pixels;} pc={(float)(phase+1u)/(float)(count+1u),8.0f};
+    struct {float phase,flow_to_pixels;uint32_t flow_w,flow_h;} pc={(float)(phase+1u)/(float)(count+1u),8.0f,e->active_flow_w,e->active_flow_h};
+    if(phase==0)write_timestamp(e,cmd,8);
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->layout,0,1,&p->sets[phase],0,NULL);
     g_vk.CmdPushConstants(cmd,p->layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),&pc);
     g_vk.CmdDispatch(cmd,div_up(e->width,8),div_up(e->height,8),1);
-    if(phase+1u==count)copy_history(e,cmd,e->pending_source);
+    if(phase+1u==count){write_timestamp(e,cmd,9);copy_history(e,cmd,e->pending_source);}
 }
+
+int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms||!e->telemetry_valid)return 0;memcpy(stages_ms,e->stage_gpu_ms,sizeof(e->stage_gpu_ms));*total_ms=e->last_gpu_ms;return 1;}
