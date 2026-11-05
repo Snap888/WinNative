@@ -47,7 +47,7 @@ The host supplies output slots in GENERAL layout. SnapFrame writes them and leav
 
 - In-game overlay: select OFF, LSFG, DIS or SnapFrame; change multiplier and Flow Scale.
 - On X11, SnapFrame availability is probed against the active swapchain: RGBA8 UNORM storage/sample support, required R16/RGBA16F compute formats, timestamp queries and at least three swapchain images are required.
-- The SnapFrame panel exposes **Debug Flow**. When enabled, the current output is replaced with a live GPU visualization of SnapFrame's own bidirectional vectors and consistency/occlusion mask (hue = direction, brightness = magnitude, dark = invalid/occluded). Generated frames continue through the normal X11 present path.
+- The SnapFrame panel exposes **Debug Flow**. When enabled, the current output is replaced with a live GPU visualization of SnapFrame's forward motion field and consistency/occlusion mask (hue = direction, brightness = magnitude, dark = invalid/occluded); the backend still computes both forward and backward fields for interpolation. Generated frames continue through the normal X11 present path.
 - Wayland retains its separate compositor capability probe; X11 uses `VulkanRenderer.nativeIsSnapFrameGenerationAvailable`.
 
 ## Tests and remaining validation
