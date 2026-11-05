@@ -3020,7 +3020,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
             }
         }
 
-        if (use_dis && r->dis_debug_flow) {
+        if (use_snap && r->snap_debug_flow && gen_count > 0) {
+            snap_frame_vk_debug_into(r->snap, f->cmd, composite->image, composite->view,
+                                     composite->width, composite->height);
+            blit_composite_to_swapchain(r, f->cmd, composite, r->swapchain_images[image_index]);
+        } else if (use_dis && r->dis_debug_flow) {
             vkr_dis_debug_into(r->dis, f->cmd, r->swapchain_images[image_index],
                                r->swapchain_extent.width, r->swapchain_extent.height);
             vkr_image_barrier(f->cmd, r->swapchain_images[image_index],
