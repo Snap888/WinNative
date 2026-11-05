@@ -136,6 +136,9 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 # WFG frame generator (DIS optical flow + interpolation), linked by libwinlator and libwnwayland.
 add_subdirectory(wfg)
 
+# SnapFrame's independent Vulkan compute backend, using the Wayland compositor's Turnip dispatch.
+add_subdirectory(snapframe)
+
 # ----------------------------------------------------------------------------
 # Winlator native library (X-server, AHB, Vulkan compositor, helpers)
 # ----------------------------------------------------------------------------

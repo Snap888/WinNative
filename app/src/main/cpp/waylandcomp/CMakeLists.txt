@@ -42,6 +42,7 @@ target_include_directories(wnwayland PRIVATE
         prebuilt/include
         src
         ../thirdparty/snapframe/include
+        ../snapframe/include
         # Committed SPIR-V of the screen-effect chain (src/effects_chain.c, src/hdr_compose.c).
         shaders
         ${CMAKE_CURRENT_SOURCE_DIR}/../adrenotools/include
@@ -89,6 +90,7 @@ set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
 target_link_libraries(wnwayland
         wayland-server
         adrenotools
+        snapframe_vk
         dl
         log
         android

@@ -36,7 +36,8 @@
     X(CreateSampler) X(DestroySampler) X(CreateDescriptorSetLayout) X(DestroyDescriptorSetLayout) \
     X(CreateDescriptorPool) X(DestroyDescriptorPool) X(AllocateDescriptorSets) X(FreeDescriptorSets) \
     X(UpdateDescriptorSets) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) \
-    X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdDraw) X(CmdSetViewport) X(CmdSetScissor) \
+    X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdDispatch) X(CmdCopyImage) \
+    X(CreateComputePipelines) X(CmdDraw) X(CmdSetViewport) X(CmdSetScissor) \
     /* frame generation (framegen_bridge.c / vk_present.c per-present sync slots) */ \
     X(DestroySemaphore)
 
