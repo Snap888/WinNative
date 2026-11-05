@@ -17,6 +17,10 @@ void snap_frame_vk_reset_history(SnapFrameVk *engine);
 int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[5], float *total_ms);
 int snap_frame_vk_process(SnapFrameVk *engine, VkCommandBuffer command_buffer, VkImage source, VkImageView source_view, uint32_t generation_count);
 void snap_frame_vk_generate(SnapFrameVk *engine, VkCommandBuffer command_buffer, uint32_t phase_index, uint32_t phase_count, VkImage output, VkImageView output_view);
+/* Render the engine's own bidirectional flow + consistency mask into an RGBA8 debug target. */
+void snap_frame_vk_debug_into(SnapFrameVk *engine, VkCommandBuffer command_buffer,
+                              VkImage output, VkImageView output_view,
+                              uint32_t width, uint32_t height);
 #ifdef __cplusplus
 }
 #endif
