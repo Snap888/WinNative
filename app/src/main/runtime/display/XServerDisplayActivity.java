@@ -1257,12 +1257,26 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         applyFrameGeneration(renderer);
         applyDisFrameGeneration(renderer);
+        applySnapFrameGeneration(renderer);
         if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled && !snapFrameGenEnabled) {
             applyPreferredRefreshRate();
         }
         saveFrameGenerationSettings();
         saveDisFrameGenerationSettings();
         renderDrawerMenu();
+    }
+
+    private void applySnapFrameGeneration(VulkanRenderer renderer) {
+        if (renderer == null || waylandMode) return;
+        renderer.setSnapFrameGenerationEnabled(snapFrameGenEnabled);
+        renderer.setSnapFrameDebugFlow(disFrameGenDebugFlow);
+        if (snapFrameGenEnabled) {
+            renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
+            renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
+            Log.i("XServerDisplayActivity", "SnapFrame X11 requested multiplier=" + frameGenMultiplier
+                    + " flowScale=" + frameGenFlowScale + " available="
+                    + renderer.isSnapFrameGenerationAvailable());
+        }
     }
 
     private void saveFrameGenerationSettings() {
@@ -5520,7 +5534,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 frameGenTargetRate,
                 frameGenFlowScale,
                 getString(R.string.session_drawer_frame_generation),
-                waylandMode && WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME),
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
                 snapFrameGenEnabled);
 
         state = XServerDrawerMenuKt.withDisFrameGenState(
