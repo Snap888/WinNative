@@ -157,6 +157,7 @@ int vkp_framegen_problem(void) {
     return 0;
 }
 const char *vkp_framegen_caps_reason(void) { return fge_caps_reason_for(atomic_load(&g_kind)); }
+int vkp_framegen_engine_available(int kind) { return g_dev_ready && !g_dev_lost && fge_caps_ok(kind); }
 
 void vkp_framegen_stats(float out[6]) {
     float accepted = 0.0f, src = 0.0f, thermal = -1.0f;
@@ -185,6 +186,12 @@ const void *vkp_framegen_device_features(VkInstance inst, PFN_vkGetInstanceProcA
 }
 
 void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled) {
+    if (g_dev_lost) {
+        /* Device-loss handles are invalid: discard them without issuing Vulkan destruction calls. */
+        memset(g_ring, 0, sizeof(g_ring)); g_ring_n = 0;
+        g_engine_ok = 0; g_engine_kind = -1; g_engine_cache_gen = -1;
+        g_built_w = g_built_h = 0; g_dev_ready = 0; g_dev_lost = 0;
+    }
     g_dev = dev; g_queue = queue; g_qfam = qfam; g_features_enabled = features_enabled;
 #define R(n) vk.n = (PFN_vk##n)g_vk.GetDeviceProcAddr(dev, "vk" #n)
     R(CreateImage); R(DestroyImage); R(CreateImageView); R(DestroyImageView);
@@ -358,7 +365,6 @@ static void log_arm_transition(int armed, int kind, int mult) {
 
 int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view, int w, int h,
                      VkFormat fmt, VkImage gens[VKP_FG_MAX_GENERATIONS]) {
-    (void)scene_view;
     int kind = atomic_load(&g_kind);
     int armed = atomic_load(&g_armed);
     int mult = atomic_load(&g_mult);

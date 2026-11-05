@@ -205,10 +205,11 @@ public final class WaylandCompositor {
                                                      boolean fxaa, boolean toon, boolean crt, boolean ntsc);
     public static native void nativeSetLookName(String name);
 
-    // Frame generation. kind is ENGINE_LSFG or ENGINE_DIS; every setter is a store the compositor
+    // Frame generation. Every setter is a store the compositor
     // thread picks up on its next frame, so they are safe to call before the compositor is up.
     public static final int ENGINE_LSFG = 0;
     public static final int ENGINE_DIS = 1;
+    public static final int ENGINE_SNAPFRAME = 2;
 
     public static native void nativeSetFrameGenEngine(int kind);
     public static native void nativeSetFrameGenArmed(boolean armed, int multiplier);
@@ -216,6 +217,7 @@ public final class WaylandCompositor {
     public static native void nativeSetFrameGenTuning(float flowScale, float refreshHz);
     public static native void nativeSetEngineTuning(int flowMinSide, int targetFps);
     public static native int nativeFrameGenProblem();
+    public static native boolean nativeFrameGenEngineAvailable(int kind);
     public static native String nativeFrameGenCapsReason();
     public static native float[] nativeFrameGenStats();
     public static native long nativeFrameGenPresentedFrames();

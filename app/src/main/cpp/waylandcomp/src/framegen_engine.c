@@ -196,7 +196,7 @@ uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rat
 }
 
 uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens) {
-    if (!g_chain_ok) return;
+    if (!g_chain_ok) return 0;
     g_source = source;
     if (g_snap) {
         uint64_t now=now_ns();

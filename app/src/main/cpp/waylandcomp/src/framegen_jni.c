@@ -76,3 +76,10 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeFrameGenG
     (void)env; (void)clazz;
     return (jlong)vkp_framegen_total_generated();
 }
+
+JNIEXPORT jboolean JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeFrameGenEngineAvailable(
+        JNIEnv *env, jclass clazz, jint kind) {
+    (void)env; (void)clazz;
+    return vkp_framegen_engine_available((int)kind) ? JNI_TRUE : JNI_FALSE;
+}

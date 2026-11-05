@@ -46,6 +46,7 @@ void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
  * 1 the driver lacks what the selected engine needs (vkp_framegen_caps_reason says what),
  * 2 the engine failed to start / build its chain. */
 int vkp_framegen_problem(void);
+int vkp_framegen_engine_available(int kind);
 const char *vkp_framegen_caps_reason(void);
 /* Same shape as VulkanRenderer.getFrameGenStats(): {generations trusted, generations planned,
  * real (source) fps, presented fps incl. generated frames, thermal (-1 = none), ms per
