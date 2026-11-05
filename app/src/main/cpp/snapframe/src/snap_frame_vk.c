@@ -274,10 +274,10 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[0],0,NULL);
     g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
-    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[1],0,NULL);
     g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
-    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     write_timestamp(e,cmd,5);
     v[0]=e->forward.view;v[1]=e->backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
     update_set(e,&e->consistency,0,4,11,v);
@@ -285,7 +285,7 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
     g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
     write_timestamp(e,cmd,6);
-    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
+    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     write_timestamp(e,cmd,7);
     return 1;
 }
