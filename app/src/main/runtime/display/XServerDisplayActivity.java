@@ -927,6 +927,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
 
         applyFrameGeneration(renderer);
+        applySnapFrameGeneration(renderer);
     }
 
     private void applyFrameGeneration(VulkanRenderer renderer) {
