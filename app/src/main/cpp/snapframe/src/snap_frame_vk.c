@@ -234,7 +234,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         metrics.artifact_risk=0.05f;metrics.telemetry_valid=1;
         SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
         if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK&&decision.mode!=SNAP_AI_MODE_BYPASS){
-            uint32_t scale=(uint32_t)(decision.flow_scale*100.0f+0.5f);
+            uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
             if(scale<25)scale=25;if(scale>100)scale=100;
             e->flow_percent=scale;
         }
