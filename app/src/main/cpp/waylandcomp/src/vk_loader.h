@@ -6,7 +6,9 @@
  * process-default system Adreno driver, which lacks VK_EXT_image_drm_format_modifier /
  * dmabuf import. All compositor Vulkan calls go through g_vk.* .
  */
+#ifndef VK_USE_PLATFORM_ANDROID_KHR
 #define VK_USE_PLATFORM_ANDROID_KHR
+#endif
 #include <vulkan/vulkan.h>
 
 #define VK_GLOBAL_FUNCS(X) X(CreateInstance) X(EnumerateInstanceExtensionProperties)
