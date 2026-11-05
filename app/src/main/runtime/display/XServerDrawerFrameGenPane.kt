@@ -73,11 +73,12 @@ internal fun FrameGenPaneContent(
                         .padding(horizontal = (12f * paneScale).dp, vertical = (12f * paneScale).dp),
                 verticalArrangement = Arrangement.spacedBy((10f * paneScale).dp),
             ) {
-                val engine = FrameGenEngine.of(state.frameGenEnabled, state.disFrameGenEnabled)
+                val engine = FrameGenEngine.of(state.frameGenEnabled, state.disFrameGenEnabled, state.snapFrameGenEnabled)
 
                 FrameGenEngineSection(
                     engine = engine,
                     lsfgAvailable = state.frameGenAvailable,
+                    snapFrameAvailable = state.snapFrameGenAvailable,
                     targetRate = state.frameGenTargetRate,
                     multiplier = state.frameGenMultiplier,
                     flowScale = state.frameGenFlowScale,
@@ -138,6 +139,7 @@ internal fun FrameGenPaneContent(
 internal fun FrameGenEngineSection(
     engine: FrameGenEngine,
     lsfgAvailable: Boolean,
+    snapFrameAvailable: Boolean,
     targetRate: Int,
     multiplier: Int,
     flowScale: Int,
@@ -159,7 +161,11 @@ internal fun FrameGenEngineSection(
 
         FrameGenEngineSwitch(
             selected = engine,
-            selectableFor = { it != FrameGenEngine.LSFG || lsfgAvailable },
+            selectableFor = { engine -> when (engine) {
+                FrameGenEngine.LSFG -> lsfgAvailable
+                FrameGenEngine.SNAPFRAME -> snapFrameAvailable
+                else -> true
+            } },
             onSelected = onEngineSelected,
             paneScale = paneScale,
         )
@@ -181,6 +187,9 @@ internal fun FrameGenEngineSection(
                     stringResource(R.string.session_drawer_dis_frame_generation_note),
                     paneScale,
                 )
+
+            FrameGenEngine.SNAPFRAME ->
+                FrameGenNote(stringResource(R.string.session_drawer_snapframe_note), paneScale)
         }
 
         FrameGenReveal(visible = engine == FrameGenEngine.LSFG) {
@@ -191,6 +200,16 @@ internal fun FrameGenEngineSection(
                 maxRefreshRate = maxRefreshRate,
                 paneScale = paneScale,
                 onTargetRateSelected = onTargetRateSelected,
+                onMultiplierSelected = onMultiplierSelected,
+                onFlowScaleChanged = onFlowScaleChanged,
+            )
+        }
+
+        FrameGenReveal(visible = engine == FrameGenEngine.SNAPFRAME) {
+            SnapFrameOptions(
+                multiplier = multiplier,
+                flowScale = flowScale,
+                paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
             )
@@ -464,6 +483,38 @@ private fun LosslessFrameGenOptions(
             onSelected = { onFlowScaleChanged(it.flowScale) },
             paneScale = paneScale,
         )
+    }
+}
+
+@Composable
+private fun SnapFrameOptions(
+    multiplier: Int,
+    flowScale: Int,
+    paneScale: Float,
+    onMultiplierSelected: (Int) -> Unit,
+    onFlowScaleChanged: (Int) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+        FrameGenFieldLabel(stringResource(R.string.session_drawer_frame_generation_multiplier), paneScale)
+        ChipFlow {
+            FrameGenMultipliers.forEach { option ->
+                HUDToggleChip(
+                    label = stringResource(R.string.session_drawer_frame_generation_multiplier_value, option),
+                    checked = multiplier == option,
+                    onClick = { onMultiplierSelected(option) },
+                    modifier = Modifier.paneNavItem(
+                        cornerRadius = (16f * paneScale).dp,
+                        onActivate = { onMultiplierSelected(option) },
+                    ),
+                )
+            }
+        }
+        FrameGenPresetRow(
+            selected = FrameGenPreset.fromFlowScale(flowScale),
+            onSelected = { onFlowScaleChanged(it.flowScale) },
+            paneScale = paneScale,
+        )
+        FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
 }
 

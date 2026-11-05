@@ -503,6 +503,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private String frameGenCachePath = null;
     private float frameGenRefreshRate = 0f;
     private boolean disFrameGenEnabled = false;
+    private boolean snapFrameGenEnabled = false;
     private SystemFrameGenMonitor systemFrameGenMonitor = null;
     private boolean systemFrameGenSupported = false;
     private boolean systemFrameGenHudEnabled = false;
@@ -883,6 +884,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         String containerMultiplier = container != null ? container.getExtra("frameGenMultiplier", "2") : "2";
         String containerTargetRate = container != null ? container.getExtra("frameGenTargetRate", "0") : "0";
         String containerFlowScale = container != null ? container.getExtra("frameGenFlowScale", "70") : "70";
+        String containerSnapFrame = container != null ? container.getExtra("snapFrameGen", "0") : "0";
 
         frameGenEnabled = "1".equals(getFrameGenSetting("frameGen", containerValue));
         frameGenMultiplier = clampFrameGenMultiplier(
@@ -891,6 +893,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 parseSettingInt(getFrameGenSetting("frameGenTargetRate", containerTargetRate), 0));
         frameGenFlowScale = clampFrameGenFlowScale(
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
+        snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
+        if (snapFrameGenEnabled) { frameGenEnabled = false; disFrameGenEnabled = false; }
 
         if (frameGenEnabled) {
             int result = com.winlator.cmod.feature.library.LosslessAutoImport.INSTANCE.sync(this).getResult();
@@ -951,7 +955,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private void applyWaylandFrameGeneration() {
         if (!waylandMode) return;
 
-        if (frameGenEnabled && frameGenCachePath != null) {
+        if (snapFrameGenEnabled) {
+            WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
+            WaylandCompositor.nativeSetEngineTuning(0, frameGenTargetRate);
+            WaylandCompositor.nativeSetFrameGenTuning(frameGenFlowScale / 100f, frameGenRefreshRate);
+            WaylandCompositor.nativeSetFrameGenArmed(true, frameGenMultiplier);
+        } else if (frameGenEnabled && frameGenCachePath != null) {
             WaylandCompositor.nativeSetLsfgCachePath(frameGenCachePath);
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_LSFG);
             WaylandCompositor.nativeSetEngineTuning(disFrameGenScale, frameGenTargetRate);
@@ -969,12 +978,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     private void syncFrameGenerationHud() {
         applyWaylandFrameGeneration();
-        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled;
+        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled || snapFrameGenEnabled;
         boolean systemFrameGen = !ourFrameGen && systemFrameGenHudEnabled;
         boolean active = ourFrameGen || systemFrameGen;
 
         FrameRating.OutputFrameSource source;
-        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled) {
+        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled || snapFrameGenEnabled) {
             source = waylandMode ? waylandFrameGenOutputSource : frameGenOutputSource;
         } else if (systemFrameGen) {
             source = ensureSystemFrameGenMonitor();
@@ -1248,7 +1257,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         applyFrameGeneration(renderer);
         applyDisFrameGeneration(renderer);
-        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled) {
+        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled && !snapFrameGenEnabled) {
             applyPreferredRefreshRate();
         }
         saveFrameGenerationSettings();
@@ -1259,6 +1268,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private void saveFrameGenerationSettings() {
         if (shortcut != null) {
             boolean overridden = saveFrameGenOverride("frameGen", frameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("snapFrameGen", snapFrameGenEnabled ? "1" : "0", "0");
             overridden |= saveFrameGenOverride("frameGenMultiplier",
                     String.valueOf(frameGenMultiplier), "2");
             overridden |= saveFrameGenOverride("frameGenTargetRate",
@@ -1269,6 +1279,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             shortcut.saveData();
         } else if (container != null) {
             container.putExtra("frameGen", frameGenEnabled ? "1" : "0");
+            container.putExtra("snapFrameGen", snapFrameGenEnabled ? "1" : "0");
             container.putExtra("frameGenMultiplier", String.valueOf(frameGenMultiplier));
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));
@@ -5506,7 +5517,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 frameGenMultiplier,
                 frameGenTargetRate,
                 frameGenFlowScale,
-                getString(R.string.session_drawer_frame_generation));
+                getString(R.string.session_drawer_frame_generation),
+                waylandMode && WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME),
+                snapFrameGenEnabled);
 
         state = XServerDrawerMenuKt.withDisFrameGenState(
                 state,
@@ -5899,6 +5912,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         if (lsfg && frameGenCachePath == null) return;
                         frameGenEnabled = lsfg;
                         disFrameGenEnabled = engine == FrameGenEngine.DIS;
+                        snapFrameGenEnabled = engine == FrameGenEngine.SNAPFRAME;
                         applyFrameGenerationLive();
                     }
 

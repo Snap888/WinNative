@@ -210,6 +210,7 @@ public final class WaylandCompositor {
     public static final int ENGINE_LSFG = 0;
     public static final int ENGINE_DIS = 1;
     public static final int ENGINE_SNAPFRAME = 2;
+    public static final int ENGINE_SNAPFRAME = 2;
 
     public static native void nativeSetFrameGenEngine(int kind);
     public static native void nativeSetFrameGenArmed(boolean armed, int multiplier);
@@ -217,6 +218,7 @@ public final class WaylandCompositor {
     public static native void nativeSetFrameGenTuning(float flowScale, float refreshHz);
     public static native void nativeSetEngineTuning(int flowMinSide, int targetFps);
     public static native int nativeFrameGenProblem();
+    public static native boolean nativeFrameGenEngineAvailable(int kind);
     public static native boolean nativeFrameGenEngineAvailable(int kind);
     public static native String nativeFrameGenCapsReason();
     public static native float[] nativeFrameGenStats();

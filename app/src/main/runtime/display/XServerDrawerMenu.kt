@@ -626,6 +626,8 @@ data class XServerDrawerState(
     val frameGenMultiplier: Int = 2,
     val frameGenTargetRate: Int = 0,
     val frameGenFlowScale: Int = 70,
+    val snapFrameGenAvailable: Boolean = false,
+    val snapFrameGenEnabled: Boolean = false,
     val disFrameGenEnabled: Boolean = false,
     val disFrameGenScale: Int = 180,
     val disFrameGenTargetFps: Int = 0,
@@ -1507,6 +1509,8 @@ fun withFrameGenState(
     targetRate: Int,
     flowScale: Int,
     frameGenTitle: String,
+    snapFrameAvailable: Boolean = false,
+    snapFrameEnabled: Boolean = false,
 ): XServerDrawerState =
     state.copy(
         items =
@@ -1520,6 +1524,8 @@ fun withFrameGenState(
                 ),
         frameGenAvailable = available,
         frameGenEnabled = enabled,
+        snapFrameGenAvailable = snapFrameAvailable,
+        snapFrameGenEnabled = snapFrameEnabled,
         frameGenMultiplier = multiplier.coerceIn(2, FrameGenMultipliers.last()),
         frameGenTargetRate = targetRate.coerceAtLeast(0),
         frameGenFlowScale = flowScale.coerceIn(FrameGenFlowScaleMin, FrameGenFlowScaleMax),
@@ -1535,6 +1541,7 @@ fun withDisFrameGenState(
     state.copy(
         disFrameGenEnabled = enabled,
         frameGenEnabled = state.frameGenEnabled && !enabled,
+        snapFrameGenEnabled = state.snapFrameGenEnabled && !enabled,
         disFrameGenScale = scale.coerceIn(DisFrameGenScaleMin, DisFrameGenScaleMax),
         disFrameGenTargetFps = targetFps.coerceAtLeast(0),
         disFrameGenDebugFlow = debugFlow,
