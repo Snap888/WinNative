@@ -79,7 +79,7 @@ void evaluateCandidate(
 
 void main() {
     ivec2 outPos = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 outExtent = imageSize(motionOutput);
+    ivec2 outExtent = ivec2(pc.flowWidth, pc.flowHeight);
     if (any(greaterThanEqual(outPos, outExtent)))
         return;
 

@@ -208,7 +208,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
     e->query_pending[slot]=0;
     if(r!=VK_SUCCESS)return;
-    float total=0.0f;
+    float total=0.0f,stage_values[5]={0};
     for(uint32_t i=0;i<5;i++){
         uint64_t begin=values[(i*2u)*2u],begin_ok=values[(i*2u)*2u+1u];
         uint64_t end=values[(i*2u+1u)*2u],end_ok=values[(i*2u+1u)*2u+1u];
@@ -239,6 +239,7 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     if(!e||!e->prepared||!cmd||!src||!src_view)return 0;e->pending_source=src;e->pending_source_view=src_view;transition_fresh(e,cmd);
     if(!e->history_valid){copy_history(e,cmd,src);return 0;}
     if(n==0){copy_history(e,cmd,src);return 0;}
+    pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;pthread_mutex_unlock(&e->telemetry_mutex);
     e->query_slot=(uint32_t)(e->frame_serial%4u);collect_query_slot(e,e->query_slot);
     g_vk.CmdResetQueryPool(cmd,e->query_pool,e->query_slot*10u,10u);
     e->query_frame_id[e->query_slot]=++e->frame_serial;e->query_pending[e->query_slot]=1;
