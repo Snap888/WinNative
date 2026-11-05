@@ -2726,6 +2726,14 @@ static bool record_and_submit_frame(VkRenderer* r) {
         destroy_composite_targets(r);
     }
 
+    if (via_composite && r->snap
+        && !snap_frame_vk_prepare(r->snap, composite_extent.width, composite_extent.height,
+                                  r->swapchain_format,
+                                  (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+        VK_LOGW("SnapFrame X11 frame resources are unavailable");
+        framegen_capacity = 0;
+    }
+
     uint32_t framegen_planned = 0;
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
@@ -3900,6 +3908,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationEnabled)(JNIEnv* env, jcla
         wait_inflight_frames(r);
         destroy_lsfg(r);
     } else if (r->device && r->lsfg_cache_path) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_dis(r);
         r->dis_requested = false;
         create_lsfg(r);
@@ -4059,6 +4069,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetDisFrameGenerationEnabled)(JNIEnv* env, j
         wait_inflight_frames(r);
         destroy_dis(r);
     } else if (r->device) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_lsfg(r);
         r->framegen_requested = false;
         create_dis(r);
