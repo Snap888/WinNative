@@ -28,6 +28,7 @@ struct SnapFrameVk {
     VkQueryPool query_pool; float timestamp_period_ms;
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4]; uint32_t query_slot;
     float stage_gpu_ms[5],last_gpu_ms; int telemetry_valid;
+    pthread_mutex_t telemetry_mutex; int telemetry_mutex_ready;
     SnapAIHandle *ai;
     SnapFrameVkLifecycle lifecycle;
     int prepared,history_valid;
@@ -225,9 +226,10 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         stage_values[i]=(float)(end-begin)*e->timestamp_period_ms;
         total+=stage_values[i];
     }
+    int telemetry_valid=total>0.0f;
     pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->stage_gpu_ms,stage_values,sizeof(stage_values));
-    e->last_gpu_ms=total;e->telemetry_valid=total>0.0f;pthread_mutex_unlock(&e->telemetry_mutex);
-    if(e->telemetry_valid&&e->ai){
+    e->last_gpu_ms=total;e->telemetry_valid=telemetry_valid;pthread_mutex_unlock(&e->telemetry_mutex);
+    if(telemetry_valid&&e->ai){
         SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
         metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
         metrics.motion_magnitude=0.35f;metrics.motion_complexity=0.45f;
