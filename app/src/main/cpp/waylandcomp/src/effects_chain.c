@@ -652,3 +652,11 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
     return scene;
 }
+
+VkImageView vkp_effects_view(VkImage image) {
+    if (!image) return VK_NULL_HANDLE;
+    if (g_scene.img == image) return g_scene.view;
+    for (int i=0;i<2;i++) if (g_t[i].img == image) return g_t[i].view;
+    if (g_mid.img == image) return g_mid.view;
+    return VK_NULL_HANDLE;
+}

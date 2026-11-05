@@ -52,6 +52,9 @@ VkFilter vkp_effects_blit_filter(void);
 VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int scene_h,
                         int out_w, int out_h, int *res_w, int *res_h);
 
+/* View belonging to the returned image; valid until the next effects resize/device teardown. */
+VkImageView vkp_effects_view(VkImage image);
+
 /* Compositor thread: drop every Vulkan object (device teardown / device lost). */
 void vkp_effects_destroy(void);
 
