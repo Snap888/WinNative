@@ -2987,10 +2987,25 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                       VK_ACCESS_TRANSFER_WRITE_BIT, 0);
                 } else {
                     VkCompositeTarget* gt = &r->composite[VK_FRAMES_IN_FLIGHT + g];
-                    vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
-                                           gt->image, gt->view,
-                                           r->swapchain_extent.width,
-                                           r->swapchain_extent.height);
+                    if (use_snap) {
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                                          VK_ACCESS_SHADER_WRITE_BIT);
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count, gt->image, gt->view);
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                          VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                          VK_ACCESS_TRANSFER_READ_BIT);
+                    } else {
+                        vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
+                                               gt->image, gt->view,
+                                               r->swapchain_extent.width,
+                                               r->swapchain_extent.height);
+                    }
                     blit_composite_to_swapchain(r, f->cmd, gt, r->swapchain_images[idx]);
                 }
             }
