@@ -16,6 +16,7 @@
 
 #include "vk_state.h"
 #include "vk_driver.h"
+#include "../../../waylandcomp/src/vk_loader.h"
 
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
@@ -75,6 +76,8 @@ static void create_lsfg(VkRenderer* r);
 static void destroy_lsfg(VkRenderer* r);
 static void create_dis(VkRenderer* r);
 static void destroy_dis(VkRenderer* r);
+static void create_snap(VkRenderer* r);
+static void destroy_snap(VkRenderer* r);
 static uint32_t framegen_extra_images(const VkRenderer* r);
 static void framegen_rebuild_swapchain(VkRenderer* r);
 static bool create_quad_vbo(VkRenderer* r);
@@ -1945,8 +1948,30 @@ static void create_dis(VkRenderer* r) {
     vkr_dis_set_debug_flow(r->dis, r->dis_debug_flow);
 }
 
+static void destroy_snap(VkRenderer* r) {
+    if (!r->snap) return;
+    snap_frame_vk_destroy(r->snap);
+    r->snap = NULL;
+    r->framegen_real_frames = 0;
+    r->framegen_made_frames = 0;
+}
+
+static void create_snap(VkRenderer* r) {
+    if (r->snap || !r->device || !r->physical_device) return;
+    r->snap = snap_frame_vk_create(r->device, r->physical_device);
+    if (!r->snap) {
+        VK_LOGW("SnapFrame Vulkan backend unavailable on this X11 device");
+        return;
+    }
+    VK_LOGI("SnapFrame Vulkan backend created on existing X11 device/queue");
+}
+
 static uint32_t framegen_extra_images(const VkRenderer* r) {
-    if (!r->framegen_requested && !r->dis_requested) return 0;
+    if (!r->framegen_requested && !r->dis_requested && !r->snap_requested) return 0;
+    if (r->snap_requested) {
+        uint32_t n = r->framegen_multiplier > 1 ? r->framegen_multiplier - 1 : 1;
+        return n > 3u ? 3u : n;
+    }
     if (r->dis_requested) return VKR_DIS_MAX_GENERATIONS;
     if (r->framegen_target_rate != 0) return VKR_LSFG_MAX_GENERATIONS;
 
@@ -2612,8 +2637,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
         destroy_sgsr1_resources(r);
     }
 
-    const bool framegen_on = r->framegen_requested || r->dis_requested;
+    const bool framegen_on = r->framegen_requested || r->dis_requested || r->snap_requested;
     const bool use_dis = r->dis != NULL;
+    const bool use_snap = r->snap != NULL;
     bool via_composite = framegen_on && r->framegen_supported
                       && r->swapchain_transfer_dst;
 
@@ -2634,9 +2660,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t framegen_capacity = 0;
-    if (via_composite && (r->lsfg || r->dis) && r->swapchain_image_count > 2) {
+    if (via_composite && (r->lsfg || r->dis || r->snap) && r->swapchain_image_count > 2) {
         framegen_capacity = r->swapchain_image_count - 2;
-        const uint32_t engine_max = r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS;
+        const uint32_t engine_max = r->snap ? 3u : (r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS);
         if (framegen_capacity > engine_max) framegen_capacity = engine_max;
         if (VK_FRAMES_IN_FLIGHT + framegen_capacity > VK_MAX_COMPOSITE_TARGETS) {
             framegen_capacity = VK_MAX_COMPOSITE_TARGETS - VK_FRAMES_IN_FLIGHT;
@@ -2657,6 +2683,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
             || (r->dis && vkr_dis_needs_rebuild(r->dis, composite_extent.width,
                                                 composite_extent.height, r->swapchain_format,
                                                 dis_content));
+        if (r->snap && (r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
+                        || !r->swapchain_storage)) {
+            VK_LOGW("SnapFrame requires RGBA8 storage swapchain output on this X11 path");
+            framegen_capacity = 0;
+        }
         if (composite_stale || chain_stale) {
             if (r->dis) {
                 vkDeviceWaitIdle(r->device);
@@ -2682,6 +2713,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                      dis_content)) {
                     framegen_capacity = 0;
                 }
+            } else if (r->snap) {
+                if (!snap_frame_vk_prepare(r->snap, composite_extent.width,
+                                           composite_extent.height, r->swapchain_format,
+                                           (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+                    VK_LOGW("SnapFrame resource preparation failed for X11 output");
+                    framegen_capacity = 0;
+                }
             }
         }
     } else if (r->composite_built) {
@@ -2703,6 +2741,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
             framegen_planned = vkr_dis_plan(r->dis, framegen_capacity,
                                             __atomic_load_n(&r->framegen_source_frames,
                                                             __ATOMIC_RELAXED));
+        } else if (r->snap) {
+            framegen_planned = snap_frame_vk_has_history(r->snap)
+                                   ? (r->framegen_multiplier > 1
+                                          ? r->framegen_multiplier - 1 : 0) : 0;
+            if (framegen_planned > 3u) framegen_planned = 3u;
+            if (framegen_planned > framegen_capacity) framegen_planned = framegen_capacity;
         }
     }
 
@@ -2883,8 +2927,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     if (composite) {
-        if ((use_dis || r->lsfg) && framegen_capacity > 0) {
-            if (use_dis) {
+        if ((use_dis || r->lsfg || use_snap) && framegen_capacity > 0) {
+            if (use_snap) {
+                if (!snap_frame_vk_process(r->snap, f->cmd, composite->image,
+                                           composite->view, gen_count)) gen_count = 0;
+            } else if (use_dis) {
                 vkr_dis_process(r->dis, f->cmd, composite->image,
                                 composite->width, composite->height, gen_count);
             } else {
@@ -2895,7 +2942,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             for (uint32_t g = 0; g < gen_count; g++) {
                 const uint32_t idx = gen_image_index[g];
                 if (r->swapchain_storage) {
-                    if (use_dis) {
+                    if (use_snap) {
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count,
+                                               r->swapchain_images[idx], r->swapchain_views[idx]);
+                    } else if (use_dis) {
                         vkr_dis_generate_into(r->dis, f->cmd, g, idx,
                                               r->swapchain_images[idx], r->swapchain_views[idx],
                                               r->swapchain_extent.width,
@@ -3234,6 +3284,10 @@ JNIEXPORT jlong JNICALL JNI_FN(nativeCreate)(JNIEnv* env, jclass clazz,
     if (!create_instance(r)) goto fail;
     if (!pick_physical_device(r)) goto fail;
     if (!create_device(r)) goto fail;
+    if (vk_loader_bind_external(vkd.GetInstanceProcAddr, r->instance, r->device) != 0) {
+        VK_LOGE("SnapFrame Vulkan dispatch could not bind to the X11 renderer device");
+        goto fail;
+    }
     query_device_caps(r);
     if (!create_command_pool(r)) goto fail;
     if (!create_descriptor_pool(r, r->caps.descriptor_pool_capacity)) goto fail;
