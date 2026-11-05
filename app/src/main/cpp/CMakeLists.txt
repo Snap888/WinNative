@@ -137,6 +137,7 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 add_subdirectory(wfg)
 
 # SnapFrame's independent Vulkan compute backend, using the Wayland compositor's Turnip dispatch.
+add_subdirectory(snapai)
 add_subdirectory(snapframe)
 
 # ----------------------------------------------------------------------------

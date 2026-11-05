@@ -1,0 +1,5 @@
+add_library(snap_ai STATIC src/snap_ai.cpp)
+set_target_properties(snap_ai PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_features(snap_ai PUBLIC cxx_std_17)
+target_include_directories(snap_ai PUBLIC include)
+target_compile_options(snap_ai PRIVATE -Wall -Wextra)
