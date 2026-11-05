@@ -19,6 +19,9 @@ add_library(wnwayland SHARED
         src/blend_pass.c
         src/framegen_bridge.c
         src/framegen_jni.c
+        # Portable SnapFrame API/core is built into the compositor, but is not selectable
+        # until a real Vulkan backend is registered and passes capability checks.
+        ../thirdparty/snapframe/src/snap_frame.cpp
         generated/color-management-v1-protocol.c
         generated/xdg-shell-protocol.c
         generated/linux-dmabuf-v1-protocol.c
@@ -33,10 +36,12 @@ add_library(wnwayland SHARED
         generated/ahb-v1-protocol.c
 )
 
+target_compile_features(wnwayland PRIVATE cxx_std_17)
 target_include_directories(wnwayland PRIVATE
         generated
         prebuilt/include
         src
+        ../thirdparty/snapframe/include
         # Committed SPIR-V of the screen-effect chain (src/effects_chain.c, src/hdr_compose.c).
         shaders
         ${CMAKE_CURRENT_SOURCE_DIR}/../adrenotools/include
