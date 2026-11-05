@@ -1,0 +1,16 @@
+#version 450
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=0,binding=0) uniform sampler2D sourceLuma;
+layout(set=0,binding=1,r16f) writeonly uniform image2D destinationLuma;
+void main() {
+    ivec2 p=ivec2(gl_GlobalInvocationID.xy);
+    ivec2 outSize=imageSize(destinationLuma);
+    if(any(greaterThanEqual(p,outSize))) return;
+    ivec2 inSize=textureSize(sourceLuma,0);
+    ivec2 b=p*2;
+    float v=0.25*(texelFetch(sourceLuma,clamp(b,inSize*0,inSize-1),0).r+
+                  texelFetch(sourceLuma,clamp(b+ivec2(1,0),inSize*0,inSize-1),0).r+
+                  texelFetch(sourceLuma,clamp(b+ivec2(0,1),inSize*0,inSize-1),0).r+
+                  texelFetch(sourceLuma,clamp(b+ivec2(1,1),inSize*0,inSize-1),0).r);
+    imageStore(destinationLuma,p,vec4(v,0,0,1));
+}

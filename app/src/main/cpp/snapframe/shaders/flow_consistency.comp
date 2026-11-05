@@ -1,0 +1,44 @@
+#version 450
+
+// Forward/backward cycle validation for the two coarse block-matching fields.
+// Motion vectors are measured in half-resolution luma texels. The luma
+// reference input provides the active flow-grid stride for projection.
+// R16F output is a soft validity/confidence mask.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform sampler2D flowCurrentToPrevious;
+layout(set = 0, binding = 1) uniform sampler2D flowPreviousToCurrent;
+layout(set = 0, binding = 2, r16f) writeonly uniform image2D consistencyOutput;
+layout(set = 0, binding = 3) uniform sampler2D referenceLuma;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(consistencyOutput);
+    if (any(greaterThanEqual(p, extent)))
+        return;
+
+    vec4 forwardFlow = texelFetch(flowCurrentToPrevious, p, 0);
+    ivec2 lumaExtent = textureSize(referenceLuma, 0);
+    ivec2 blockStride = max(ivec2(1), ivec2(ceil(vec2(lumaExtent) / vec2(extent))));
+    ivec2 blockCenter = min(p * blockStride + blockStride / 2, lumaExtent - ivec2(2));
+    vec2 lumaPosition = vec2(blockCenter) + forwardFlow.xy;
+    // Flow cells represent block centers (p * stride + stride/2), not
+    // block corners. Project to the nearest reverse cell center; floor(pos/stride)
+    // biases the lookup by roughly half a cell and can invalidate good matches.
+    vec2 reverseCell = (lumaPosition - 0.5 * vec2(blockStride)) / vec2(blockStride);
+    ivec2 reverseCoord = ivec2(round(reverseCell));
+    ivec2 reverseExtent = textureSize(flowPreviousToCurrent, 0);
+
+    if (any(lessThan(reverseCoord, ivec2(0))) ||
+        any(greaterThanEqual(reverseCoord, reverseExtent))) {
+        imageStore(consistencyOutput, p, vec4(0.0));
+        return;
+    }
+
+    vec4 reverseFlow = texelFetch(flowPreviousToCurrent, reverseCoord, 0);
+    float fbError = length(forwardFlow.xy + reverseFlow.xy);
+    float threshold = 0.75 + 0.05 * length(forwardFlow.xy);
+    float consistency = 1.0 - smoothstep(threshold, threshold * 2.0, fbError);
+    float localConfidence = min(forwardFlow.z, reverseFlow.z);
+    consistency *= clamp(localConfidence * 2.0, 0.0, 1.0);
+    imageStore(consistencyOutput, p, vec4(consistency, 0.0, 0.0, 1.0));
+}
