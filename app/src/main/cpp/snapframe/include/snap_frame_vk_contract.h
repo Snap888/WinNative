@@ -1,7 +1,12 @@
 #ifndef SNAP_FRAME_VK_CONTRACT_H
 #define SNAP_FRAME_VK_CONTRACT_H
 #include <stdint.h>
+#ifdef SNAP_FRAME_VK_CONTRACT_STANDALONE
+typedef int32_t VkFormat;
+enum { VK_FORMAT_R8G8B8A8_UNORM = 37, VK_FORMAT_B8G8R8A8_UNORM = 44, VK_FORMAT_R16G16B16A16_SFLOAT = 97 };
+#else
 #include <vulkan/vulkan.h>
+#endif
 
 enum {
     SNAP_FRAME_RESET_INITIAL = 1u << 0,
