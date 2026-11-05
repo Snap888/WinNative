@@ -5976,8 +5976,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         disFrameGenDebugFlow = enabled;
                         if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setDisDebugFlow(enabled);
+                            xServerView.getRenderer().setSnapFrameDebugFlow(enabled);
                         }
-                        renderDrawerMenu();
+                        applyFrameGenerationLive();
                     }
 
 
