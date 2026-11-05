@@ -26,7 +26,7 @@
 #endif
 #include <vulkan/vulkan.h>
 
-enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1 };
+enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1, VKP_FG_ENGINE_SNAPFRAME = 2 };
 /* Hard ceiling on generated frames per source frame, as on X11: DIS goes to 8x, LSFG to 4x. */
 #define VKP_FG_MAX_GENERATIONS 7
 #define VKP_FG_LSFG_MAX_GENERATIONS 3
