@@ -1318,7 +1318,7 @@ static bool create_swapchain(VkRenderer* r, uint32_t fallback_width, uint32_t fa
         sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // blit source for the encoder mirror
     }
     bool transfer_dst_capable = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0;
-    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested) && transfer_dst_capable;
+    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested || r->snap_requested) && transfer_dst_capable;
     if (r->swapchain_transfer_dst) sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     r->swapchain_storage = r->framegen_requested
@@ -3007,6 +3007,14 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 r->framegen_draw_ns = 0;
                 r->framegen_gap_ns = 0;
                 r->framegen_timed_frames = 0;
+                if (use_snap) {
+                    float snap_stages[5], snap_total = 0.0f;
+                    if (snap_frame_vk_get_telemetry(r->snap, snap_stages, &snap_total)) {
+                        VK_LOGI("SnapFrame GPU ms: luma=%.3f pyramid=%.3f flow=%.3f consistency=%.3f warp=%.3f total=%.3f",
+                                snap_stages[0], snap_stages[1], snap_stages[2],
+                                snap_stages[3], snap_stages[4], snap_total);
+                    }
+                }
                 VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u got=%u "
                         "misses=%llu timeout=%.1fms images=%u capacity=%u draw=%.2fms gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
