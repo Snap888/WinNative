@@ -325,6 +325,10 @@ public class VulkanRenderer
                 if (disFrameGenerationRequested) {
                     nativeSetDisFrameGenerationEnabled(nativeHandle, true);
                 }
+                if (snapFrameGenerationRequested) {
+                    nativeSetSnapFrameGenerationEnabled(nativeHandle, true);
+                }
+                nativeSetSnapFrameDebugFlow(nativeHandle, snapFrameDebugFlow);
                 destroyed.set(false);
                 xServer.windowManager.addOnWindowModificationListener(this);
                 xServer.pointer.addOnPointerMotionListener(this);
@@ -1062,6 +1066,23 @@ public class VulkanRenderer
         }
     }
 
+    private boolean snapFrameGenerationRequested = false;
+    private boolean snapFrameDebugFlow = false;
+
+    public void setSnapFrameGenerationEnabled(boolean enabled) {
+        snapFrameGenerationRequested = enabled;
+        if (nativeHandle != 0) nativeSetSnapFrameGenerationEnabled(nativeHandle, enabled);
+    }
+
+    public boolean isSnapFrameGenerationAvailable() {
+        return nativeHandle != 0 && nativeIsSnapFrameGenerationAvailable(nativeHandle);
+    }
+
+    public void setSnapFrameDebugFlow(boolean enabled) {
+        snapFrameDebugFlow = enabled;
+        if (nativeHandle != 0) nativeSetSnapFrameDebugFlow(nativeHandle, enabled);
+    }
+
     private boolean disFrameGenerationRequested = false;
     private int disFrameGenerationScale = 180;
     private int disFrameGenerationTargetFps = 0;
@@ -1169,6 +1190,9 @@ public class VulkanRenderer
     private static native void nativeSetFrameGenerationMode(long handle, int multiplier,
                                                             int targetRate,
                                                             int flowScalePercent);
+    private static native boolean nativeIsSnapFrameGenerationAvailable(long handle);
+    private static native void nativeSetSnapFrameGenerationEnabled(long handle, boolean enabled);
+    private static native void nativeSetSnapFrameDebugFlow(long handle, boolean enabled);
     private static native void nativeSetDisFrameGenerationEnabled(long handle, boolean enabled);
     private static native void nativeSetDisFrameGenerationScale(long handle, int scalePercent);
     private static native void nativeSetDisFrameGenerationTargetFps(long handle, int targetFps);
