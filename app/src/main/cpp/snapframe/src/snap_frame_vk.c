@@ -10,6 +10,7 @@
 #include "snap_midpoint_warp_comp.spv.h"
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #define SF_LEVELS 3u
 #define SF_PHASES 3u
@@ -140,6 +141,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     if(!d||!pd||!g_vk.CreateComputePipelines||!g_vk.CmdDispatch||!g_vk.CmdCopyImage||
        !g_vk.CreateQueryPool||!g_vk.GetQueryPoolResults||!g_vk.CmdResetQueryPool||!g_vk.CmdWriteTimestamp)return NULL;
     SnapFrameVk*e=(SnapFrameVk*)calloc(1,sizeof(*e));if(!e)return NULL;e->device=d;e->physical=pd;
+    if(pthread_mutex_init(&e->telemetry_mutex,NULL)!=0)goto fail;e->telemetry_mutex_ready=1;
     g_vk.GetPhysicalDeviceMemoryProperties(pd,&e->memprops);
     VkPhysicalDeviceProperties props; memset(&props,0,sizeof(props));
     g_vk.GetPhysicalDeviceProperties(pd,&props);
@@ -176,6 +178,7 @@ void snap_frame_vk_destroy(SnapFrameVk*e){
     if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);
     if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);
     if(e->ai)snap_ai_destroy(e->ai);
+    if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);
     free(e);
 }
 int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint32_t scale){
@@ -183,9 +186,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     if(scale<25)scale=25;if(scale>100)scale=100;
     if(e->prepared&&e->width==w&&e->height==h&&e->format==fmt){
         if(e->manual_flow_percent!=scale){e->manual_flow_percent=scale;e->flow_percent=scale;}
-        e->active_flow_w=e->forward.w*e->flow_percent/100u;
-        e->active_flow_h=e->forward.h*e->flow_percent/100u;
-        if(!e->active_flow_w)e->active_flow_w=1;if(!e->active_flow_h)e->active_flow_h=1;
+        snap_frame_vk_flow_extent(e->forward.w,e->forward.h,e->flow_percent,&e->active_flow_w,&e->active_flow_h);
         return 1;
     }
     g_vk.DeviceWaitIdle(e->device);resources_destroy(e);
@@ -198,7 +199,12 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     if(!image_create(e,&e->forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->mask,fw,fh,VK_FORMAT_R16_SFLOAT))goto fail;
-    e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->prepared=1;e->history_valid=0;return 1;
+    e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
+    snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
+    snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
+    e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;e->frame_serial=0;memset(e->query_pending,0,sizeof(e->query_pending));
+    pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));pthread_mutex_unlock(&e->telemetry_mutex);
+    snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);return 1;
 fail:resources_destroy(e);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
@@ -215,10 +221,11 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         uint64_t begin=values[(i*2u)*2u],begin_ok=values[(i*2u)*2u+1u];
         uint64_t end=values[(i*2u+1u)*2u],end_ok=values[(i*2u+1u)*2u+1u];
         if(!begin_ok||!end_ok||end<begin)return;
-        e->stage_gpu_ms[i]=(float)(end-begin)*e->timestamp_period_ms;
-        total+=e->stage_gpu_ms[i];
+        stage_values[i]=(float)(end-begin)*e->timestamp_period_ms;
+        total+=stage_values[i];
     }
-    e->last_gpu_ms=total;e->telemetry_valid=total>0.0f;
+    pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->stage_gpu_ms,stage_values,sizeof(stage_values));
+    e->last_gpu_ms=total;e->telemetry_valid=total>0.0f;pthread_mutex_unlock(&e->telemetry_mutex);
     if(e->telemetry_valid&&e->ai){
         SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
         metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
@@ -268,14 +275,15 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[1],0,NULL);
     g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
-    write_timestamp(e,cmd,5);write_timestamp(e,cmd,6);
+    write_timestamp(e,cmd,5);
     v[0]=e->forward.view;v[1]=e->backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
     update_set(e,&e->consistency,0,4,11,v);
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
     g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    write_timestamp(e,cmd,6);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8));barrier_compute(cmd);
-    write_timestamp(e,cmd,7);e->telemetry_valid=0;
+    write_timestamp(e,cmd,7);
     return 1;
 }
 void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uint32_t count,VkImage out,VkImageView out_view){
@@ -292,6 +300,6 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
     if(phase+1u==count){write_timestamp(e,cmd,9);copy_history(e,cmd,e->pending_source);}
 }
 
-int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms||!e->telemetry_valid)return 0;memcpy(stages_ms,e->stage_gpu_ms,sizeof(e->stage_gpu_ms));*total_ms=e->last_gpu_ms;return 1;}
+int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->telemetry_valid;if(valid){memcpy(stages_ms,m->stage_gpu_ms,sizeof(m->stage_gpu_ms));*total_ms=m->last_gpu_ms;}pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
 
 void snap_frame_vk_abandon(SnapFrameVk*e){if(!e)return;if(e->ai)snap_ai_destroy(e->ai);if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);free(e);}
