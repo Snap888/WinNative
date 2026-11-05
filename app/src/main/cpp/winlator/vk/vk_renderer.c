@@ -2683,9 +2683,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
             || (r->dis && vkr_dis_needs_rebuild(r->dis, composite_extent.width,
                                                 composite_extent.height, r->swapchain_format,
                                                 dis_content));
-        if (r->snap && (r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
-                        || !r->swapchain_storage)) {
-            VK_LOGW("SnapFrame requires RGBA8 storage swapchain output on this X11 path");
+        if (r->snap && r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM) {
+            VK_LOGW("SnapFrame currently requires an RGBA8 X11 swapchain format");
             framegen_capacity = 0;
         }
         if (composite_stale || chain_stale) {
@@ -3356,6 +3355,7 @@ JNIEXPORT void JNICALL JNI_FN(nativeDestroy)(JNIEnv* env, jclass clazz, jlong ha
     if (!r) return;
 
     if (r->device) vkDeviceWaitIdle(r->device);
+    destroy_snap(r);
 
     // Drain any in-flight uploads and tear down the staging pool before destroying images.
     vkr_staging_pool_destroy(r);
@@ -3916,6 +3916,68 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsFrameGenerationSupported)(JNIEnv* env,
     VkRenderer* r = (VkRenderer*)(intptr_t)handle;
     if (!r) return JNI_FALSE;
     return r->framegen_supported ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* env, jclass clazz,
+                                                                        jlong handle) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r || !r->physical_device || !r->device || !r->framegen_supported
+        || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM) return JNI_FALSE;
+    VkPhysicalDeviceProperties props;
+    memset(&props, 0, sizeof(props));
+    vkGetPhysicalDeviceProperties(r->physical_device, &props);
+    if (!props.limits.timestampComputeAndGraphics || props.limits.timestampPeriod <= 0.0f)
+        return JNI_FALSE;
+    const VkFormat formats[] = { VK_FORMAT_R16_SFLOAT, VK_FORMAT_R16G16_SFLOAT,
+        VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM };
+    const VkFormatFeatureFlags base = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    for (uint32_t i = 0; i < 4; i++) {
+        VkFormatProperties fp;
+        memset(&fp, 0, sizeof(fp));
+        vkGetPhysicalDeviceFormatProperties(r->physical_device, formats[i], &fp);
+        VkFormatFeatureFlags need = base;
+        if (i >= 2) need |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        if ((fp.optimalTilingFeatures & need) != need) return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameGenerationEnabled)(JNIEnv* env, jclass clazz,
+                                                                    jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    const bool want = enabled == JNI_TRUE;
+    if (r->snap_requested == want) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_requested = want;
+    if (!want) {
+        wait_inflight_frames(r);
+        destroy_snap(r);
+    } else if (r->device) {
+        destroy_lsfg(r);
+        destroy_dis(r);
+        r->framegen_requested = false;
+        r->dis_requested = false;
+        create_snap(r);
+        if (!r->snap) r->snap_requested = false;
+    }
+    framegen_rebuild_swapchain(r);
+    pthread_mutex_unlock(&r->render_mutex);
+    VK_LOGI("SnapFrame X11 path %s (backend=%s)", want ? "enabled" : "disabled",
+            r->snap ? "ready" : "unavailable");
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugFlow)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_flow = enabled == JNI_TRUE;
+    pthread_mutex_unlock(&r->render_mutex);
 }
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationShaders)(JNIEnv* env, jclass clazz,
