@@ -169,7 +169,7 @@ void vkp_framegen_stats(float out[6]) {
     out[2] = g_source_rate;
     out[3] = g_presented_rate;
     out[4] = thermal;
-    out[5] = -1.0f;
+    out[5] = accepted;
 }
 
 unsigned vkp_framegen_stats_take(void) { return atomic_exchange(&g_stat_generated, 0u); }
@@ -201,9 +201,11 @@ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int f
     g_vk.GetPhysicalDeviceMemoryProperties(g_pd, &g_memprops);
     fge_device_ready(g_gipa, g_inst, g_pd, dev, queue, qfam, features_enabled);
     g_dev_ready = vk.CreateImage && vk.CreateImageView && vk.CmdPipelineBarrier;
-    FGLOG("engines ready on the compositor's device: LSFG Native %s (%s), WFG Native %s",
-          fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable", fge_caps_reason(),
-          fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable");
+    FGLOG("engines ready on the compositor's device: LSFG Native %s, WFG Native %s, SnapFrame Vulkan %s (%s)",
+          fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable",
+          fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable",
+          fge_caps_ok(VKP_FG_ENGINE_SNAPFRAME) ? "available" : "unavailable",
+          fge_caps_reason_for(VKP_FG_ENGINE_SNAPFRAME));
 }
 
 void vkp_framegen_device_lost(void) { g_dev_lost = 1; fge_device_lost(); }

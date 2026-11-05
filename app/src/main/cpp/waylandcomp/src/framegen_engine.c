@@ -71,9 +71,12 @@ const void *fge_probe(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
                                   VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
                                   | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
     g_caps_dis = 1;
-    g_caps_snapframe = format_supports(VK_FORMAT_R16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
-        format_supports(VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
-        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+    VkPhysicalDeviceProperties snap_props; memset(&snap_props,0,sizeof(snap_props));
+    vkd.GetPhysicalDeviceProperties(pd,&snap_props);
+    g_caps_snapframe = snap_props.limits.timestampComputeAndGraphics &&
+        format_supports(VK_FORMAT_R16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+        format_supports(VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) &&
+        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
     g_reason = g_caps_lsfg ? "supported" : "the driver has no storage half-float images";
 
     /* Neither engine needs a feature enabled at device creation. */
@@ -237,9 +240,8 @@ void fge_forget_targets(void) {
 }
 
 void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
-    *accepted = 0.0f;
-    *source_rate = 0.0f;
-    *thermal = -1.0f;
+    *accepted = 0.0f; *source_rate = 0.0f; *thermal = -1.0f;
+    if (g_snap) { float stages[5], total=0.0f; if (snap_frame_vk_get_telemetry(g_snap,stages,&total)) { *accepted=total; *source_rate=stages[2]; } }
 }
 
 const char *fge_engine_name(int kind) {
