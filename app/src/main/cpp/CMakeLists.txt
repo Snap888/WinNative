@@ -156,6 +156,7 @@ add_library(winlator SHARED
         winlator/process_lifecycle.c
         winlator/vulkan.c
         winlator/vk/vk_dispatch.c
+        waylandcomp/src/vk_loader.c
         winlator/vk/vk_image.c
         winlator/vk/vk_renderer.c
         winlator/vk/lsfg/lsfg_dll.c
@@ -186,6 +187,8 @@ target_compile_definitions(winlator PRIVATE
 target_include_directories(winlator PRIVATE
         ${xz_SOURCE_DIR}/src/liblzma/api
         winlator/vk
+        waylandcomp/src
+        snapframe/include
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -193,6 +196,7 @@ target_compile_features(winlator PRIVATE cxx_std_17)
 
 target_link_libraries(winlator
         wfg
+        snapframe_vk
         log
         android
         mediandk
