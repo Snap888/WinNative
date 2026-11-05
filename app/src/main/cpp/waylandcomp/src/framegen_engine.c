@@ -85,6 +85,7 @@ const void *fge_probe(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
     vkd.GetPhysicalDeviceProperties(pd,&snap_props);
     g_caps_snapframe = snap_props.limits.timestampComputeAndGraphics &&
         format_supports(VK_FORMAT_R16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
+        format_supports(VK_FORMAT_R16G16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
         format_supports(VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) &&
         format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
     g_reason = g_caps_lsfg ? "supported" : "the driver has no storage half-float images";
@@ -110,7 +111,7 @@ int fge_caps_ok(int kind) {
 
 const char *fge_caps_reason(void) { return g_reason; }
 const char *fge_caps_reason_for(int kind) {
-    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks required storage/sample formats or compute timestamp queries required by SnapFrame";
+    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks R16/RG16 flow storage formats, sampled RGBA formats or compute timestamp queries required by SnapFrame";
     if (kind == VKP_FG_ENGINE_DIS) return g_caps_dis ? "WFG/DIS supported" : "the compositor cannot create its generation ring";
     return g_reason;
 }
