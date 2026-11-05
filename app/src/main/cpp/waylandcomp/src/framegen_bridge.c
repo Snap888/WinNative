@@ -92,7 +92,7 @@ static int64_t now_ns(void) {
 /* ====================================================================== app controls */
 
 void vkp_framegen_set_engine(int kind) {
-    if (kind != VKP_FG_ENGINE_LSFG && kind != VKP_FG_ENGINE_DIS) kind = VKP_FG_ENGINE_LSFG;
+    if (kind != VKP_FG_ENGINE_LSFG && kind != VKP_FG_ENGINE_DIS && kind != VKP_FG_ENGINE_SNAPFRAME) kind = VKP_FG_ENGINE_LSFG;
     atomic_store(&g_kind, kind);
     atomic_store(&g_failed_kind, -1);
     atomic_store(&g_cfg_dirty, 1);
@@ -156,7 +156,7 @@ int vkp_framegen_problem(void) {
     if (g_engine_ok && g_engine_kind == kind && fge_unavailable()) return 2;
     return 0;
 }
-const char *vkp_framegen_caps_reason(void) { return fge_caps_reason(); }
+const char *vkp_framegen_caps_reason(void) { return fge_caps_reason_for(atomic_load(&g_kind)); }
 
 void vkp_framegen_stats(float out[6]) {
     float accepted = 0.0f, src = 0.0f, thermal = -1.0f;
@@ -199,7 +199,7 @@ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int f
           fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable");
 }
 
-void vkp_framegen_device_lost(void) { g_dev_lost = 1; }
+void vkp_framegen_device_lost(void) { g_dev_lost = 1; fge_device_lost(); }
 
 /* ====================================================================== ring */
 
@@ -290,6 +290,7 @@ int vkp_framegen_active(void) {
 /* DIS fills the gap to the refresh rate itself; LSFG takes the multiplier's share, or with a
  * target rate lets its pacer pick the count. Either way, up to the engine's most. */
 static uint32_t generation_slots(void) {
+    if (atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME) { uint32_t m=(uint32_t)atomic_load(&g_mult); return m>1?m-1:0; }
     if (atomic_load(&g_kind) == VKP_FG_ENGINE_DIS) return VKP_FG_MAX_GENERATIONS;
     if (atomic_load(&g_target_fps) > 0) return VKP_FG_LSFG_MAX_GENERATIONS;
     uint32_t m = (uint32_t)atomic_load(&g_mult);
@@ -334,6 +335,7 @@ static int ensure_engine(int kind) {
 
 static int g_logged_mult;
 static void log_arm_transition(int armed, int kind, int mult) {
+    if (armed != g_was_armed && g_engine_ok) fge_reset_history();
     if (armed == g_was_armed) {
         if (armed && mult != g_logged_mult) {
             g_logged_mult = mult;
@@ -427,7 +429,7 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
                           0, 0, NULL, 0, NULL, nb, bars);
 
     /* Frame N in; the shared passes (the whole flow pyramid) run only when generating. */
-    fge_process(cmd, scene, (uint32_t)w, (uint32_t)h, n_gen);
+    fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, n_gen);
     for (uint32_t g = 0; g < n_gen; g++) {
         fge_generate(cmd, g, n_gen, g_ring[g].img, g_ring[g].view, (uint32_t)w, (uint32_t)h);
         gens[g] = g_ring[g].img;
