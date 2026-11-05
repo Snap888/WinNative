@@ -195,15 +195,14 @@ uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rat
     return 0;
 }
 
-void fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens) {
+uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens) {
     if (!g_chain_ok) return;
     g_source = source;
     if (g_snap) {
         uint64_t now=now_ns();
         if (g_last_plan_ns && now-g_last_plan_ns > 500000000ull) snap_frame_vk_reset_history(g_snap);
         g_last_plan_ns=now;
-        snap_frame_vk_process(g_snap,cmd,source,source_view,gens);
-        return;
+        return snap_frame_vk_process(g_snap,cmd,source,source_view,gens) ? gens : 0u;
     }
     if (g_lsfg) {
         vkr_lsfg_process(g_lsfg, cmd, source, w, h, gens);
@@ -214,6 +213,7 @@ void fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, u
     } else if (g_dis) {
         vkr_dis_process(g_dis, cmd, source, w, h, gens);
     }
+    return gens;
 }
 
 void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, VkImageView view,

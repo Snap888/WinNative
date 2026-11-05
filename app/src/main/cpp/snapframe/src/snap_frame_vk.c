@@ -175,10 +175,10 @@ fail:resources_destroy(e);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
 void snap_frame_vk_reset_history(SnapFrameVk*e){if(e)e->history_valid=0;}
-void snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageView src_view,uint32_t n){
-    if(!e||!e->prepared||!cmd||!src||!src_view)return;e->pending_source=src;e->pending_source_view=src_view;transition_fresh(e,cmd);
-    if(!e->history_valid){copy_history(e,cmd,src);return;}
-    if(n==0){copy_history(e,cmd,src);return;}
+int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageView src_view,uint32_t n){
+    if(!e||!e->prepared||!cmd||!src||!src_view)return 0;e->pending_source=src;e->pending_source_view=src_view;transition_fresh(e,cmd);
+    if(!e->history_valid){copy_history(e,cmd,src);return 0;}
+    if(n==0){copy_history(e,cmd,src);return 0;}
     VkImageView v[6];
     v[0]=e->history.view;v[1]=e->prev[0].view;update_set(e,&e->luma,0,2,1,v);
     v[0]=src_view;v[1]=e->curr[0].view;update_set(e,&e->luma,1,2,1,v);
@@ -193,6 +193,7 @@ void snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImage
     dispatch(cmd,&e->flow,0,e->forward.w,e->forward.h);dispatch(cmd,&e->flow,1,e->backward.w,e->backward.h);barrier_compute(cmd);
     v[0]=e->forward.view;v[1]=e->backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
     update_set(e,&e->consistency,0,4,11,v);dispatch(cmd,&e->consistency,0,e->mask.w,e->mask.h);barrier_compute(cmd);
+    return 1;
 }
 void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uint32_t count,VkImage out,VkImageView out_view){
     if(!e||!e->prepared||!e->history_valid||!e->pending_source||!e->pending_source_view||!out||!out_view||!count||count>SF_PHASES||phase>=count)return;

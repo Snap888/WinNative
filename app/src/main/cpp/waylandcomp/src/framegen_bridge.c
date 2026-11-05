@@ -429,7 +429,8 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
                           0, 0, NULL, 0, NULL, nb, bars);
 
     /* Frame N in; the shared passes (the whole flow pyramid) run only when generating. */
-    fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, n_gen);
+    n_gen = fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, n_gen);
+    g_planned = n_gen;
     for (uint32_t g = 0; g < n_gen; g++) {
         fge_generate(cmd, g, n_gen, g_ring[g].img, g_ring[g].view, (uint32_t)w, (uint32_t)h);
         gens[g] = g_ring[g].img;

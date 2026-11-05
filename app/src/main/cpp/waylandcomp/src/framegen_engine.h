@@ -54,7 +54,7 @@ int fge_prepare(uint32_t w, uint32_t h, VkFormat fmt);
 /* How many frames to generate for this source frame (0 until the history is valid). */
 uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rate);
 /* Take the scene image (GENERAL) as frame N and run the shared part of the chain. */
-void fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens);
+uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, uint32_t gens);
 /* Synthesise generated frame g of `count` into a storage image (GENERAL). */
 void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, VkImageView view,
                   uint32_t w, uint32_t h);
