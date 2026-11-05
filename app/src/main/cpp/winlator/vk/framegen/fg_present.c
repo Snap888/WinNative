@@ -17,7 +17,6 @@
 #include "../vk_driver.h"
 #include "vkr_dis.h"
 #include "../lsfg/vkr_lsfg.h"
-#include "../../../snapframe/include/snap_frame_vk.h"
 
 #define LOG_TAG "FgPresent"
 #define FG_LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -102,7 +101,6 @@ struct FgPresenter {
 
     VkrLsfg* lsfg;
     VkrDis* dis;
-    SnapFrameVk* snap;
     uint32_t active_engine;
     char* cache_path;
 
@@ -708,7 +706,6 @@ static uint32_t fg_dis_target(uint32_t multiplier, uint32_t target_rate, float s
 static void fg_engine_configure(FgPresenter* fg, uint32_t multiplier, uint32_t target_rate,
                                 float flow_scale, float refresh_rate, float source_rate,
                                 uint32_t dis_min_side) {
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME) return;
     if (fg->active_engine == FG_ENGINE_DIS) {
         if (!fg->dis) return;
         vkr_dis_configure(fg->dis, dis_min_side ? dis_min_side : FG_DIS_MIN_SIDE_DEFAULT,
@@ -729,22 +726,9 @@ static void fg_engine_release(FgPresenter* fg) {
         vkr_dis_destroy(fg->dis);
         fg->dis = NULL;
     }
-    if (fg->snap) {
-        snap_frame_vk_destroy(fg->snap);
-        fg->snap = NULL;
-    }
 }
 
 static bool fg_engine_acquire(FgPresenter* fg) {
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME) {
-        if (fg->snap) return true;
-        fg->snap = snap_frame_vk_create(fg->device, fg->physical_device);
-        if (!fg->snap) {
-            FG_LOGW("SnapFrame Vulkan backend is unavailable on this X11 device");
-            return false;
-        }
-        return true;
-    }
     if (fg->active_engine == FG_ENGINE_DIS) {
         if (fg->dis) return true;
         fg->dis = vkr_dis_create(fg->device, fg->physical_device);
@@ -764,12 +748,10 @@ static bool fg_engine_acquire(FgPresenter* fg) {
 }
 
 static bool fg_engine_ready(const FgPresenter* fg) {
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME) return fg->snap != NULL;
     return fg->active_engine == FG_ENGINE_DIS ? fg->dis != NULL : fg->lsfg != NULL;
 }
 
 static const char* fg_engine_name(uint32_t engine) {
-    if (engine == FG_ENGINE_SNAPFRAME) return "SnapFrame";
     return engine == FG_ENGINE_DIS ? "WFG" : "LSFG";
 }
 
@@ -825,14 +807,6 @@ static void fg_renew_semaphore(FgPresenter* fg, VkSemaphore* handle) {
 static void fg_record_and_present(FgPresenter* fg, FgImport* source, AImage* image) {
     FgFrame* f = &fg->frames[fg->frame_index];
 
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME && fg->snap
-        && !snap_frame_vk_prepare(fg->snap, fg->extent.width, fg->extent.height,
-                                  fg->target_format,
-                                  (uint32_t)(fg->flow_scale * 100.0f))) {
-        FG_LOGW("SnapFrame prepare failed for %ux%u format=%d", fg->extent.width,
-                fg->extent.height, (int)fg->target_format);
-    }
-
     uint32_t capacity = 0;
     if (fg_engine_ready(fg) && fg->swapchain_image_count > 2) {
         capacity = fg->swapchain_image_count - 2;
@@ -840,12 +814,7 @@ static void fg_record_and_present(FgPresenter* fg, FgImport* source, AImage* ima
     }
 
     uint32_t planned = 0;
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME && fg->snap) {
-        planned = snap_frame_vk_has_history(fg->snap)
-                      ? (fg->multiplier > 1 ? fg->multiplier - 1 : 0) : 0;
-        if (planned > 3u) planned = 3u;
-        if (planned > capacity) planned = capacity;
-    } else if (fg->active_engine == FG_ENGINE_DIS) {
+    if (fg->active_engine == FG_ENGINE_DIS) {
         planned = vkr_dis_plan(fg->dis, capacity, fg->source_frames);
     } else if (fg->lsfg) {
         vkr_lsfg_set_guest_extent(fg->lsfg, source->width, source->height);
@@ -909,10 +878,7 @@ static void fg_record_and_present(FgPresenter* fg, FgImport* source, AImage* ima
                VK_ACCESS_TRANSFER_WRITE_BIT,
                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT);
 
-    if (fg->active_engine == FG_ENGINE_SNAPFRAME && fg->snap) {
-        if (!snap_frame_vk_process(fg->snap, f->cmd, composite->image, composite->view,
-                                   gen_count)) gen_count = 0;
-    } else if (fg->active_engine == FG_ENGINE_DIS) {
+    if (fg->active_engine == FG_ENGINE_DIS) {
         vkr_dis_process(fg->dis, f->cmd, composite->image, fg->extent.width,
                         fg->extent.height, gen_count);
     } else if (fg->lsfg) {
@@ -922,10 +888,7 @@ static void fg_record_and_present(FgPresenter* fg, FgImport* source, AImage* ima
 
     for (uint32_t g = 0; g < gen_count; g++) {
         FgTarget* generated = &fg->targets[FG_FRAMES_IN_FLIGHT + g];
-        if (fg->active_engine == FG_ENGINE_SNAPFRAME && fg->snap) {
-            snap_frame_vk_generate(fg->snap, f->cmd, g, gen_count, generated->image,
-                                   generated->view);
-        } else if (fg->active_engine == FG_ENGINE_DIS) {
+        if (fg->active_engine == FG_ENGINE_DIS) {
             // DIS blits its interpolated frame into whatever target it is given, so it goes
             // straight into the swapchain image, without a generated target and second blit.
             vkr_dis_generate_into(fg->dis, f->cmd, g, gen_index[g], fg->swapchain_images[gen_index[g]],
@@ -1207,7 +1170,7 @@ FgPresenter* fg_create(JNIEnv* env, jobject context, const char* driver_name,
     fg->multiplier = multiplier;
     fg->target_rate = target_rate;
     fg->flow_scale = flow_scale;
-    fg->engine = engine <= FG_ENGINE_SNAPFRAME ? engine : FG_ENGINE_LSFG;
+    fg->engine = engine == FG_ENGINE_DIS ? FG_ENGINE_DIS : FG_ENGINE_LSFG;
     fg->active_engine = fg->engine;
     fg->dis_min_side = dis_min_side ? dis_min_side : FG_DIS_MIN_SIDE_DEFAULT;
     fg->refresh_rate = refresh_rate;
@@ -1245,7 +1208,7 @@ FgPresenter* fg_create(JNIEnv* env, jobject context, const char* driver_name,
 
     if (!fg_engine_acquire(fg)) {
         const uint32_t fallback =
-            fg->active_engine == FG_ENGINE_LSFG ? FG_ENGINE_DIS : FG_ENGINE_LSFG;
+            fg->active_engine == FG_ENGINE_DIS ? FG_ENGINE_LSFG : FG_ENGINE_DIS;
         FG_LOGW("%s unavailable; trying %s", fg_engine_name(fg->active_engine),
                 fg_engine_name(fallback));
         fg->active_engine = fallback;
