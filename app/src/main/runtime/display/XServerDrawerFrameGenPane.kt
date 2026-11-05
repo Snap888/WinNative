@@ -213,9 +213,11 @@ internal fun FrameGenEngineSection(
             SnapFrameOptions(
                 multiplier = multiplier,
                 flowScale = flowScale,
+                debugFlow = disDebugFlow,
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
+                onDebugFlowChanged = onDisDebugFlowChanged,
             )
         }
 
@@ -494,9 +496,11 @@ private fun LosslessFrameGenOptions(
 private fun SnapFrameOptions(
     multiplier: Int,
     flowScale: Int,
+    debugFlow: Boolean,
     paneScale: Float,
     onMultiplierSelected: (Int) -> Unit,
     onFlowScaleChanged: (Int) -> Unit,
+    onDebugFlowChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         FrameGenFieldLabel(stringResource(R.string.session_drawer_frame_generation_multiplier), paneScale)
@@ -518,6 +522,12 @@ private fun SnapFrameOptions(
             onSelected = { onFlowScaleChanged(it.flowScale) },
             paneScale = paneScale,
         )
+        NavBooleanRow(
+            title = stringResource(R.string.session_drawer_dis_debug_flow),
+            checked = debugFlow,
+            onCheckedChange = onDebugFlowChanged,
+        )
+        FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
         FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
 }
