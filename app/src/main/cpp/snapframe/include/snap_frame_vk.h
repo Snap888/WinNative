@@ -8,6 +8,8 @@ extern "C" {
 typedef struct SnapFrameVk SnapFrameVk;
 SnapFrameVk *snap_frame_vk_create(VkDevice device, VkPhysicalDevice physical_device);
 void snap_frame_vk_destroy(SnapFrameVk *engine);
+/* Device-loss path: releases host memory only; must not call Vulkan on a lost device. */
+void snap_frame_vk_abandon(SnapFrameVk *engine);
 int snap_frame_vk_prepare(SnapFrameVk *engine, uint32_t width, uint32_t height, VkFormat format, uint32_t flow_scale_percent);
 int snap_frame_vk_has_history(const SnapFrameVk *engine);
 void snap_frame_vk_reset_history(SnapFrameVk *engine);

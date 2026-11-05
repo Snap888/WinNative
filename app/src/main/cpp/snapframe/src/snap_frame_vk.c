@@ -292,3 +292,5 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
 }
 
 int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms||!e->telemetry_valid)return 0;memcpy(stages_ms,e->stage_gpu_ms,sizeof(e->stage_gpu_ms));*total_ms=e->last_gpu_ms;return 1;}
+
+void snap_frame_vk_abandon(SnapFrameVk*e){if(!e)return;if(e->ai)snap_ai_destroy(e->ai);if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);free(e);}

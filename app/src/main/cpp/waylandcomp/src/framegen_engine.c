@@ -253,7 +253,9 @@ void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); 
 
 void fge_device_lost(void) {
     /* A lost VkDevice must not be touched for cleanup. The driver reclaims its objects. */
-    g_lsfg = NULL; g_dis = NULL; g_snap = NULL; g_dev = VK_NULL_HANDLE;
+    g_lsfg = NULL; g_dis = NULL;
+    if (g_snap) snap_frame_vk_abandon(g_snap);
+    g_snap = NULL; g_dev = VK_NULL_HANDLE;
     g_kind = -1; g_chain_ok = 0; g_chain_failed = 0; g_source = VK_NULL_HANDLE;
 }
 
