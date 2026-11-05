@@ -3044,6 +3044,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
 
         if (use_snap && r->snap_debug_flow && gen_count > 0) {
+            vkr_image_barrier(f->cmd, composite->image,
+                              VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                              VK_ACCESS_SHADER_WRITE_BIT);
             snap_frame_vk_debug_into(r->snap, f->cmd, composite->image, composite->view,
                                      composite->width, composite->height);
             blit_composite_to_swapchain(r, f->cmd, composite, r->swapchain_images[image_index]);
@@ -3955,6 +3962,8 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsFrameGenerationSupported)(JNIEnv* env,
     return r->framegen_supported ? JNI_TRUE : JNI_FALSE;
 }
 
+/* This probe must work before FG is enabled; it checks surface/format capabilities,
+ * not the current framegen_requested or swapchain_transfer_dst state. */
 JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* env, jclass clazz,
                                                                         jlong handle) {
     (void)env; (void)clazz;
