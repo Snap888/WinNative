@@ -14,6 +14,7 @@ typedef struct FgPresenter FgPresenter;
 typedef enum FgEngine {
     FG_ENGINE_LSFG = 0,
     FG_ENGINE_DIS = 1,
+    FG_ENGINE_SNAPFRAME = 2,
 } FgEngine;
 
 #define FG_DIS_MIN_SIDE_DEFAULT 180u
