@@ -1269,6 +1269,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (shortcut != null) {
             boolean overridden = saveFrameGenOverride("frameGen", frameGenEnabled ? "1" : "0", "0");
             overridden |= saveFrameGenOverride("snapFrameGen", snapFrameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("frameGenEngine", snapFrameGenEnabled ? "1" : "0", "0");
             overridden |= saveFrameGenOverride("frameGenMultiplier",
                     String.valueOf(frameGenMultiplier), "2");
             overridden |= saveFrameGenOverride("frameGenTargetRate",
@@ -1280,6 +1281,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         } else if (container != null) {
             container.putExtra("frameGen", frameGenEnabled ? "1" : "0");
             container.putExtra("snapFrameGen", snapFrameGenEnabled ? "1" : "0");
+            container.putExtra("frameGenEngine", snapFrameGenEnabled ? "1" : "0");
             container.putExtra("frameGenMultiplier", String.valueOf(frameGenMultiplier));
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));

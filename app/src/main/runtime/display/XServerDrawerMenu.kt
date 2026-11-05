@@ -1520,7 +1520,7 @@ fun withFrameGenState(
                     title = frameGenTitle,
                     subtitle = "",
                     icon = Icons.Outlined.Speed,
-                    active = enabled || state.fpsLimit > 0,
+                    active = enabled || snapFrameEnabled || state.disFrameGenEnabled || state.fpsLimit > 0,
                 ),
         frameGenAvailable = available,
         frameGenEnabled = enabled,
