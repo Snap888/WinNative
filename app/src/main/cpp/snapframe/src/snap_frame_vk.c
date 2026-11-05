@@ -8,6 +8,7 @@
 #include "snap_flow_consistency_comp.spv.h"
 #include "snap_midpoint_warp_rgba8_comp.spv.h"
 #include "snap_midpoint_warp_comp.spv.h"
+#include "snap_flow_debug_comp.spv.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -21,7 +22,7 @@ struct sf_pipeline { VkDescriptorSetLayout set_layout; VkPipelineLayout layout; 
 struct SnapFrameVk {
     VkDevice device; VkPhysicalDevice physical; VkPhysicalDeviceMemoryProperties memprops;
     VkSampler sampler; VkDescriptorPool pool;
-    struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16;
+    struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16,debug;
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
@@ -166,9 +167,10 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,8)||
        !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
        !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
-       !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16))goto fail;
+       !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
+       !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,12))goto fail;
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
-       !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3))goto fail;
+       !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3)||\n       !alloc_sets(e,&e->debug,1))goto fail;
     return e;
 fail:snap_frame_vk_destroy(e);return NULL;
 }
@@ -302,6 +304,22 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
     g_vk.CmdDispatch(cmd,div_up(e->width,8),div_up(e->height,8),1);
     if(phase+1u==count){write_timestamp(e,cmd,9);copy_history(e,cmd,e->pending_source);}
 }
+
+void snap_frame_vk_debug_into(SnapFrameVk*e,VkCommandBuffer cmd,VkImage out,
+                              VkImageView out_view,uint32_t w,uint32_t h){
+    if(!e||!e->prepared||!e->history_valid||!e->forward.image||!e->mask.image
+       ||!cmd||!out||!out_view||!w||!h||e->format!=VK_FORMAT_R8G8B8A8_UNORM)return;
+    VkImageView views[3]={e->forward.view,e->mask.view,out_view};
+    update_set(e,&e->debug,0,3,3,views);
+    struct {uint32_t width,height;float magnitude_scale;} pc={w,h,0.075f};
+    g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->debug.pipeline);
+    g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->debug.layout,0,1,
+                               &e->debug.sets[0],0,NULL);
+    g_vk.CmdPushConstants(cmd,e->debug.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),&pc);
+    g_vk.CmdDispatch(cmd,div_up(w,8),div_up(h,8),1);
+    barrier_compute(cmd);
+}
+
 
 int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->telemetry_valid;if(valid){memcpy(stages_ms,m->stage_gpu_ms,sizeof(m->stage_gpu_ms));*total_ms=m->last_gpu_ms;}pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
 
