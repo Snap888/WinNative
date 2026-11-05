@@ -110,7 +110,7 @@ int fge_caps_ok(int kind) {
 
 const char *fge_caps_reason(void) { return g_reason; }
 const char *fge_caps_reason_for(int kind) {
-    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks R16F/RGBA16F storage and sampled image support required by SnapFrame";
+    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks required storage/sample formats or compute timestamp queries required by SnapFrame";
     if (kind == VKP_FG_ENGINE_DIS) return g_caps_dis ? "WFG/DIS supported" : "the compositor cannot create its generation ring";
     return g_reason;
 }

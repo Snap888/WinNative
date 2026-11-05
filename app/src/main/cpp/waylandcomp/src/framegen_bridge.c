@@ -157,7 +157,13 @@ int vkp_framegen_problem(void) {
     return 0;
 }
 const char *vkp_framegen_caps_reason(void) { return fge_caps_reason_for(atomic_load(&g_kind)); }
-int vkp_framegen_engine_available(int kind) { return g_dev_ready && !g_dev_lost && fge_caps_ok(kind); }
+int vkp_framegen_engine_available(int kind) {
+    if (!g_dev_ready || g_dev_lost || !fge_caps_ok(kind)) return 0;
+    if (kind == VKP_FG_ENGINE_SNAPFRAME &&
+        (!g_vk.CreateQueryPool || !g_vk.DestroyQueryPool || !g_vk.GetQueryPoolResults ||
+         !g_vk.CmdResetQueryPool || !g_vk.CmdWriteTimestamp)) return 0;
+    return 1;
+}
 
 void vkp_framegen_stats(float out[6]) {
     float accepted = 0.0f, src = 0.0f, thermal = -1.0f;
