@@ -26,6 +26,8 @@
     X(GetDeviceQueue) X(CreateSwapchainKHR) X(DestroySwapchainKHR) X(GetSwapchainImagesKHR) \
     X(CreateCommandPool) X(AllocateCommandBuffers) X(CreateSemaphore) X(CreateFence) \
     X(DeviceWaitIdle) X(CreateImage) X(GetImageMemoryRequirements) X(AllocateMemory) \
+    X(CreateBuffer) X(GetBufferMemoryRequirements) X(BindBufferMemory) X(DestroyBuffer) \
+    X(CmdCopyImageToBuffer) \
     X(BindImageMemory) X(DestroyImage) X(FreeMemory) X(AcquireNextImageKHR) \
     X(ResetCommandBuffer) X(BeginCommandBuffer) X(CmdPipelineBarrier) X(CmdBlitImage) \
     X(EndCommandBuffer) X(ResetFences) X(QueueSubmit) X(QueuePresentKHR) X(WaitForFences) \
