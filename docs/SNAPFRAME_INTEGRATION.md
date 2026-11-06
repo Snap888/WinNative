@@ -35,11 +35,13 @@ Flow Scale adjusts the active flow grid through push constants while maximum-siz
 
 Timestamp queries measure five GPU stage groups: luma, pyramid, flow, consistency and warp. Completed query slots are collected non-blockingly several frames later. Snap AI compares measured GPU time against a 5 ms budget and returns a bounded ratio multiplied by the user's Flow Scale baseline.
 
-Current limitation: the AI inputs for motion magnitude, motion complexity, flow confidence and artifact risk are neutral fixed priors. GPU reductions for actual flow confidence, motion complexity and artifact risk are not yet wired. The controller therefore adapts mainly to measured GPU pressure; it is not yet content-aware.
+The X11 Vulkan backend now reduces the already-computed forward flow and consistency mask in one 256-lane compute workgroup. It writes four normalized values to a 1x1 RGBA32F image: mean motion magnitude, motion-magnitude deviation, confidence weighted by forward/backward consistency, and complementary artifact risk. The image is copied to a 16-byte host-visible/coherent staging buffer in a four-slot ring. CPU mapping happens only when the corresponding timestamp-query slot is already available several frames later; no queue/device wait and no full-resolution image readback are used.
+
+Snap AI now receives these measured values together with GPU time. Motion magnitude contributes to the controller's smoothed scene-complexity input, so large uniform motion is not treated as a trivially static scene. Metrics are capability-gated: if buffer readback entry points, coherent host memory, or the RGBA32F storage image are unavailable, SnapFrame interpolation remains enabled and content metrics are simply skipped. The Wayland adapter still needs its own telemetry handoff before it can expose the same content-aware AI behavior.
 
 ## Vulkan and WSI ownership
 
-The backend borrows the host's Vulkan device, command buffer, source view and output slots. It does not create another device/queue, submit the host command buffer, wait for GPU completion, perform CPU readback, own WSI semaphores or present images itself. On X11, the renderer owns swapchain acquire/present operations. On Wayland, the compositor owns its FIFO present path. Resource replacement must occur at the host's serialized safe frame boundary.
+The backend borrows the host's Vulkan device, command buffer, source view and output slots. It does not create another device/queue, submit the host command buffer, wait for GPU completion, read back source/generated images, own WSI semaphores or present images itself. The optional AI telemetry path copies only 16 bytes of aggregate metrics into a ring-buffer staging slot and maps it only after the host's normal frame/query completion proves that slot is finished. On X11, the renderer owns swapchain acquire/present operations. On Wayland, the compositor owns its FIFO present path. Resource replacement must occur at the host's serialized safe frame boundary.
 
 ## Settings and diagnostics
 
