@@ -9,9 +9,11 @@
 #include "snap_midpoint_warp_rgba8_comp.spv.h"
 #include "snap_midpoint_warp_comp.spv.h"
 #include "snap_flow_debug_comp.spv.h"
+#include "snap_flow_metrics_comp.spv.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <math.h>
 
 #define SF_LEVELS 3u
 #define SF_PHASES 3u
@@ -19,10 +21,13 @@
 
 struct sf_image { VkImage image; VkDeviceMemory memory; VkImageView view; uint32_t w,h; int fresh; };
 struct sf_pipeline { VkDescriptorSetLayout set_layout; VkPipelineLayout layout; VkPipeline pipeline; VkDescriptorSet sets[4]; };
+struct sf_buffer { VkBuffer buffer; VkDeviceMemory memory; };
 struct SnapFrameVk {
     VkDevice device; VkPhysicalDevice physical; VkPhysicalDeviceMemoryProperties memprops;
     VkSampler sampler; VkDescriptorPool pool;
-    struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16,debug;
+    struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16,debug,metrics;
+    struct sf_buffer metrics_readback[4]; struct sf_image metrics_output;
+    int metrics_pipeline_ready,metrics_enabled; uint8_t metrics_pending[4];
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
@@ -61,6 +66,30 @@ static int image_create(SnapFrameVk*e,struct sf_image*i,uint32_t w,uint32_t h,Vk
       .viewType=VK_IMAGE_VIEW_TYPE_2D,.format=fmt,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
     if(g_vk.CreateImageView(e->device,&vi,NULL,&i->view)!=VK_SUCCESS)return 0;
     i->w=w;i->h=h;i->fresh=1;return 1;
+}
+static void buffer_destroy(SnapFrameVk*e,struct sf_buffer*b){
+    if(b->buffer)g_vk.DestroyBuffer(e->device,b->buffer,NULL);
+    if(b->memory)g_vk.FreeMemory(e->device,b->memory,NULL);
+    memset(b,0,sizeof(*b));
+}
+static int buffer_create_readback(SnapFrameVk*e,struct sf_buffer*b){
+    VkBufferCreateInfo ci={.sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,.size=sizeof(float)*4u,
+        .usage=VK_BUFFER_USAGE_TRANSFER_DST_BIT,.sharingMode=VK_SHARING_MODE_EXCLUSIVE};
+    if(g_vk.CreateBuffer(e->device,&ci,NULL,&b->buffer)!=VK_SUCCESS)return 0;
+    VkMemoryRequirements req;g_vk.GetBufferMemoryRequirements(e->device,b->buffer,&req);
+    int mt=-1;
+    for(uint32_t i=0;i<e->memprops.memoryTypeCount;i++){
+        VkMemoryPropertyFlags flags=e->memprops.memoryTypes[i].propertyFlags;
+        if((req.memoryTypeBits&(1u<<i))&&
+           (flags&(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))==
+                    (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)){mt=(int)i;break;}
+    }
+    if(mt<0){buffer_destroy(e,b);return 0;}
+    VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize=req.size,.memoryTypeIndex=(uint32_t)mt};
+    if(g_vk.AllocateMemory(e->device,&ai,NULL,&b->memory)!=VK_SUCCESS){buffer_destroy(e,b);return 0;}
+    if(g_vk.BindBufferMemory(e->device,b->buffer,b->memory,0)!=VK_SUCCESS){buffer_destroy(e,b);return 0;}
+    return 1;
 }
 static void pipeline_destroy(SnapFrameVk*e,struct sf_pipeline*p){
     if(p->pipeline)g_vk.DestroyPipeline(e->device,p->pipeline,NULL);
@@ -109,13 +138,13 @@ static void barrier_compute(VkCommandBuffer cmd){
     g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&b,0,NULL,0,NULL);
 }
 static void transition_fresh(SnapFrameVk*e,VkCommandBuffer cmd){
-    VkImageMemoryBarrier b[10];uint32_t n=0;
+    VkImageMemoryBarrier b[12];uint32_t n=0;
 #define FRESH(i) do{if((i).fresh){b[n++]=(VkImageMemoryBarrier){.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,.srcAccessMask=0,\
  .dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT,.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,.newLayout=VK_IMAGE_LAYOUT_GENERAL,\
  .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.image=(i).image,\
  .subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};(i).fresh=0;}}while(0)
     FRESH(e->history);for(uint32_t i=0;i<SF_LEVELS;i++){FRESH(e->prev[i]);FRESH(e->curr[i]);}
-    FRESH(e->forward);FRESH(e->backward);FRESH(e->mask);
+    FRESH(e->forward);FRESH(e->backward);FRESH(e->mask);FRESH(e->metrics_output);
 #undef FRESH
     if(n)g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,0,NULL,0,NULL,n,b);
 }
@@ -136,7 +165,7 @@ static void copy_history(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src){
 }
 static void resources_destroy(SnapFrameVk*e){
     image_destroy(e,&e->history);for(uint32_t i=0;i<SF_LEVELS;i++){image_destroy(e,&e->prev[i]);image_destroy(e,&e->curr[i]);}
-    image_destroy(e,&e->forward);image_destroy(e,&e->backward);image_destroy(e,&e->mask);
+    image_destroy(e,&e->forward);image_destroy(e,&e->backward);image_destroy(e,&e->mask);image_destroy(e,&e->metrics_output);e->metrics_enabled=0;
     e->width=e->height=0;e->prepared=0;e->history_valid=0;e->pending_source=VK_NULL_HANDLE;e->pending_source_view=VK_NULL_HANDLE;
 }
 SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
@@ -172,6 +201,13 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
        !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3)||
        !alloc_sets(e,&e->debug,1))goto fail;
+    if(pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,3,3,0)&&alloc_sets(e,&e->metrics,1)){
+        e->metrics_pipeline_ready=1;
+        for(uint32_t i=0;i<4;i++)if(!buffer_create_readback(e,&e->metrics_readback[i])){
+            for(uint32_t j=0;j<4;j++)buffer_destroy(e,&e->metrics_readback[j]);
+            pipeline_destroy(e,&e->metrics);e->metrics_pipeline_ready=0;break;
+        }
+    }
     return e;
 fail:snap_frame_vk_destroy(e);return NULL;
 }
@@ -181,6 +217,8 @@ void snap_frame_vk_destroy(SnapFrameVk*e){
     if(e->query_pool)g_vk.DestroyQueryPool(e->device,e->query_pool,NULL);
     if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);
     if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);
+    for(uint32_t i=0;i<4;i++)buffer_destroy(e,&e->metrics_readback[i]);
+    pipeline_destroy(e,&e->metrics);
     if(e->ai)snap_ai_destroy(e->ai);
     if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);
     free(e);
@@ -204,10 +242,11 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     if(!image_create(e,&e->forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->mask,fw,fh,VK_FORMAT_R16_SFLOAT))goto fail;
+    if(e->metrics_pipeline_ready&&image_create(e,&e->metrics_output,1,1,VK_FORMAT_R32G32B32A32_SFLOAT))e->metrics_enabled=1;
     e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
-    e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;e->frame_serial=0;memset(e->query_pending,0,sizeof(e->query_pending));
+    e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;e->frame_serial=0;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));pthread_mutex_unlock(&e->telemetry_mutex);
     snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);return 1;
 fail:resources_destroy(e);return 0;
@@ -232,19 +271,26 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     int telemetry_valid=total>0.0f;
     pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->stage_gpu_ms,stage_values,sizeof(stage_values));
     e->last_gpu_ms=total;e->telemetry_valid=telemetry_valid;pthread_mutex_unlock(&e->telemetry_mutex);
-    if(telemetry_valid&&e->ai){
-        SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
-        metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
-        metrics.motion_magnitude=0.35f;metrics.motion_complexity=0.45f;
-        metrics.flow_confidence=0.80f;metrics.gpu_pressure=total/5.0f;
-        metrics.artifact_risk=0.05f;metrics.telemetry_valid=1;
-        SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
-        if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK&&decision.mode!=SNAP_AI_MODE_BYPASS){
-            uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
-            if(scale<25)scale=25;if(scale>100)scale=100;
-            e->flow_percent=scale;
+    if(telemetry_valid&&e->ai&&e->metrics_enabled&&e->metrics_pending[slot]){
+        float flow_metrics[4]={0};void*mapped=NULL;
+        if(g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
+            memcpy(flow_metrics,mapped,sizeof(flow_metrics));g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
+            int valid=1;for(uint32_t i=0;i<4;i++)if(!isfinite(flow_metrics[i])||flow_metrics[i]<0.0f||flow_metrics[i]>1.0f)valid=0;
+            if(valid){
+                SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
+                metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
+                metrics.motion_magnitude=flow_metrics[0];metrics.motion_complexity=flow_metrics[1];
+                metrics.flow_confidence=flow_metrics[2];metrics.gpu_pressure=total/5.0f;
+                metrics.artifact_risk=flow_metrics[3];metrics.telemetry_valid=1;
+                SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
+                if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK&&decision.mode!=SNAP_AI_MODE_BYPASS){
+                    uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
+                    if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
+                }
+            }
         }
     }
+    e->metrics_pending[slot]=0;
 }
 static void write_timestamp(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t query){
     g_vk.CmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,e->query_pool,e->query_slot*10u+query);
@@ -289,6 +335,40 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
     write_timestamp(e,cmd,6);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
+    if(e->metrics_enabled){
+        VkImageView metric_views[3]={e->forward.view,e->mask.view,e->metrics_output.view};
+        update_set(e,&e->metrics,0,3,3,metric_views);
+        g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->metrics.pipeline);
+        g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->metrics.layout,0,1,&e->metrics.sets[0],0,NULL);
+        g_vk.CmdDispatch(cmd,1,1,1);
+        VkImageMemoryBarrier image_to_copy={.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask=VK_ACCESS_SHADER_WRITE_BIT,.dstAccessMask=VK_ACCESS_TRANSFER_READ_BIT,
+            .oldLayout=VK_IMAGE_LAYOUT_GENERAL,.newLayout=VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .image=e->metrics_output.image,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+        VkBufferMemoryBarrier host_to_copy={.sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask=VK_ACCESS_HOST_READ_BIT,.dstAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .buffer=e->metrics_readback[e->query_slot].buffer,.offset=0,.size=VK_WHOLE_SIZE};
+        g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,1,&host_to_copy,1,&image_to_copy);
+        VkBufferImageCopy copy={.bufferOffset=0,.bufferRowLength=0,.bufferImageHeight=0,
+            .imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1},.imageOffset={0,0,0},.imageExtent={1,1,1}};
+        g_vk.CmdCopyImageToBuffer(cmd,e->metrics_output.image,VK_IMAGE_LAYOUT_GENERAL,
+            e->metrics_readback[e->query_slot].buffer,1,&copy);
+        VkImageMemoryBarrier image_back={.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask=VK_ACCESS_TRANSFER_READ_BIT,.dstAccessMask=VK_ACCESS_SHADER_WRITE_BIT,
+            .oldLayout=VK_IMAGE_LAYOUT_GENERAL,.newLayout=VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .image=e->metrics_output.image,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+        VkBufferMemoryBarrier buffer_to_host={.sType=VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT,.dstAccessMask=VK_ACCESS_HOST_READ_BIT,
+            .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,
+            .buffer=e->metrics_readback[e->query_slot].buffer,.offset=0,.size=VK_WHOLE_SIZE};
+        g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT|VK_PIPELINE_STAGE_HOST_BIT,0,0,NULL,1,&buffer_to_host,1,&image_back);
+        e->metrics_pending[e->query_slot]=1;
+    }
     write_timestamp(e,cmd,7);
     return 1;
 }
