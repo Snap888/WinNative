@@ -85,7 +85,8 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
     return SNAP_AI_OK;
   }
 
-  const float raw_c = clamp01(m->motion_complexity);
+  const float raw_motion = clamp01(m->motion_magnitude);
+  const float raw_c = clamp01(m->motion_complexity * 0.75f + raw_motion * 0.25f);
   const float raw_q = clamp01(m->flow_confidence);
   const float raw_p = clamp01(std::max(m->gpu_pressure,
     m->gpu_time_ms / std::max(0.1f, h->cfg.target_gpu_budget_ms)));
