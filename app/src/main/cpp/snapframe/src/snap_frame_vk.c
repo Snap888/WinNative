@@ -201,7 +201,8 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
        !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3)||
        !alloc_sets(e,&e->debug,1))goto fail;
-    if(pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,3,3,0)&&alloc_sets(e,&e->metrics,1)){
+    if(g_vk.CreateBuffer&&g_vk.GetBufferMemoryRequirements&&g_vk.BindBufferMemory&&g_vk.DestroyBuffer&&g_vk.CmdCopyImageToBuffer&&g_vk.MapMemory&&g_vk.UnmapMemory&&
+       pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,3,3,0)&&alloc_sets(e,&e->metrics,1)){
         e->metrics_pipeline_ready=1;
         for(uint32_t i=0;i<4;i++)if(!buffer_create_readback(e,&e->metrics_readback[i])){
             for(uint32_t j=0;j<4;j++)buffer_destroy(e,&e->metrics_readback[j]);
