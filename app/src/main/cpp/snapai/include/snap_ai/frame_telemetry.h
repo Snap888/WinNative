@@ -1,5 +1,6 @@
 #ifndef SNAP_AI_FRAME_TELEMETRY_H
 #define SNAP_AI_FRAME_TELEMETRY_H
+#include "snap_ai/snap_ai.h"
 #include <stdint.h>
 #ifdef __cplusplus
 #include <memory>
@@ -20,7 +21,7 @@ struct Snapshot {
   StreamStats source{}, generated{};
   double output_interval_median_ms=0, output_interval_p95_ms=0, output_interval_p99_ms=0;
 };
-class Recorder {
+class SNAP_AI_API Recorder {
 public:
   explicit Recorder(uint32_t capacity=256); ~Recorder();
   Recorder(Recorder&&) noexcept; Recorder& operator=(Recorder&&) noexcept;
