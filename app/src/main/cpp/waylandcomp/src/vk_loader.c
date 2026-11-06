@@ -73,5 +73,5 @@ int vk_loader_bind_external(PFN_vkGetInstanceProcAddr gipa, VkInstance instance,
     VK_DEVICE_FUNCS(X)
 #undef X
     return (g_vk.CreateComputePipelines && g_vk.CmdDispatch && g_vk.CreateQueryPool
-            && g_vk.GetQueryPoolResults && g_vk.CmdWriteTimestamp && g_vk.CreateBuffer\n            && g_vk.GetBufferMemoryRequirements && g_vk.BindBufferMemory\n            && g_vk.CmdCopyImageToBuffer && g_vk.MapMemory && g_vk.UnmapMemory) ? 0 : -1;
+            && g_vk.GetQueryPoolResults && g_vk.CmdWriteTimestamp) ? 0 : -1;
 }
