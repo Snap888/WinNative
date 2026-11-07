@@ -327,6 +327,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
             (unsigned long long)e->query_frame_id[slot], total, stage_values[0], stage_values[2],
             stage_values[3], stage_values[4], e->flow_percent, e->active_flow_w, e->active_flow_h,
             e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode);
+    }
     if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
         float flow_metrics[4]={0};void*mapped=NULL;
         if(g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
