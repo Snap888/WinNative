@@ -8,7 +8,7 @@
 // Confidence is local best/second-best SAD separation, not FB consistency.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
-layout(push_constant) uniform PC { uint flowWidth; uint flowHeight; } pc;
+layout(push_constant) uniform PC { uint flowWidth; uint flowHeight; float searchRadiusScale; } pc;
 
 layout(set = 0, binding = 0) uniform sampler2D previousLuma;
 layout(set = 0, binding = 1) uniform sampler2D currentLuma;
@@ -99,7 +99,7 @@ void main() {
     // (5x5). The two stages cover every integer displacement in the selected
     // local window while evaluating at most 49 candidates instead of 89.
     // This reduces SAD work by ~45% without reducing the +/-10 search span.
-    const int coarseRadius = 8;
+    int coarseRadius = clamp(int(round(8.0 * clamp(pc.searchRadiusScale, 0.75, 1.5))), 8, 16);
     const int coarseStep = 4;
     const int refineRadius = 2;
 
