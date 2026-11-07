@@ -129,6 +129,19 @@ void vkp_framegen_set_tuning(float flow_scale, float refresh_hz) {
     atomic_store(&g_cfg_dirty, 1);
 }
 
+uint64_t vkp_framegen_acquire_timeout_ns(void) {
+    float refresh_hz;
+    pthread_mutex_lock(&g_lock);
+    refresh_hz = g_refresh_hz;
+    pthread_mutex_unlock(&g_lock);
+    /* Unknown refresh rate defaults to 60 Hz. Never allow a WSI acquire to park
+       the compositor for a second; generated frames are opportunistic. */
+    uint64_t timeout_ns = refresh_hz > 1.0f ? (uint64_t)(1000000000.0f / refresh_hz) : 16000000ULL;
+    if (timeout_ns < 4000000ULL) timeout_ns = 4000000ULL;
+    if (timeout_ns > 16000000ULL) timeout_ns = 16000000ULL;
+    return timeout_ns;
+}
+
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps) {
     if (flow_min_side < 64) flow_min_side = 64;
     if (flow_min_side > 1080) flow_min_side = 1080;
