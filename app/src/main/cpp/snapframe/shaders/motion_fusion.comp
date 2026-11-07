@@ -1,0 +1,33 @@
+#version 450
+// Per-cell fusion of independent global and local motion hypotheses.
+// Divergent vectors are never blindly averaged: the more reliable branch wins.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform sampler2D globalMotion;
+layout(set = 0, binding = 1) uniform sampler2D localMotion;
+layout(set = 0, binding = 2, rgba16f) writeonly uniform image2D fusedMotion;
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(fusedMotion);
+    if (any(greaterThanEqual(p, extent))) return;
+    vec4 g = texelFetch(globalMotion, p, 0);
+    vec4 l = texelFetch(localMotion, p, 0);
+    float gc = clamp(g.z, 0.0, 1.0);
+    float lc = clamp(l.z, 0.0, 1.0);
+    float divergence = length(g.xy - l.xy);
+    float agreement = 1.0 - smoothstep(1.0, 5.0, divergence);
+    float gw = gc * (0.35 + 0.65 * agreement);
+    float lw = lc * (0.35 + 0.65 * agreement);
+    vec2 motion;
+    float confidence;
+    if (divergence > 2.0 && abs(lc - gc) > 0.12) {
+        bool localWins = lc > gc;
+        motion = localWins ? l.xy : g.xy;
+        confidence = max(gc, lc) * (1.0 - 0.35 * smoothstep(2.0, 8.0, divergence));
+    } else {
+        float sum = gw + lw;
+        motion = sum > 1.0e-4 ? (g.xy * gw + l.xy * lw) / sum : vec2(0.0);
+        confidence = clamp(0.5 * (gc + lc) * (0.65 + 0.35 * agreement), 0.0, 1.0);
+    }
+    float error = (g.w * gw + l.w * lw) / max(gw + lw, 1.0e-4);
+    imageStore(fusedMotion, p, vec4(motion, confidence, error));
+}
