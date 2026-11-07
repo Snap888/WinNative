@@ -129,7 +129,10 @@ void vkp_framegen_set_tuning(float flow_scale, float refresh_hz) {
     atomic_store(&g_cfg_dirty, 1);
 }
 
-uint64_t vkp_framegen_acquire_timeout_ns(void) {
+uint64_t vkp_framegen_acquire_timeout_ns(int generated_slot) {
+    /* Only the first generated image may wait for a refresh interval. Further
+       images are best-effort; do not serialize multiple long WSI waits. */
+    if (generated_slot > 0) return 1000000ULL;
     float refresh_hz;
     pthread_mutex_lock(&g_lock);
     refresh_hz = g_refresh_hz;
