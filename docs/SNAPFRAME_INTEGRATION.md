@@ -81,3 +81,14 @@ logs report completed samples, never trigger a synchronous GPU wait.
 The existing X11 Flow Viewer remains the visual flow/consistency view. The numeric metrics
 are currently available in logs; selectable confidence/occlusion/photometric-residual viewer
 layers remain future work and are not claimed as implemented.
+
+
+### Selectable X11 Flow Viewer layers
+
+The existing SnapFrame debug compute pass now has three selectable modes: motion
+(direction hue and magnitude brightness), matcher confidence (the block matcher's
+best/second-best SAD separation stored in flow.z), and forward/backward consistency
+(the existing consistency mask, which also incorporates local matcher confidence).
+The mode is a push constant in the same compute dispatch; no extra flow pass,
+image allocation, CPU readback, or synchronous GPU wait is introduced. The X11
+frame-generation drawer exposes the three modes while Debug Flow is enabled.
