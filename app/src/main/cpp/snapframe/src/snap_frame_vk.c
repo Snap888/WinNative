@@ -33,7 +33,7 @@ struct SnapFrameVk {
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4]; uint32_t query_slot;
-    float stage_gpu_ms[5],last_gpu_ms; int telemetry_valid;
+    float stage_gpu_ms[5],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
     pthread_mutex_t telemetry_mutex; int telemetry_mutex_ready;
     SnapAIHandle *ai;
     SnapFrameVkLifecycle lifecycle;
@@ -280,6 +280,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
             memcpy(flow_metrics,mapped,sizeof(flow_metrics));g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
             int valid=1;for(uint32_t i=0;i<4;i++)if(!isfinite(flow_metrics[i])||flow_metrics[i]<0.0f||flow_metrics[i]>1.0f)valid=0;
             if(valid){
+                pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->flow_metrics,flow_metrics,sizeof(flow_metrics));e->flow_metrics_valid=1;pthread_mutex_unlock(&e->telemetry_mutex);
                 SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
                 metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
                 metrics.motion_magnitude=flow_metrics[0];metrics.motion_complexity=flow_metrics[1];
@@ -408,5 +409,7 @@ void snap_frame_vk_debug_into(SnapFrameVk*e,VkCommandBuffer cmd,VkImage out,
 
 
 int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*total_ms){if(!e||!stages_ms||!total_ms)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->telemetry_valid;if(valid){memcpy(stages_ms,m->stage_gpu_ms,sizeof(m->stage_gpu_ms));*total_ms=m->last_gpu_ms;}pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
+
+int snap_frame_vk_get_flow_metrics(const SnapFrameVk*e,float metrics[4]){if(!e||!metrics)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->flow_metrics_valid;if(valid)memcpy(metrics,m->flow_metrics,sizeof(m->flow_metrics));pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
 
 void snap_frame_vk_abandon(SnapFrameVk*e){if(!e)return;if(e->ai)snap_ai_destroy(e->ai);if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);free(e);}
