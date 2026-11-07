@@ -33,8 +33,7 @@ foreach(token IN ITEMS
         "SNAP_AI_MODE_BYPASS"
         "manual_flow_percent"
         "n == UINT32_MAX"
-        "if(debug_only)copy_history"
-        "snap_process_count = UINT32_MAX")
+        "if(debug_only)copy_history")
     string(FIND "${host}" "${token}" found)
     if(found EQUAL -1)
         message(FATAL_ERROR "SnapFrame host is missing candidate integration token: ${token}")
@@ -46,6 +45,10 @@ if(NOT renderer MATCHES "if \\(use_snap && r->snap_debug_flow\\)")
 endif()
 if(renderer MATCHES "if \\(use_snap && r->snap_debug_flow && gen_count > 0\\)")
     message(FATAL_ERROR "SnapFrame flow viewer is incorrectly gated by gen_count")
+endif()
+string(FIND "${renderer}" "snap_process_count = UINT32_MAX" debug_only_found)
+if(debug_only_found EQUAL -1)
+    message(FATAL_ERROR "Renderer must request flow-only processing when no generated frame is acquired")
 endif()
 
 foreach(token IN ITEMS
