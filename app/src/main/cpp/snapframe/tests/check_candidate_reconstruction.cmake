@@ -56,8 +56,8 @@ foreach(token IN ITEMS
         "metrics.gpu_pressure=total/7.0f"
         "metrics.motion_magnitude >= 0.12f"
         "metrics.motion_complexity >= 0.18f"
-        "metrics.flow_confidence >= 0.12f"
-        "metrics.artifact_risk <= 0.20f"
+        "metrics.flow_confidence >= 0.18f"
+        "metrics.artifact_risk <= 0.10f"
         "metrics.gpu_pressure>1.15f"
         "metrics.gpu_pressure<0.98f")
     string(FIND "${host}" "${token}" found)
@@ -68,11 +68,23 @@ endforeach()
 file(READ "${AI_FILE}" ai_source)
 file(READ "${FLOW_SHADER_FILE}" flow_shader)
 foreach(token IN ITEMS
+        "raw_q < 0.18f"
+        "risk > 0.20f"
+        "unreliable_flow"
+        "radius = 1.0f"
+        "artifact = true"
+        "raw_q - 0.18f")
+    string(FIND "${ai_source}" "${token}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "Snap AI low-confidence safety policy is missing: ${token}")
+    endif()
+endforeach()
+foreach(token IN ITEMS
         "search_radius_scale=fmaxf"
         "snap_block_match_flow_comp_size,3,3,12"
         "searchRadiusScale"
         "coarseRadius = clamp"
-        "radius += 0.45f * hard")
+        "radius += 0.30f * hard")
     string(FIND "${host}${flow_shader}${ai_source}" "${token}" found)
     if(found EQUAL -1)
         message(FATAL_ERROR "Adaptive flow search contract is missing: ${token}")
