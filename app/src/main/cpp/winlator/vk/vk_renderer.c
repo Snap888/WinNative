@@ -3036,11 +3036,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 r->framegen_gap_ns = 0;
                 r->framegen_timed_frames = 0;
                 if (use_snap) {
-                    float snap_stages[5], snap_total = 0.0f;
+                    float snap_stages[6], snap_total = 0.0f;
                     if (snap_frame_vk_get_telemetry(r->snap, snap_stages, &snap_total)) {
-                        VK_LOGI("SnapFrame GPU ms: luma=%.3f pyramid=%.3f flow=%.3f consistency=%.3f warp=%.3f total=%.3f",
+                        VK_LOGI("SnapFrame GPU ms: luma=%.3f pyramid=%.3f flow=%.3f consistency=%.3f warp=%.3f candidate=%.3f total=%.3f",
                                 snap_stages[0], snap_stages[1], snap_stages[2],
-                                snap_stages[3], snap_stages[4], snap_total);
+                                snap_stages[3], snap_stages[4], snap_stages[5], snap_total);
                     }
                     float snap_metrics[4];
                     if (snap_frame_vk_get_flow_metrics(r->snap, snap_metrics)) {
