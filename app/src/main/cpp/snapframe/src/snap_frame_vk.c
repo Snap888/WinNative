@@ -35,7 +35,7 @@ struct SnapFrameVk {
     int metrics_pipeline_ready,metrics_enabled; uint8_t metrics_pending[4];
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
     struct sf_image candidates[SF_PHASES][4],candidate_weights[SF_PHASES];
-    int candidate_reconstruction_enabled;
+    uint32_t candidate_reconstruction_mode; int candidate_reconstruction_enabled,ai_quality_mode;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
@@ -273,8 +273,12 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
 fail:resources_destroy(e);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
-void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t enabled){
-    if(e)e->candidate_reconstruction_enabled=enabled?1:0;
+void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
+    if(!e)return;
+    /* 0=AI automatic, 1=forced off, 2=forced on. */
+    if(mode>2u)mode=0u;
+    e->candidate_reconstruction_mode=mode;
+    e->candidate_reconstruction_enabled=(mode==2u)||(mode==0u&&e->ai_quality_mode);
 }
 void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->lifecycle.history_valid=0;snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);}}
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
@@ -310,9 +314,14 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 metrics.flow_confidence=flow_metrics[2];metrics.gpu_pressure=total/5.0f;
                 metrics.artifact_risk=flow_metrics[3];metrics.telemetry_valid=1;
                 SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
-                if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK&&decision.mode!=SNAP_AI_MODE_BYPASS){
-                    uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
-                    if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
+                if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK){
+                    e->ai_quality_mode=decision.mode==SNAP_AI_MODE_QUALITY;
+                    if(e->candidate_reconstruction_mode==0u)
+                        e->candidate_reconstruction_enabled=e->ai_quality_mode;
+                    if(decision.mode!=SNAP_AI_MODE_BYPASS){
+                        uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
+                        if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
+                    }
                 }
             }
         }
