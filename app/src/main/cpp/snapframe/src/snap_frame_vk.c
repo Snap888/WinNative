@@ -281,14 +281,20 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
     e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;e->frame_serial=0;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
-    snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);return 1;
-fail:resources_destroy(e);return 0;
+    snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);
+    SF_LOGI("prepared extent=%ux%u format=%u flow_scale=%u flow_extent=%ux%u candidate_mode=%u metrics=%d",
+        w,h,(unsigned)fmt,e->flow_percent,e->active_flow_w,e->active_flow_h,
+        e->candidate_reconstruction_mode,e->metrics_enabled);
+    return 1;
+fail:resources_destroy(e);SF_LOGI("prepare failed extent=%ux%u format=%u",w,h,(unsigned)fmt);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
     if(!e)return;
     /* 0=AI automatic, 1=forced off, 2=forced on. */
     mode=snap_frame_vk_candidate_mode(mode);
+    if (e->candidate_reconstruction_mode != mode)
+        SF_LOGI("candidate reconstruction mode=%u", mode);
     e->candidate_reconstruction_mode=mode;
     e->candidate_reconstruction_enabled=(mode==SNAP_FRAME_CANDIDATE_FORCE_ON)||
         (mode==SNAP_FRAME_CANDIDATE_AI_AUTO&&e->ai_quality_mode);
@@ -346,6 +352,13 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                     if(decision.mode!=SNAP_AI_MODE_BYPASS){
                         uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
                         if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
+                    } else {
+                        /* BYPASS means no AI policy is active: restore the user's baseline,
+                           otherwise an earlier QUALITY decision leaves flow permanently reduced. */
+                        e->flow_percent=e->manual_flow_percent;
+                        e->ai_quality_mode=0;
+                        if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO)
+                            e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
                         SF_LOGI("ai frame=%llu mode=%u flow_scale=%.3f gpu_pressure=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f",
