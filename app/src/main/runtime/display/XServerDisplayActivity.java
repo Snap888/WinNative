@@ -532,6 +532,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int disFrameGenTargetFps = 0;
     private boolean disFrameGenDebugFlow = false;
     private int snapFrameDebugMode = 0;
+    private int snapFrameCandidateMode = WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO;
     private boolean sgsrEnabled = false;
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
@@ -886,6 +887,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         String containerTargetRate = container != null ? container.getExtra("frameGenTargetRate", "0") : "0";
         String containerFlowScale = container != null ? container.getExtra("frameGenFlowScale", "70") : "70";
         String containerSnapFrame = container != null ? container.getExtra("snapFrameGen", "0") : "0";
+        String containerCandidateMode = container != null ? container.getExtra("snapFrameCandidateMode", "0") : "0";
 
         frameGenEnabled = "1".equals(getFrameGenSetting("frameGen", containerValue));
         frameGenMultiplier = clampFrameGenMultiplier(
@@ -895,6 +897,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         frameGenFlowScale = clampFrameGenFlowScale(
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
         snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
+        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON,
+                        parseSettingInt(getFrameGenSetting("snapFrameCandidateMode", containerCandidateMode), 0)));
         if (snapFrameGenEnabled) { frameGenEnabled = false; disFrameGenEnabled = false; }
 
         if (frameGenEnabled) {
@@ -956,6 +961,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
      * X11 renderer is given; the setters are stores its thread picks up on its next frame. */
     private void applyWaylandFrameGeneration() {
         if (!waylandMode) return;
+        WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
 
         if (snapFrameGenEnabled) {
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
@@ -1293,6 +1299,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     String.valueOf(frameGenTargetRate), "0");
             overridden |= saveFrameGenOverride("frameGenFlowScale",
                     String.valueOf(frameGenFlowScale), "70");
+            overridden |= saveFrameGenOverride("snapFrameCandidateMode",
+                    String.valueOf(snapFrameCandidateMode), "0");
             if (overridden) shortcut.putExtra("use_container_defaults", "0");
             shortcut.saveData();
         } else if (container != null) {
@@ -1302,6 +1310,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             container.putExtra("frameGenMultiplier", String.valueOf(frameGenMultiplier));
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));
+            container.putExtra("snapFrameCandidateMode", String.valueOf(snapFrameCandidateMode));
             container.saveData();
         }
     }
@@ -5549,7 +5558,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 disFrameGenScale,
                 disFrameGenTargetFps,
                 disFrameGenDebugFlow,
-                snapFrameDebugMode);
+                snapFrameDebugMode,
+                snapFrameCandidateMode);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -5990,6 +6000,17 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setSnapFrameDebugMode(snapFrameDebugMode);
                         }
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameCandidateModeChanged(int mode) {
+                        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON, mode));
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        }
+                        saveFrameGenerationSettings();
                         renderDrawerMenu();
                     }
 
