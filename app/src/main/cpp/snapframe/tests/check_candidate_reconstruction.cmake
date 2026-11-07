@@ -123,10 +123,21 @@ endforeach()
 message(STATUS "SnapFrame candidate, temporal visibility, divergence telemetry, AI quality gate and stable flow viewer contracts are present")
 
 # Both presentation backends must route SnapFrame to the same Vulkan implementation.
-if(DEFINED WAYLAND_BRIDGE_FILE AND DEFINED WAYLAND_ENGINE_FILE AND DEFINED X11_RENDERER_FILE)
+if(DEFINED WAYLAND_BRIDGE_FILE AND DEFINED WAYLAND_ENGINE_FILE AND DEFINED X11_RENDERER_FILE AND DEFINED WAYLAND_PRESENT_FILE AND DEFINED X11_STATE_FILE)
     file(READ "${WAYLAND_BRIDGE_FILE}" wayland_bridge)
     file(READ "${WAYLAND_ENGINE_FILE}" wayland_engine)
     file(READ "${X11_RENDERER_FILE}" x11_renderer)
+    file(READ "${WAYLAND_PRESENT_FILE}" wayland_present)
+    file(READ "${X11_STATE_FILE}" x11_state)
+    if(NOT wayland_bridge MATCHES "vkp_framegen_acquire_timeout_ns" OR NOT wayland_present MATCHES "vkp_framegen_acquire_timeout_ns\\(\\)")
+        message(FATAL_ERROR "Wayland framegen acquire must use the bounded refresh-aware timeout")
+    endif()
+    if(NOT wayland_bridge MATCHES "16000000ULL" OR NOT wayland_bridge MATCHES "4000000ULL")
+        message(FATAL_ERROR "Wayland framegen acquire timeout must be clamped to 4..16 ms")
+    endif()
+    if(NOT x11_state MATCHES "VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL" OR NOT x11_state MATCHES "VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL")
+        message(FATAL_ERROR "X11 framegen acquire budget must be bounded at 8..16 ms")
+    endif()
     foreach(token IN ITEMS
             "vk.GetImageMemoryRequirements && vk.AllocateMemory"
             "vk.BindImageMemory && vk.CmdPipelineBarrier && vk.DeviceWaitIdle"
