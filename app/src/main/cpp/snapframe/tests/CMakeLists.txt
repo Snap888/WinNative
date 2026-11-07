@@ -21,4 +21,6 @@ add_test(NAME snapframe_candidate_reconstruction_contract
         -DWAYLAND_BRIDGE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/framegen_bridge.c
         -DWAYLAND_ENGINE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/framegen_engine.c
         -DX11_RENDERER_FILE=${CMAKE_CURRENT_LIST_DIR}/../../winlator/vk/vk_renderer.c
+        -DWAYLAND_PRESENT_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/vk_present.c
+        -DX11_STATE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../winlator/vk/vk_state.h
         -P ${CMAKE_CURRENT_LIST_DIR}/check_candidate_reconstruction.cmake)
