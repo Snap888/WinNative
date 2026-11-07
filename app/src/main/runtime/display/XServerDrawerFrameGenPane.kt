@@ -156,6 +156,7 @@ internal fun FrameGenEngineSection(
     snapDebugMode: Int,
     candidateMode: Int,
     candidateAvailable: Boolean,
+    logEnabled: Boolean,
     maxRefreshRate: Int,
     paneScale: Float,
     onEngineSelected: (FrameGenEngine) -> Unit,
@@ -230,12 +231,14 @@ internal fun FrameGenEngineSection(
                 debugMode = snapDebugMode,
                 candidateMode = candidateMode,
                 candidateAvailable = candidateAvailable,
+                logEnabled = logEnabled,
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
                 onDebugFlowChanged = onDisDebugFlowChanged,
                 onDebugModeChanged = onSnapDebugModeChanged,
                 onCandidateModeChanged = onCandidateModeChanged,
+                onLogChanged = onLogChanged,
             )
         }
 
@@ -525,6 +528,7 @@ private fun SnapFrameOptions(
     onDebugFlowChanged: (Boolean) -> Unit,
     onDebugModeChanged: (Int) -> Unit,
     onCandidateModeChanged: (Int) -> Unit,
+    onLogChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         FrameGenFieldLabel(stringResource(R.string.session_drawer_frame_generation_multiplier), paneScale)
