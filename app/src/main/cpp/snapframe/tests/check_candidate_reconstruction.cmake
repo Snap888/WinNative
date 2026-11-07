@@ -69,7 +69,7 @@ file(READ "${AI_FILE}" ai_source)
 file(READ "${FLOW_SHADER_FILE}" flow_shader)
 foreach(token IN ITEMS
         "search_radius_scale=fmaxf"
-        "flow,snap_block_match_flow_comp_size,3,3,12"
+        "snap_block_match_flow_comp_size,3,3,12"
         "searchRadiusScale"
         "coarseRadius = clamp"
         "radius += 0.45f * hard")
