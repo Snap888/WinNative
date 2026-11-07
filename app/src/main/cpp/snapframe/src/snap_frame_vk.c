@@ -369,10 +369,12 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu mode=%u flow_scale=%.3f gpu_pressure=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f",
+                        SF_LOGI("ai frame=%llu mode=%u flow_scale=%.3f gpu_pressure=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f flow_guard=%d search_radius=%.2f candidate=%d",
                             (unsigned long long)e->query_frame_id[slot], (unsigned)decision.mode,
                             decision.flow_scale, metrics.gpu_pressure, metrics.motion_magnitude,
-                            metrics.motion_complexity, metrics.flow_confidence, metrics.artifact_risk);
+                            metrics.motion_complexity, metrics.flow_confidence, metrics.artifact_risk,
+                            (metrics.flow_confidence < 0.18f || metrics.artifact_risk > 0.20f),
+                            e->search_radius_scale, e->candidate_reconstruction_enabled);
                     }
                 }
             }
