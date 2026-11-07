@@ -1,0 +1,58 @@
+#version 450
+
+// Confidence- and photometric-aware scoring for the four warped candidates.
+// The output is a per-flow-cell RGBA vector of normalized candidate weights.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform sampler2D previousColor;
+layout(set = 0, binding = 1) uniform sampler2D currentColor;
+layout(set = 0, binding = 2) uniform sampler2D candidate0;
+layout(set = 0, binding = 3) uniform sampler2D candidate1;
+layout(set = 0, binding = 4) uniform sampler2D candidate2;
+layout(set = 0, binding = 5) uniform sampler2D candidate3;
+layout(set = 0, binding = 6, rgba16f) writeonly uniform image2D candidateWeights;
+
+float colorError(vec3 a, vec3 b) {
+    return dot(abs(a - b), vec3(0.2126, 0.7152, 0.0722));
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(candidateWeights);
+    if (any(greaterThanEqual(p, extent))) return;
+
+    vec4 a = texelFetch(candidate0, p, 0);
+    vec4 b = texelFetch(candidate1, p, 0);
+    vec4 c = texelFetch(candidate2, p, 0);
+    vec4 d = texelFetch(candidate3, p, 0);
+
+    vec3 ca = texture(previousColor, a.xy).rgb;
+    vec3 cb = texture(currentColor, b.xy).rgb;
+    vec3 cc = texture(previousColor, c.xy).rgb;
+    vec3 cd = texture(currentColor, d.xy).rgb;
+    float pairError0 = colorError(ca, cb);
+    float pairError1 = colorError(cc, cd);
+
+    const float eps = 1.0e-4;
+    vec4 confidence = vec4(a.z, b.z, c.z, d.z);
+    vec4 valid = vec4(a.w, b.w, c.w, d.w);
+    float scores[4] = float[4](
+        log(max(confidence.x, eps)) - 10.0 * pairError0,
+        log(max(confidence.y, eps)) - 10.0 * pairError0,
+        log(max(confidence.z, eps)) - 10.0 * pairError1,
+        log(max(confidence.w, eps)) - 10.0 * pairError1
+    );
+    float maxConfidence = max(max(confidence.x, confidence.y),
+                              max(confidence.z, confidence.w));
+    if (maxConfidence < 1.0e-3) {
+        imageStore(candidateWeights, p, vec4(0.0));
+        return;
+    }
+
+    float maxScore = max(max(scores[0], scores[1]), max(scores[2], scores[3]));
+    vec4 weights = exp(clamp(vec4(scores[0], scores[1], scores[2], scores[3])
+                             - vec4(maxScore), vec4(-20.0), vec4(0.0))) * valid;
+    float sumWeights = dot(weights, vec4(1.0));
+    if (sumWeights > eps) weights /= sumWeights;
+    else weights = vec4(0.0);
+    imageStore(candidateWeights, p, weights);
+}
