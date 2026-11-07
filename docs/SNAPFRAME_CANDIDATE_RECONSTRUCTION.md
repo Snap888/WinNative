@@ -85,3 +85,19 @@ On X11, the diagnostic shader writes across the full composite target, which is 
 ## Global/local motion fusion (SnapFrame FG 2.x)
 
 The experimental GSFG-inspired path now evaluates an independent tighter-window local matcher in both temporal directions, then fuses its vectors with the global matcher per flow cell. Large disagreement is not blindly averaged: the branch with stronger local match confidence wins, while confidence is attenuated as divergence rises. Forward/backward consistency, metrics, debug visualization, and both reconstruction paths consume the fused fields. The original global fields remain available as inputs to fusion. This is a conservative first implementation, not a learned GSFG-equivalent network; HUD segmentation and explicit occlusion visibility remain subsequent stages and must be validated before enabling more aggressive reconstruction.
+
+
+## Temporal visibility and divergence telemetry (GSFG-inspired stage 2)
+
+The flow-consistency pass now combines two independent signals before reconstruction:
+
+- forward/backward cycle error and the minimum confidence of the two directions;
+- photometric agreement between the previous-frame luma at the source cell and current-frame luma at the flow-projected target.
+
+The resulting R16F mask is a *soft visibility/confidence estimate*. Low photometric agreement attenuates the mask, reducing the influence of likely disocclusions, occlusion boundaries, and mismatched block correspondences. It is not semantic segmentation and cannot reliably distinguish HUD pixels from static world geometry; it must not be described as a complete occlusion solution.
+
+The metrics reduction also compares the original global and local flow hypotheses. Its artifact-risk channel now includes the normalized vector divergence in addition to forward-confidence/consistency disagreement. This reaches Snap AI through the existing asynchronous readback, allowing the current conservative guard to react to disagreement rather than only cycle failure.
+
+The descriptor pool's combined-image-sampler budget was raised from 128 to 192. The pipeline allocates multiple descriptor sets for both output formats, so this is a capacity correction for the complete set allocation rather than a per-frame GPU cost. Storage-image capacity remains 64.
+
+Validation still required: compile and run the updated GLSL on the target driver, verify the photometric thresholds on real motion/occlusion sequences, and compare p50/p95 GPU timings. The visibility mask can become too conservative on animated lighting, particles, and specular surfaces; if the mask suppresses too much valid motion, tune the photometric thresholds using recorded sequences rather than weakening the FB safety gate globally.
