@@ -331,9 +331,9 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     /* Sparse diagnostic telemetry: one line per 60 completed source frames. No GPU wait/readback
        is added here; query results are already retired asynchronously by the existing ring. */
     if (telemetry_valid && (e->query_frame_id[slot] % 60u) == 0u) {
-        SF_LOGI("frame=%llu gpu_ms=%.3f preprocess_ms=%.3f flow_ms=%.3f consistency_ms=%.3f warp_ms=%.3f flow_scale=%u active_flow=%ux%u candidate_mode=%u candidate_enabled=%d ai_quality=%d",
+        SF_LOGI("frame=%llu gpu_ms=%.3f preprocess_ms=%.3f flow_ms=%.3f consistency_ms=%.3f warp_ms=%.3f candidate_ms=%.3f flow_scale=%u active_flow=%ux%u candidate_mode=%u candidate_enabled=%d ai_quality=%d",
             (unsigned long long)e->query_frame_id[slot], total, stage_values[0], stage_values[2],
-            stage_values[3], stage_values[4], e->flow_percent, e->active_flow_w, e->active_flow_h,
+            stage_values[3], stage_values[4], stage_values[5], e->flow_percent, e->active_flow_w, e->active_flow_h,
             e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode);
     }
     if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){

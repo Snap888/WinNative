@@ -23,13 +23,15 @@ bool valid_profile(SnapAIProfile p) {
   return p == SNAP_AI_PROFILE_PERFORMANCE || p == SNAP_AI_PROFILE_BALANCED ||
          p == SNAP_AI_PROFILE_QUALITY;
 }
-void bypass(const SnapAIHandle* h, uint64_t id, SnapAIDecision* d) {
+void bypass(const SnapAIHandle* h, uint64_t id, uint32_t reason, SnapAIDecision* d) {
   d->struct_size = sizeof(*d); d->api_version = SNAP_AI_API_VERSION;
   d->mode = SNAP_AI_MODE_BYPASS; d->flow_scale = 1.0f;
   d->search_radius_scale = 1.0f; d->confidence_threshold = 0.55f;
   d->refinement_passes = h ? h->cfg.max_refinement_passes : 2;
   d->reuse_previous_flow = 0; d->run_bidirectional_flow = 1;
   d->run_artifact_check = 0; d->estimated_compute_saving = 0.0f; d->frame_id = id;
+  d->bypass_reason = reason; d->conservative_reason = SNAP_AI_CONSERVATIVE_NONE;
+  d->gpu_pressure_input = 0.0f; d->gpu_pressure_effective = 0.0f; d->pressure_ema = h ? h->pressure : 0.0f;
 }
 }
 
@@ -76,7 +78,10 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
     m->flow_confidence >= 0 && m->gpu_pressure >= 0 && m->artifact_risk >= 0;
   ++h->stats.frames_seen;
   if (!h->cfg.enabled || !ok || m->scene_cut || (h->have_frame && id <= h->last_frame_id)) {
-    bypass(h, id, d); ++h->stats.bypass_frames;
+    const uint32_t reason = !h->cfg.enabled ? SNAP_AI_BYPASS_DISABLED :
+      !ok ? SNAP_AI_BYPASS_INVALID_TELEMETRY :
+      m->scene_cut ? SNAP_AI_BYPASS_SCENE_CUT : SNAP_AI_BYPASS_NON_MONOTONIC_FRAME_ID;
+    bypass(h, id, reason, d); ++h->stats.bypass_frames;
     if (!ok || m->scene_cut) {
       h->warmup_left = h->cfg.warmup_frames;
       h->complexity = 0; h->confidence = 1; h->pressure = 0;
@@ -97,7 +102,11 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   h->pressure += a * (raw_p - h->pressure);
 
   if (h->warmup_left) {
-    --h->warmup_left; bypass(h, id, d); ++h->stats.bypass_frames;
+    --h->warmup_left; bypass(h, id, SNAP_AI_BYPASS_WARMUP, d);
+    d->gpu_pressure_input = m->gpu_pressure;
+    d->gpu_pressure_effective = raw_p;
+    d->pressure_ema = h->pressure;
+    ++h->stats.bypass_frames;
     h->last_frame_id = id; h->have_frame = true; return SNAP_AI_OK;
   }
 
@@ -120,6 +129,9 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   const float easy = (1.0f - h->complexity) * raw_q * (1.0f - risk);
   const float hard = clamp01(h->complexity * 0.55f + (1.0f - h->confidence) * 0.45f);
   const bool unreliable_flow = raw_q < 0.18f || risk > 0.20f;
+  uint32_t conservative_reason = SNAP_AI_CONSERVATIVE_NONE;
+  if (raw_q < 0.18f) conservative_reason |= SNAP_AI_CONSERVATIVE_LOW_CONFIDENCE;
+  if (risk > 0.20f) conservative_reason |= SNAP_AI_CONSERVATIVE_HIGH_ARTIFACT_RISK;
   if (unreliable_flow) {
     /* Keep the baseline flow scale/search radius and use the midpoint fallback.
        Ask the host for bidirectional/artifact checks; never reuse stale flow here. */
@@ -162,6 +174,11 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   d->run_bidirectional_flow = (uncertainty > 0.48f || risk > 0.35f) ? 1u : 0u;
   d->run_artifact_check = artifact ? 1u : 0u;
   d->estimated_compute_saving = clamp01((1.0f - scale) * 0.75f); d->frame_id = id;
+  d->bypass_reason = SNAP_AI_BYPASS_NONE;
+  d->conservative_reason = conservative_reason;
+  d->gpu_pressure_input = m->gpu_pressure;
+  d->gpu_pressure_effective = raw_p;
+  d->pressure_ema = h->pressure;
 
   h->previous_scale = scale; h->last_frame_id = id; h->have_frame = true;
   ++h->stats.adaptive_frames;

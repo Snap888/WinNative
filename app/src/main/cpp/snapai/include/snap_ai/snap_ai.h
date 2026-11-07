@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-#define SNAP_AI_API_VERSION 1u
+#define SNAP_AI_API_VERSION 2u
 typedef struct SnapAIHandle SnapAIHandle;
 
 typedef enum SnapAIProfile {
@@ -31,6 +31,21 @@ typedef enum SnapAIMode {
   SNAP_AI_MODE_ADAPTIVE = 2,
   SNAP_AI_MODE_QUALITY = 3
 } SnapAIMode;
+
+typedef enum SnapAIBypassReason {
+  SNAP_AI_BYPASS_NONE = 0,
+  SNAP_AI_BYPASS_DISABLED = 1,
+  SNAP_AI_BYPASS_INVALID_TELEMETRY = 2,
+  SNAP_AI_BYPASS_SCENE_CUT = 3,
+  SNAP_AI_BYPASS_NON_MONOTONIC_FRAME_ID = 4,
+  SNAP_AI_BYPASS_WARMUP = 5
+} SnapAIBypassReason;
+
+typedef enum SnapAIConservativeReason {
+  SNAP_AI_CONSERVATIVE_NONE = 0,
+  SNAP_AI_CONSERVATIVE_LOW_CONFIDENCE = 1u << 0,
+  SNAP_AI_CONSERVATIVE_HIGH_ARTIFACT_RISK = 1u << 1
+} SnapAIConservativeReason;
 
 typedef enum SnapAIStatus {
   SNAP_AI_OK = 0,
@@ -80,6 +95,11 @@ typedef struct SnapAIDecision {
   uint32_t run_artifact_check;
   float estimated_compute_saving;
   uint64_t frame_id;
+  uint32_t bypass_reason;
+  uint32_t conservative_reason;
+  float gpu_pressure_input;
+  float gpu_pressure_effective;
+  float pressure_ema;
 } SnapAIDecision;
 
 typedef struct SnapAIStats {

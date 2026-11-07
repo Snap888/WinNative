@@ -16,7 +16,7 @@ void snap_frame_vk_reset_history(SnapFrameVk *engine);
 /* Candidate reconstruction mode: 0=AI automatic, 1=forced off, 2=forced on. */
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk *engine, uint32_t mode);
 /* Non-blocking timestamps from the last completed query slot; values are milliseconds. */
-int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[5], float *total_ms);
+int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[6], float *total_ms);
 /* Last completed GPU-reduced metrics: motion, complexity, FB-weighted confidence,
  * and forward-confidence inconsistency risk (a diagnostic proxy, not ground truth). */
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk *engine, float metrics[4]);
