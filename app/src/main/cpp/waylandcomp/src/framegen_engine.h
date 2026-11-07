@@ -63,6 +63,8 @@ void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, 
 void fge_forget_targets(void);
 /* Engine-side telemetry: accepted generations, source rate (0 = engine has none), thermal. */
 void fge_telemetry(float *accepted, float *source_rate, float *thermal);
+/* Last completed SnapFrame GPU reduction, normalized to 0..1. Returns 0 for other engines. */
+int fge_flow_metrics(float metrics[4]);
 const char *fge_engine_name(int kind);
 /* "lsfg-native"/"dis-native" build provenance for the start log line. */
 const char *fge_build_info(void);
