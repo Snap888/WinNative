@@ -3029,6 +3029,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                 snap_stages[0], snap_stages[1], snap_stages[2],
                                 snap_stages[3], snap_stages[4], snap_total);
                     }
+                    float snap_metrics[4];
+                    if (snap_frame_vk_get_flow_metrics(r->snap, snap_metrics)) {
+                        VK_LOGI("SnapFrame flow metrics: motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f (normalized)",
+                                snap_metrics[0], snap_metrics[1], snap_metrics[2], snap_metrics[3]);
+                    }
                 }
                 VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u got=%u "
                         "misses=%llu timeout=%.1fms images=%u capacity=%u draw=%.2fms gap=%.2fms",
