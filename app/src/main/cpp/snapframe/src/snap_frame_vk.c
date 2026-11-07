@@ -316,9 +316,14 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 metrics.artifact_risk=flow_metrics[3];metrics.telemetry_valid=1;
                 SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
                 if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK){
-                    e->ai_quality_mode=decision.mode==SNAP_AI_MODE_QUALITY;
-                    if(e->candidate_reconstruction_mode==0u)
+                    if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO){
+                        /* Hysteresis prevents candidate compute from oscillating near the GPU budget. */
+                        if(decision.mode!=SNAP_AI_MODE_QUALITY || metrics.gpu_pressure>0.90f)
+                            e->ai_quality_mode=0;
+                        else if(metrics.gpu_pressure<0.75f)
+                            e->ai_quality_mode=1;
                         e->candidate_reconstruction_enabled=e->ai_quality_mode;
+                    }
                     if(decision.mode!=SNAP_AI_MODE_BYPASS){
                         uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
                         if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
