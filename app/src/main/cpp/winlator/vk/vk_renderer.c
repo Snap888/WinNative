@@ -2796,20 +2796,28 @@ static bool record_and_submit_frame(VkRenderer* r) {
 
     uint32_t gen_count = 0;
     uint32_t gen_image_index[VK_FRAMEGEN_MAX_GENERATIONS] = {0};
+    r->framegen_planned_total += framegen_planned;
     for (uint32_t g = 0; g < framegen_planned; g++) {
         uint32_t idx = 0;
         const uint64_t slot_timeout = g == 0 ? gen_acquire_timeout : 1000000ULL;
+        const uint64_t acquire_begin_ns = vkr_monotonic_ns();
         VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, slot_timeout,
                                             f->image_available_gen[g], VK_NULL_HANDLE, &idx);
+        const uint64_t acquire_end_ns = vkr_monotonic_ns();
+        if (acquire_end_ns >= acquire_begin_ns) r->framegen_acquire_ns += acquire_end_ns - acquire_begin_ns;
         if (ga != VK_SUCCESS && ga != VK_SUBOPTIMAL_KHR) {
-            if (r->framegen_acquire_misses++ % 120 == 0) {
+            r->framegen_acquire_misses++;
+            if (ga == VK_TIMEOUT || ga == VK_NOT_READY) r->framegen_acquire_timeouts++;
+            else r->framegen_acquire_errors++;
+            if (r->framegen_acquire_misses % 120 == 1) {
                 VK_LOGW("Generated frame %u/%u dropped: acquire returned %d "
-                        "(swapchain images=%u capacity=%u)",
+                        "(swapchain images=%u capacity=%u timeout=%llu ns)",
                         g + 1, framegen_planned, (int)ga, r->swapchain_image_count,
-                        framegen_capacity);
+                        framegen_capacity, (unsigned long long)slot_timeout);
             }
             break;
         }
+        r->framegen_acquired_total++;
         gen_image_index[gen_count++] = idx;
     }
 
@@ -3016,8 +3024,6 @@ static bool record_and_submit_frame(VkRenderer* r) {
                     blit_composite_to_swapchain(r, f->cmd, gt, r->swapchain_images[idx]);
                 }
             }
-            r->framegen_real_frames++;
-            r->framegen_made_frames += gen_count;
             if ((r->framegen_real_frames % 120) == 0) {
                 const uint64_t d_real = r->framegen_real_frames - r->framegen_log_real;
                 const uint64_t d_made = r->framegen_made_frames - r->framegen_log_made;
@@ -3042,16 +3048,29 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                 snap_metrics[0], snap_metrics[1], snap_metrics[2], snap_metrics[3]);
                     }
                 }
-                VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u got=%u "
-                        "misses=%llu timeout=%.1fms images=%u capacity=%u draw=%.2fms gap=%.2fms",
+                const double acquire_ms = (double)r->framegen_acquire_ns / 1.0e6;
+                const double submit_ms = (double)r->framegen_submit_ns / 1.0e6;
+                const double present_avg_ms = r->framegen_present_calls
+                    ? (double)r->framegen_present_ns / (double)r->framegen_present_calls / 1.0e6 : 0.0;
+                VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u acquired=%u "
+                        "computed=%llu submitted=%llu acquire_miss=%llu timeout=%llu acquire_err=%llu "
+                        "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
+                        "present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
                         (unsigned long long)r->framegen_made_frames,
                         d_real ? (double)d_made / (double)d_real : 0.0,
                         framegen_planned, gen_count,
+                        (unsigned long long)r->framegen_compute_total,
+                        (unsigned long long)r->framegen_submitted_total,
                         (unsigned long long)r->framegen_acquire_misses,
-                        (double)gen_acquire_timeout / 1000000.0,
-                        r->swapchain_image_count, framegen_capacity,
-                        draw_ms, gap_ms);
+                        (unsigned long long)r->framegen_acquire_timeouts,
+                        (unsigned long long)r->framegen_acquire_errors,
+                        acquire_ms, submit_ms, present_avg_ms,
+                        (unsigned long long)r->framegen_present_failures, draw_ms, gap_ms);
+                r->framegen_acquire_ns = 0;
+                r->framegen_submit_ns = 0;
+                r->framegen_present_ns = 0;
+                r->framegen_present_calls = 0;
             }
         }
 
@@ -3189,9 +3208,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
     si.signalSemaphoreCount = signal_count;
     si.pSignalSemaphores = signal_sems;
 
+    const uint64_t submit_begin_ns = vkr_monotonic_ns();
     pthread_mutex_lock(&r->queue_mutex);
     VkResult sr = vkQueueSubmit(r->graphics_queue, 1, &si, f->in_flight);
     pthread_mutex_unlock(&r->queue_mutex);
+    const uint64_t submit_end_ns = vkr_monotonic_ns();
+    if (submit_end_ns >= submit_begin_ns) r->framegen_submit_ns += submit_end_ns - submit_begin_ns;
     if (sr != VK_SUCCESS) {
         VK_LOGE("vkQueueSubmit -> %d", sr);
         // The frame fence was reset before submit. If submit fails, nothing will ever signal
@@ -3224,6 +3246,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
         return false;
     }
 
+    r->framegen_compute_total += gen_count; /* command buffer submitted successfully */
+    r->framegen_submitted_total += gen_count;
     VkPresentInfoKHR pi = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     pi.waitSemaphoreCount = 1;
     pi.pWaitSemaphores = &render_finished;
@@ -3240,7 +3264,11 @@ static bool record_and_submit_frame(VkRenderer* r) {
         gpi.swapchainCount = 1;
         gpi.pSwapchains = &r->swapchain;
         gpi.pImageIndices = &gen_image_index[g];
+        const uint64_t present_begin_ns = vkr_monotonic_ns();
         VkResult gpr = vkQueuePresentKHR(r->graphics_queue, &gpi);
+        const uint64_t present_end_ns = vkr_monotonic_ns();
+        if (present_end_ns >= present_begin_ns) r->framegen_present_ns += present_end_ns - present_begin_ns;
+        r->framegen_present_calls++;
         if (gpr != VK_SUCCESS && gpr != VK_SUBOPTIMAL_KHR) {
             if (gpr == VK_ERROR_OUT_OF_DATE_KHR) gen_present_out_of_date = true;
             if (r->framegen_present_failures++ % 120 == 0) {
@@ -3248,11 +3276,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         (unsigned long long)r->framegen_present_failures);
             }
         } else {
+            r->framegen_made_frames++;
             __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
         }
     }
     VkResult pr = vkQueuePresentKHR(r->graphics_queue, &pi);
     if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
+        r->framegen_real_frames++;
         __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
     }
     // Present the mirror separately so its result doesn't disturb the display recreate logic below.

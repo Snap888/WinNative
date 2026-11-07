@@ -444,11 +444,21 @@ typedef struct VkRenderer {
     float             framegen_refresh_rate;
     int32_t           framegen_refresh_mhz;
     uint64_t          framegen_source_frames;
-    uint64_t          framegen_real_frames;
+    uint64_t          framegen_real_frames;       // source frames with successful base present
     uint64_t          framegen_log_real;
     uint64_t          framegen_log_made;
-    uint64_t          framegen_made_frames;
+    uint64_t          framegen_made_frames;       // generated frames with successful queue present
+    uint64_t          framegen_planned_total;
+    uint64_t          framegen_acquired_total;
+    uint64_t          framegen_compute_total;
+    uint64_t          framegen_submitted_total;
     uint64_t          framegen_acquire_misses;
+    uint64_t          framegen_acquire_timeouts;
+    uint64_t          framegen_acquire_errors;
+    uint64_t          framegen_acquire_ns;
+    uint64_t          framegen_submit_ns;
+    uint64_t          framegen_present_ns;
+    uint64_t          framegen_present_calls;
     uint64_t          framegen_draw_ns;
     uint64_t          framegen_gap_ns;
     uint64_t          framegen_last_end_ns;
