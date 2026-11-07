@@ -450,6 +450,14 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
     }
     n_gen = fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, fmt, n_gen, snap_outputs);
     g_planned = n_gen;
+    /* Readback is delayed by the four-slot GPU ring; this only logs completed samples. */
+    if (kind == VKP_FG_ENGINE_SNAPFRAME && (g_source_frames % 120u) == 0u) {
+        float m[4];
+        if (fge_flow_metrics(m)) {
+            FGLOG("SnapFrame GPU metrics: motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f (normalized)",
+                  (double)m[0], (double)m[1], (double)m[2], (double)m[3]);
+        }
+    }
     for (uint32_t g = 0; g < n_gen; g++) {
         fge_generate(cmd, g, n_gen, g_ring[g].img, g_ring[g].view, (uint32_t)w, (uint32_t)h);
         gens[g] = g_ring[g].img;
