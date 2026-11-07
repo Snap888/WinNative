@@ -248,7 +248,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
     e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;e->frame_serial=0;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
-    pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));pthread_mutex_unlock(&e->telemetry_mutex);
+    pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
     snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);return 1;
 fail:resources_destroy(e);return 0;
 }
