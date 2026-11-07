@@ -137,6 +137,18 @@ if(DEFINED WAYLAND_BRIDGE_FILE AND DEFINED WAYLAND_ENGINE_FILE AND DEFINED X11_R
             message(FATAL_ERROR "Wayland Vulkan ring safety contract is missing: ${token}")
         endif()
     endforeach()
+    if(wayland_engine MATCHES "VK_FORMAT_R16G16_SFLOAT")
+        message(FATAL_ERROR "Wayland SnapFrame capability gate must not require the unused RG16F format")
+    endif()
+    foreach(token IN ITEMS
+            "VK_FORMAT_R16_SFLOAT"
+            "VK_FORMAT_R16G16B16A16_SFLOAT"
+            "VK_FORMAT_R8G8B8A8_UNORM")
+        string(FIND "${wayland_engine}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "Wayland SnapFrame is missing a required image format capability check: ${token}")
+        endif()
+    endforeach()
     foreach(token IN ITEMS
             "snap_frame_vk_process(h->vk"
             "snap_frame_process(g_snap_core"
