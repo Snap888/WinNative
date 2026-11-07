@@ -5,7 +5,9 @@
 layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D motionField;
 layout(set = 0, binding = 1) uniform sampler2D consistencyField;
-layout(set = 0, binding = 2, rgba32f) writeonly uniform image2D metricsOutput;
+layout(set = 0, binding = 2) uniform sampler2D globalMotion;
+layout(set = 0, binding = 3) uniform sampler2D localMotion;
+layout(set = 0, binding = 4, rgba32f) writeonly uniform image2D metricsOutput;
 shared vec4 partial[128];
 void main() {
     uint lane = gl_LocalInvocationID.x;
@@ -17,6 +19,12 @@ void main() {
         vec4 flow = texelFetch(motionField, p, 0);
         float consistency = clamp(texelFetch(consistencyField, p, 0).r, 0.0, 1.0);
         float magnitude = clamp(length(flow.xy) / 12.0, 0.0, 1.0);
+        vec4 globalFlow = texelFetch(globalMotion, p, 0);
+        ivec2 localExtent = textureSize(localMotion, 0);
+        ivec2 localCoord = clamp(ivec2((vec2(p) + 0.5) * vec2(localExtent) / vec2(extent)),
+                                 ivec2(0), localExtent - ivec2(1));
+        vec4 localFlowValue = texelFetch(localMotion, localCoord, 0);
+        float divergence = clamp(length(globalFlow.xy - localFlowValue.xy) / 8.0, 0.0, 1.0);
         float forwardConfidence = clamp(flow.z, 0.0, 1.0);
         float confidence = forwardConfidence * consistency;
         // Highlight blocks whose forward matcher is confident but whose
@@ -24,7 +32,7 @@ void main() {
         accum.x += magnitude;
         accum.y += magnitude * magnitude;
         accum.z += confidence;
-        accum.w += forwardConfidence * (1.0 - consistency);
+        accum.w += max(forwardConfidence * (1.0 - consistency), divergence);
     }
     partial[lane] = accum;
     barrier();
