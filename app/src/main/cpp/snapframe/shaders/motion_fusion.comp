@@ -10,7 +10,9 @@ void main() {
     ivec2 extent = imageSize(fusedMotion);
     if (any(greaterThanEqual(p, extent))) return;
     vec4 g = texelFetch(globalMotion, p, 0);
-    vec4 l = texelFetch(localMotion, p, 0);
+    ivec2 localExtent = textureSize(localMotion, 0);
+    ivec2 localPos = clamp(ivec2((vec2(p) + vec2(0.5)) * vec2(localExtent) / vec2(extent)), ivec2(0), localExtent - ivec2(1));
+    vec4 l = texelFetch(localMotion, localPos, 0);
     float gc = clamp(g.z, 0.0, 1.0);
     float lc = clamp(l.z, 0.0, 1.0);
     float divergence = length(g.xy - l.xy);
