@@ -56,7 +56,9 @@ vec4 makeCandidate(vec2 uv, vec2 flow, float timeScale, float confidence,
     vec2 sampleUv = uv + flow * timeScale * pixelToUv;
     float valid = (all(greaterThanEqual(sampleUv, vec2(0.0))) &&
                    all(lessThanEqual(sampleUv, vec2(1.0)))) ? 1.0 : 0.0;
-    return vec4(sampleUv, confidence * valid, valid);
+    // Store the displacement, not an absolute cell-center UV. Reconstruction
+    // adds it to each full-resolution pixel so flow blocks do not become flat tiles.
+    return vec4(flow * timeScale * pixelToUv, confidence * valid, valid);
 }
 
 void main() {
