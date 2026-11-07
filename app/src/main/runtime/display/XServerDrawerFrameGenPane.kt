@@ -88,6 +88,7 @@ internal fun FrameGenPaneContent(
                     snapDebugMode = state.snapFrameDebugMode,
                     candidateMode = state.snapFrameCandidateMode,
                     candidateAvailable = state.snapFrameCandidateAvailable,
+                    logEnabled = state.snapFrameLogEnabled,
                     maxRefreshRate = state.maxRefreshRate,
                     paneScale = paneScale,
                     onEngineSelected = listener::onFrameGenEngineSelected,
@@ -99,6 +100,7 @@ internal fun FrameGenPaneContent(
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
                     onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
                     onCandidateModeChanged = listener::onSnapFrameCandidateModeChanged,
+                    onLogChanged = listener::onSnapFrameLogChanged,
                 )
 
                 ThinDivider()
@@ -165,6 +167,7 @@ internal fun FrameGenEngineSection(
     onDisDebugFlowChanged: (Boolean) -> Unit,
     onSnapDebugModeChanged: (Int) -> Unit,
     onCandidateModeChanged: (Int) -> Unit,
+    onLogChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         PaneSectionLabel(stringResource(R.string.session_drawer_frame_generation))
@@ -515,6 +518,7 @@ private fun SnapFrameOptions(
     debugMode: Int,
     candidateMode: Int,
     candidateAvailable: Boolean,
+    logEnabled: Boolean,
     paneScale: Float,
     onMultiplierSelected: (Int) -> Unit,
     onFlowScaleChanged: (Int) -> Unit,
@@ -587,7 +591,13 @@ private fun SnapFrameOptions(
         } else {
             FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_wayland_only), paneScale)
         }
-        FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
+        NavBooleanRow(
+            title = stringResource(R.string.session_drawer_snapframe_diagnostic_log),
+            checked = logEnabled,
+            onCheckedChange = onLogChanged,
+        )
+        FrameGenNote(stringResource(R.string.session_drawer_snapframe_diagnostic_log_note), paneScale)
+                FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
 }
 
