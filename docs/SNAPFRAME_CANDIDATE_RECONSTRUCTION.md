@@ -80,3 +80,8 @@ The original midpoint warp remains the safe rollback path at all times.
 ## Flow Viewer stability
 
 On X11, the diagnostic shader writes across the full composite target, which is then blitted to the full swapchain extent. Its display is deliberately independent of whether an extra generated swapchain image was acquired: acquisition can time out under FIFO pacing even though the latest completed flow field remains valid. When no generated image can be acquired, X11 submits a flow-only SnapFrame pass (`UINT32_MAX` sentinel): it computes the newest flow field and advances history without generating an intermediate frame. The viewer therefore stays full-target and continuously refreshed instead of blinking or freezing with `gen_count`.
+
+
+## Global/local motion fusion (SnapFrame FG 2.x)
+
+The experimental GSFG-inspired path now evaluates an independent tighter-window local matcher in both temporal directions, then fuses its vectors with the global matcher per flow cell. Large disagreement is not blindly averaged: the branch with stronger local match confidence wins, while confidence is attenuated as divergence rises. Forward/backward consistency, metrics, debug visualization, and both reconstruction paths consume the fused fields. The original global fields remain available as inputs to fusion. This is a conservative first implementation, not a learned GSFG-equivalent network; HUD segmentation and explicit occlusion visibility remain subsequent stages and must be validated before enabling more aggressive reconstruction.
