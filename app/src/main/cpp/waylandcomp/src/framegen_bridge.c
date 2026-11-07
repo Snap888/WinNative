@@ -213,7 +213,13 @@ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int f
 #undef R
     g_vk.GetPhysicalDeviceMemoryProperties(g_pd, &g_memprops);
     fge_device_ready(g_gipa, g_inst, g_pd, dev, queue, qfam, features_enabled);
-    g_dev_ready = vk.CreateImage && vk.CreateImageView && vk.CmdPipelineBarrier;
+    g_dev_ready = vk.CreateImage && vk.DestroyImage && vk.CreateImageView &&
+        vk.DestroyImageView && vk.GetImageMemoryRequirements && vk.AllocateMemory &&
+        vk.FreeMemory && vk.BindImageMemory && vk.CmdPipelineBarrier && vk.DeviceWaitIdle;
+    if (!g_dev_ready) {
+        FGLOG("frame generation disabled: compositor Vulkan device is missing required image/memory entry points");
+        return;
+    }
     FGLOG("engines ready on the compositor's device: LSFG Native %s, WFG Native %s, SnapFrame Vulkan %s (%s)",
           fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable",
           fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable",
@@ -266,8 +272,17 @@ static int ensure_ring(uint32_t w, uint32_t h, VkFormat fmt, uint32_t n) {
         int idx = memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         VkMemoryAllocateInfo mai = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                     .allocationSize = req.size, .memoryTypeIndex = (uint32_t)idx};
-        if (idx < 0 || vk.AllocateMemory(g_dev, &mai, NULL, &r->mem) != VK_SUCCESS) { destroy_ring(); return 0; }
-        vk.BindImageMemory(g_dev, r->img, r->mem, 0);
+        if (idx < 0 || vk.AllocateMemory(g_dev, &mai, NULL, &r->mem) != VK_SUCCESS) {
+            FGLOG("generation ring allocation failed at slot %u (%ux%u)", i, w, h);
+            destroy_ring();
+            return 0;
+        }
+        VkResult bind_result = vk.BindImageMemory(g_dev, r->img, r->mem, 0);
+        if (bind_result != VK_SUCCESS) {
+            FGLOG("generation ring bind failed at slot %u: VkResult=%d", i, (int)bind_result);
+            destroy_ring();
+            return 0;
+        }
         VkImageViewCreateInfo vci = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = r->img,
             .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = fmt,
