@@ -18,6 +18,10 @@
 #include <string.h>
 #include <pthread.h>
 #include <math.h>
+#include <android/log.h>
+
+#define SF_LOG_TAG "SnapFrame"
+#define SF_LOGI(...) __android_log_print(ANDROID_LOG_INFO, SF_LOG_TAG, __VA_ARGS__)
 
 #define SF_LEVELS 3u
 #define SF_PHASES 3u
@@ -310,6 +314,13 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     int telemetry_valid=total>0.0f;
     pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->stage_gpu_ms,stage_values,sizeof(stage_values));
     e->last_gpu_ms=total;e->telemetry_valid=telemetry_valid;pthread_mutex_unlock(&e->telemetry_mutex);
+    /* Sparse diagnostic telemetry: one line per 60 completed source frames. No GPU wait/readback
+       is added here; query results are already retired asynchronously by the existing ring. */
+    if (telemetry_valid && (e->query_frame_id[slot] % 60u) == 0u) {
+        SF_LOGI("frame=%llu gpu_ms=%.3f preprocess_ms=%.3f flow_ms=%.3f consistency_ms=%.3f warp_ms=%.3f flow_scale=%u active_flow=%ux%u candidate_mode=%u candidate_enabled=%d ai_quality=%d",
+            (unsigned long long)e->query_frame_id[slot], total, stage_values[0], stage_values[2],
+            stage_values[3], stage_values[4], e->flow_percent, e->active_flow_w, e->active_flow_h,
+            e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode);
     if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
         float flow_metrics[4]={0};void*mapped=NULL;
         if(g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
@@ -335,6 +346,12 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                     if(decision.mode!=SNAP_AI_MODE_BYPASS){
                         uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
                         if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
+                    }
+                    if ((e->query_frame_id[slot] % 60u) == 0u) {
+                        SF_LOGI("ai frame=%llu mode=%u flow_scale=%.3f gpu_pressure=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f",
+                            (unsigned long long)e->query_frame_id[slot], (unsigned)decision.mode,
+                            decision.flow_scale, metrics.gpu_pressure, metrics.motion_magnitude,
+                            metrics.motion_complexity, metrics.flow_confidence, metrics.artifact_risk);
                     }
                 }
             }
