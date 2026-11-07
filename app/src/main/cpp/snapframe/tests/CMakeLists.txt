@@ -10,3 +10,9 @@ add_test(NAME snapframe_wsi_ownership
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_FILE=${CMAKE_CURRENT_LIST_DIR}/../src/snap_frame_vk.c
         -P ${CMAKE_CURRENT_LIST_DIR}/check_wsi_ownership.cmake)
+
+add_test(NAME snapframe_candidate_reconstruction_contract
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_CURRENT_LIST_DIR}/..
+        -DHOST_FILE=${CMAKE_CURRENT_LIST_DIR}/../src/snap_frame_vk.c
+        -P ${CMAKE_CURRENT_LIST_DIR}/check_candidate_reconstruction.cmake)

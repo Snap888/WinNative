@@ -33,6 +33,8 @@ void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, 
     (void)cmd; (void)g; (void)count; (void)img; (void)view; (void)w; (void)h;
 }
 void fge_forget_targets(void) {}
+void fge_set_candidate_reconstruction(int mode) { (void)mode; }
+void fge_reset_history(void) {}
 void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
     *accepted = 0.0f; *source_rate = 0.0f; *thermal = -1.0f;
 }

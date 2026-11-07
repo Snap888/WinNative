@@ -2,6 +2,11 @@
 #include <cassert>
 #include <cmath>
 int main() {
+    assert(snap_frame_vk_candidate_mode(SNAP_FRAME_CANDIDATE_AI_AUTO) == SNAP_FRAME_CANDIDATE_AI_AUTO);
+    assert(snap_frame_vk_candidate_mode(SNAP_FRAME_CANDIDATE_FORCE_OFF) == SNAP_FRAME_CANDIDATE_FORCE_OFF);
+    assert(snap_frame_vk_candidate_mode(SNAP_FRAME_CANDIDATE_FORCE_ON) == SNAP_FRAME_CANDIDATE_FORCE_ON);
+    assert(snap_frame_vk_candidate_mode(3u) == SNAP_FRAME_CANDIDATE_AI_AUTO);
+    assert(snap_frame_vk_candidate_mode(UINT32_MAX) == SNAP_FRAME_CANDIDATE_AI_AUTO);
     assert(std::fabs(snap_frame_vk_phase_time(0,2)-1.0f/3.0f)<0.0001f);
     assert(std::fabs(snap_frame_vk_phase_time(1,2)-2.0f/3.0f)<0.0001f);
     assert(std::fabs(snap_frame_vk_phase_time(0,3)-0.25f)<0.0001f);

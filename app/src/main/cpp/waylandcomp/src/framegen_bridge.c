@@ -21,6 +21,7 @@ static _Atomic int   g_armed;
 static _Atomic int   g_mult = 2;
 static _Atomic int   g_dis_min_side = 180;
 static _Atomic int   g_target_fps;
+static _Atomic int   g_candidate_reconstruction; /* 0=AI auto, 1=off, 2=on */
 static _Atomic int   g_cfg_dirty = 1;
 static float g_flow = 0.8f, g_refresh_hz;          /* under g_lock */
 static char *g_cache_path;                          /* under g_lock */
@@ -134,6 +135,12 @@ void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps) {
     if (target_fps < 0) target_fps = 0;
     atomic_store(&g_dis_min_side, flow_min_side);
     atomic_store(&g_target_fps, target_fps);
+    atomic_store(&g_cfg_dirty, 1);
+}
+
+void vkp_framegen_set_candidate_reconstruction(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    atomic_store(&g_candidate_reconstruction, mode);
     atomic_store(&g_cfg_dirty, 1);
 }
 
@@ -386,6 +393,7 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
         pthread_mutex_lock(&g_lock); flow = g_flow; hz = g_refresh_hz; pthread_mutex_unlock(&g_lock);
         fge_configure((uint32_t)mult, flow, hz, atomic_load(&g_dis_min_side),
                       atomic_load(&g_target_fps));
+        fge_set_candidate_reconstruction(atomic_load(&g_candidate_reconstruction));
     }
     if (!fge_prepare((uint32_t)w, (uint32_t)h, fmt)) {
         if (fmt != VK_FORMAT_R8G8B8A8_UNORM && fge_unavailable()) {

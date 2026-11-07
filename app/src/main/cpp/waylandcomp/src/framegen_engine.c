@@ -325,6 +325,10 @@ const char *fge_engine_name(int kind) {
 
 void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); }
 
+void fge_set_candidate_reconstruction(int mode) {
+    if (g_snap) snap_frame_vk_set_candidate_reconstruction(g_snap, (uint32_t)mode);
+}
+
 void fge_device_lost(void) {
     /* A lost VkDevice must not be touched for cleanup. The driver reclaims its objects. */
     if(g_snap_core){snap_frame_destroy(g_snap_core);g_snap_core=NULL;}

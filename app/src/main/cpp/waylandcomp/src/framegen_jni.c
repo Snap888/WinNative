@@ -42,6 +42,13 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetEngine
     vkp_framegen_set_engine_tuning((int)flowMinSide, (int)targetFps);
 }
 
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFrameCandidateReconstruction(
+        JNIEnv *env, jclass clazz, jint mode) {
+    (void)env; (void)clazz;
+    vkp_framegen_set_candidate_reconstruction((int)mode);
+}
+
 JNIEXPORT jint JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeFrameGenProblem(JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;

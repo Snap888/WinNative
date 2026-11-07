@@ -1,7 +1,7 @@
 set(SNAPFRAME_SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 set(SNAPFRAME_SHADER_OUT "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 file(MAKE_DIRECTORY "${SNAPFRAME_SHADER_OUT}")
-set(SNAPFRAME_SHADERS luma_downsample pyramid_downsample block_match_flow flow_consistency midpoint_warp_rgba8 midpoint_warp flow_debug flow_metrics)
+set(SNAPFRAME_SHADERS luma_downsample pyramid_downsample block_match_flow flow_consistency midpoint_warp_rgba8 midpoint_warp flow_debug flow_metrics candidate_warp candidate_score candidate_reconstruct_rgba8 candidate_reconstruct)
 set(SNAPFRAME_SHADER_HEADERS "")
 foreach(base ${SNAPFRAME_SHADERS})
     set(input "${SNAPFRAME_SHADER_DIR}/${base}.comp")
