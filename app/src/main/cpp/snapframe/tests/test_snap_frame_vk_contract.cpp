@@ -15,6 +15,11 @@ int main() {
     assert(snap_frame_vk_format_supported(VK_FORMAT_R8G8B8A8_UNORM));
     assert(snap_frame_vk_format_supported(VK_FORMAT_R16G16B16A16_SFLOAT));
     assert(!snap_frame_vk_format_supported(VK_FORMAT_B8G8R8A8_UNORM));
+    assert(snap_frame_vk_debug_mode(0) == SNAP_FRAME_DEBUG_MOTION);
+    assert(snap_frame_vk_debug_mode(1) == SNAP_FRAME_DEBUG_CONFIDENCE);
+    assert(snap_frame_vk_debug_mode(2) == SNAP_FRAME_DEBUG_CONSISTENCY);
+    assert(snap_frame_vk_debug_mode(3) == SNAP_FRAME_DEBUG_MOTION);
+    assert(snap_frame_vk_debug_mode(UINT32_MAX) == SNAP_FRAME_DEBUG_MOTION);
 
     SnapFrameVkLifecycle state{};
     uint32_t reset=snap_frame_vk_lifecycle_update(&state,1,1920,1080,VK_FORMAT_R8G8B8A8_UNORM,1,0);
