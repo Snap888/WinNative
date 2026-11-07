@@ -346,8 +346,8 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                         /* Hysteresis prevents candidate compute from oscillating near the GPU budget. */
                         const int candidate_scene = metrics.motion_magnitude >= 0.12f &&
                             metrics.motion_complexity >= 0.18f &&
-                            metrics.flow_confidence >= 0.12f &&
-                            metrics.artifact_risk <= 0.20f;
+                            metrics.flow_confidence >= 0.18f &&
+                            metrics.artifact_risk <= 0.10f;
                         if(decision.mode!=SNAP_AI_MODE_QUALITY || !candidate_scene ||
                            metrics.gpu_pressure>1.15f)
                             e->ai_quality_mode=0;
