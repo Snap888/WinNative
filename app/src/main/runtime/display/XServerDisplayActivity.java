@@ -531,6 +531,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int disFrameGenScale = DIS_FRAME_GEN_SCALE_DEFAULT;
     private int disFrameGenTargetFps = 0;
     private boolean disFrameGenDebugFlow = false;
+    private int snapFrameDebugMode = 0;
     private boolean sgsrEnabled = false;
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
@@ -1271,6 +1272,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (renderer == null || waylandMode) return;
         renderer.setSnapFrameGenerationEnabled(snapFrameGenEnabled);
         renderer.setSnapFrameDebugFlow(disFrameGenDebugFlow);
+        renderer.setSnapFrameDebugMode(snapFrameDebugMode);
         if (snapFrameGenEnabled) {
             renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
             renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
@@ -5546,7 +5548,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 disFrameGenEnabled,
                 disFrameGenScale,
                 disFrameGenTargetFps,
-                disFrameGenDebugFlow);
+                disFrameGenDebugFlow,
+                snapFrameDebugMode);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -5979,6 +5982,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                             xServerView.getRenderer().setSnapFrameDebugFlow(enabled);
                         }
                         applyFrameGenerationLive();
+                    }
+
+                    @Override
+                    public void onSnapFrameDebugModeChanged(int mode) {
+                        snapFrameDebugMode = Math.max(0, Math.min(2, mode));
+                        if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameDebugMode(snapFrameDebugMode);
+                        }
+                        renderDrawerMenu();
                     }
 
 
