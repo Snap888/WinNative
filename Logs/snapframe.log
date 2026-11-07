@@ -1,604 +1,204 @@
 --------- beginning of main
-11-07 23:17:59.620 21290 13819 I SnapFrame: frame=780 gpu_ms=3.098 preprocess_ms=0.463 flow_ms=1.331 consistency_ms=0.236 warp_ms=0.915 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:17:59.620 21290 13819 I SnapFrame: ai frame=780 mode=2 flow_scale=0.820 gpu_pressure=0.620 motion=0.000 complexity=0.005 confidence=0.000 artifact_risk=0.000
-11-07 23:17:59.642 21290 13819 W VkRenderer: Generated frame 1/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:00.006 21290 13819 I VkRenderer: draw reasons over 24,8s: requested=4 continuous=0 transientReq=564 transientActive=32 guestPresents=0 coalesced: other=0 content=0 geometry=0 window=0 cursor=0 frame=0 suppressed=0 pointer=2178 winhandler=2 inputview=0 setting=2 guest=0
-11-07 23:18:00.012 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.464 pyramid=0.152 flow=1.164 consistency=0.235 warp=0.915 total=2.930
-11-07 23:18:00.012 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.000 complexity=0.005 confidence=0.000 confident_inconsistency=0.000 (normalized)
-11-07 23:18:00.012 21290 13819 I VkRenderer: framegen delivered real=1200 made=915 ratio=0.57 planned=3 got=0 misses=1141 timeout=3.0ms images=9 capacity=3 draw=8.14ms gap=120.37ms
-11-07 23:18:00.398 21290 13819 W VkRenderer: Generated frame 1/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:01.840 21290 13819 I SnapFrame: frame=840 gpu_ms=3.503 preprocess_ms=0.463 flow_ms=1.735 consistency_ms=0.238 warp_ms=0.915 flow_scale=100 active_flow=135x306 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:01.840 21290 13819 I SnapFrame: ai frame=840 mode=2 flow_scale=1.000 gpu_pressure=0.701 motion=0.000 complexity=0.004 confidence=0.000 artifact_risk=0.000
-11-07 23:18:01.899 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.464 pyramid=0.152 flow=2.386 consistency=0.237 warp=0.915 total=4.154
-11-07 23:18:01.899 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.002 complexity=0.017 confidence=0.000 confident_inconsistency=0.000 (normalized)
-11-07 23:18:01.899 21290 13819 I VkRenderer: framegen delivered real=1320 made=983 ratio=0.57 planned=3 got=1 misses=1259 timeout=3.0ms images=9 capacity=3 draw=8.75ms gap=7.00ms
-11-07 23:18:02.562 21290 13819 I SnapFrame: frame=900 gpu_ms=3.162 preprocess_ms=0.463 flow_ms=1.396 consistency_ms=0.235 warp_ms=0.915 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:02.562 21290 13819 I SnapFrame: ai frame=900 mode=2 flow_scale=0.900 gpu_pressure=0.632 motion=0.000 complexity=0.005 confidence=0.000 artifact_risk=0.000
-11-07 23:18:02.648 21290 13819 W VkRenderer: Generated frame 2/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:05.332 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.463 pyramid=0.152 flow=2.398 consistency=0.237 warp=0.915 total=4.166
-11-07 23:18:05.332 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.002 complexity=0.017 confidence=0.000 confident_inconsistency=0.000 (normalized)
-11-07 23:18:05.332 21290 13819 I VkRenderer: framegen delivered real=1440 made=1101 ratio=0.98 planned=3 got=0 misses=1377 timeout=3.0ms images=9 capacity=3 draw=11.68ms gap=16.90ms
-11-07 23:18:05.354 21290 13819 I SnapFrame: frame=960 gpu_ms=4.151 preprocess_ms=0.464 flow_ms=2.383 consistency_ms=0.238 warp_ms=0.915 flow_scale=100 active_flow=135x306 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:05.354 21290 13819 I SnapFrame: ai frame=960 mode=2 flow_scale=0.920 gpu_pressure=0.830 motion=0.002 complexity=0.017 confidence=0.000 artifact_risk=0.000
-11-07 23:18:06.078 21290 13819 I SnapFrame: frame=1020 gpu_ms=3.097 preprocess_ms=0.464 flow_ms=1.332 consistency_ms=0.234 warp_ms=0.915 flow_scale=98 active_flow=132x299 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:06.078 21290 13819 I SnapFrame: ai frame=1020 mode=2 flow_scale=1.000 gpu_pressure=0.619 motion=0.000 complexity=0.005 confidence=0.000 artifact_risk=0.000
-11-07 23:18:06.090 21290 13819 W VkRenderer: Generated frame 2/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:06.766 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.463 pyramid=0.152 flow=2.389 consistency=0.238 warp=0.915 total=4.158
-11-07 23:18:06.766 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.002 complexity=0.018 confidence=0.000 confident_inconsistency=0.000 (normalized)
-11-07 23:18:06.766 21290 13819 I VkRenderer: framegen delivered real=1560 made=1219 ratio=0.98 planned=3 got=1 misses=1497 timeout=3.0ms images=9 capacity=3 draw=11.91ms gap=0.06ms
-11-07 23:18:06.801 21290 13819 I SnapFrame: frame=1080 gpu_ms=4.152 preprocess_ms=0.463 flow_ms=2.382 consistency_ms=0.238 warp_ms=0.915 flow_scale=84 active_flow=113x257 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:06.801 21290 13819 I SnapFrame: ai frame=1080 mode=2 flow_scale=0.820 gpu_pressure=0.830 motion=0.002 complexity=0.019 confidence=0.000 artifact_risk=0.000
-11-07 23:18:07.526 21290 13819 I SnapFrame: frame=1140 gpu_ms=3.500 preprocess_ms=0.464 flow_ms=1.731 consistency_ms=0.238 warp_ms=0.915 flow_scale=100 active_flow=135x306 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:07.526 21290 13819 I SnapFrame: ai frame=1140 mode=2 flow_scale=1.000 gpu_pressure=0.700 motion=0.000 complexity=0.003 confidence=0.000 artifact_risk=0.000
-11-07 23:18:07.537 21290 13819 W VkRenderer: Generated frame 2/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:12.722 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.464 pyramid=0.152 flow=1.326 consistency=0.235 warp=0.916 total=3.092
-11-07 23:18:12.722 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.000 complexity=0.005 confidence=0.000 confident_inconsistency=0.000 (normalized)
-11-07 23:18:12.722 21290 13819 I VkRenderer: framegen delivered real=1680 made=1342 ratio=1.02 planned=3 got=1 misses=1613 timeout=3.0ms images=9 capacity=3 draw=11.31ms gap=38.32ms
-11-07 23:18:13.434 21290 13819 I SnapFrame: frame=1200 gpu_ms=5.221 preprocess_ms=0.465 flow_ms=1.406 consistency_ms=0.235 warp_ms=2.963 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:13.434 21290 13819 I SnapFrame: ai frame=1200 mode=2 flow_scale=0.740 gpu_pressure=1.044 motion=0.000 complexity=0.005 confidence=0.006 artifact_risk=0.000
-11-07 23:18:15.298 21290 13819 I VkRenderer: AHB Vulkan import begin: 2448x1080 stride=2496 format=5 usage=0x332 allocation=10784768 memoryBits=0x7 vkFormat=44
-11-07 23:18:15.299 21290 13819 I VkRenderer: AHB Vulkan import ready: 2448x1080 vkFormat=44 memoryType=0 texture=0x7bbf776860
-11-07 23:18:15.363 21290 13819 I VkRenderer: AHB Vulkan import begin: 2448x1080 stride=2496 format=5 usage=0x332 allocation=10784768 memoryBits=0x7 vkFormat=44
-11-07 23:18:15.364 21290 13819 I VkRenderer: AHB Vulkan import ready: 2448x1080 vkFormat=44 memoryType=0 texture=0x7bbf774460
-11-07 23:18:15.375 21290 13819 I VkRenderer: AHB Vulkan import begin: 2448x1080 stride=2496 format=5 usage=0x332 allocation=10784768 memoryBits=0x7 vkFormat=44
-11-07 23:18:15.376 21290 13819 I VkRenderer: AHB Vulkan import ready: 2448x1080 vkFormat=44 memoryType=0 texture=0x7bbf801400
-11-07 23:18:15.411 21290 13819 I VkRenderer: AHB Vulkan import begin: 2448x1080 stride=2496 format=5 usage=0x332 allocation=10784768 memoryBits=0x7 vkFormat=44
-11-07 23:18:15.412 21290 13819 I VkRenderer: AHB Vulkan import ready: 2448x1080 vkFormat=44 memoryType=0 texture=0x7bbf784600
-11-07 23:18:17.540 21290 13819 I SnapFrame: frame=1260 gpu_ms=4.883 preprocess_ms=0.466 flow_ms=1.047 consistency_ms=0.231 warp_ms=2.987 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:17.540 21290 13819 I SnapFrame: ai frame=1260 mode=2 flow_scale=0.700 gpu_pressure=0.977 motion=0.001 complexity=0.016 confidence=0.018 artifact_risk=0.001
-11-07 23:18:19.705 21290 13819 I VkRenderer: draw reasons over 19,7s: requested=123 continuous=0 transientReq=432 transientActive=45 guestPresents=107 coalesced: other=0 content=119 geometry=3 window=8 cursor=2 frame=114 suppressed=239 pointer=1580 winhandler=26 inputview=0 setting=1 guest=107
-11-07 23:18:19.705 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.036 consistency=0.232 warp=2.982 total=4.868
-11-07 23:18:19.705 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.001 complexity=0.012 confidence=0.020 confident_inconsistency=0.001 (normalized)
-11-07 23:18:19.705 21290 13819 I VkRenderer: framegen delivered real=1800 made=1694 ratio=2.93 planned=3 got=3 misses=1619 timeout=3.0ms images=9 capacity=3 draw=6.86ms gap=51.06ms
-11-07 23:18:20.042 21290 13819 I SnapFrame: frame=1320 gpu_ms=4.877 preprocess_ms=0.466 flow_ms=1.047 consistency_ms=0.233 warp_ms=2.979 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:20.042 21290 13819 I SnapFrame: ai frame=1320 mode=2 flow_scale=0.700 gpu_pressure=0.975 motion=0.001 complexity=0.013 confidence=0.020 artifact_risk=0.001
-11-07 23:18:22.563 21290 13819 I SnapFrame: frame=1380 gpu_ms=4.860 preprocess_ms=0.466 flow_ms=1.046 consistency_ms=0.232 warp_ms=2.964 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:22.563 21290 13819 I SnapFrame: ai frame=1380 mode=2 flow_scale=0.700 gpu_pressure=0.972 motion=0.000 complexity=0.005 confidence=0.031 artifact_risk=0.000
-11-07 23:18:24.222 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.049 consistency=0.234 warp=2.962 total=4.863
-11-07 23:18:24.222 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.000 complexity=0.005 confidence=0.031 confident_inconsistency=0.000 (normalized)
-11-07 23:18:24.222 21290 13819 I VkRenderer: framegen delivered real=1920 made=2054 ratio=3.00 planned=3 got=3 misses=1619 timeout=3.0ms images=9 capacity=3 draw=6.50ms gap=31.24ms
-11-07 23:18:24.463 21290 13819 I SnapFrame: frame=1440 gpu_ms=4.857 preprocess_ms=0.466 flow_ms=1.051 consistency_ms=0.231 warp_ms=2.958 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:24.463 21290 13819 I SnapFrame: ai frame=1440 mode=2 flow_scale=0.700 gpu_pressure=0.971 motion=0.000 complexity=0.005 confidence=0.031 artifact_risk=0.000
-11-07 23:18:26.327 21290 13819 I SnapFrame: frame=1500 gpu_ms=4.872 preprocess_ms=0.466 flow_ms=1.051 consistency_ms=0.233 warp_ms=2.970 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:26.327 21290 13819 I SnapFrame: ai frame=1500 mode=2 flow_scale=0.700 gpu_pressure=0.975 motion=0.000 complexity=0.005 confidence=0.031 artifact_risk=0.000
-11-07 23:18:27.174 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=2.379 consistency=0.241 warp=0.922 total=4.161
-11-07 23:18:27.174 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.039 complexity=0.138 confidence=0.115 confident_inconsistency=0.027 (normalized)
-11-07 23:18:27.174 21290 13819 I VkRenderer: framegen delivered real=2040 made=2333 ratio=2.33 planned=3 got=2 misses=1666 timeout=3.0ms images=9 capacity=3 draw=9.22ms gap=15.50ms
-11-07 23:18:27.270 21290 13819 I SnapFrame: frame=1560 gpu_ms=3.088 preprocess_ms=0.466 flow_ms=1.319 consistency_ms=0.235 warp_ms=0.916 flow_scale=98 active_flow=132x299 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:27.270 21290 13819 I SnapFrame: ai frame=1560 mode=2 flow_scale=1.000 gpu_pressure=0.618 motion=0.007 complexity=0.057 confidence=0.053 artifact_risk=0.006
-11-07 23:18:27.392 21290 13819 W VkRenderer: Generated frame 2/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:28.194 21290 13819 I SnapFrame: frame=1620 gpu_ms=3.325 preprocess_ms=0.466 flow_ms=1.547 consistency_ms=0.237 warp_ms=0.923 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:28.194 21290 13819 I SnapFrame: ai frame=1620 mode=2 flow_scale=0.820 gpu_pressure=0.665 motion=0.008 complexity=0.055 confidence=0.058 artifact_risk=0.009
-11-07 23:18:29.090 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.323 consistency=0.234 warp=1.955 total=4.130
-11-07 23:18:29.090 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.014 complexity=0.081 confidence=0.064 confident_inconsistency=0.011 (normalized)
-11-07 23:18:29.090 21290 13819 I VkRenderer: framegen delivered real=2160 made=2531 ratio=1.65 planned=3 got=2 misses=1786 timeout=3.0ms images=9 capacity=3 draw=15.94ms gap=0.06ms
-11-07 23:18:29.228 21290 13819 I SnapFrame: frame=1680 gpu_ms=4.131 preprocess_ms=0.467 flow_ms=1.320 consistency_ms=0.236 warp_ms=1.956 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:29.228 21290 13819 I SnapFrame: ai frame=1680 mode=2 flow_scale=0.820 gpu_pressure=0.826 motion=0.013 complexity=0.073 confidence=0.066 artifact_risk=0.012
-11-07 23:18:29.355 21290 13819 W VkRenderer: Generated frame 3/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:18:31.098 21290 13819 I SnapFrame: frame=1740 gpu_ms=5.133 preprocess_ms=0.466 flow_ms=1.309 consistency_ms=0.234 warp_ms=2.971 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:31.098 21290 13819 I SnapFrame: ai frame=1740 mode=2 flow_scale=0.740 gpu_pressure=1.027 motion=0.008 complexity=0.063 confidence=0.047 artifact_risk=0.007
-11-07 23:18:32.539 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.045 consistency=0.232 warp=2.976 total=4.871
-11-07 23:18:32.539 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.014 complexity=0.075 confidence=0.050 confident_inconsistency=0.016 (normalized)
-11-07 23:18:32.539 21290 13819 I VkRenderer: framegen delivered real=2280 made=2851 ratio=2.67 planned=3 got=3 misses=1823 timeout=3.0ms images=9 capacity=3 draw=9.71ms gap=18.87ms
-11-07 23:18:32.768 21290 13819 I SnapFrame: frame=1800 gpu_ms=4.889 preprocess_ms=0.467 flow_ms=1.046 consistency_ms=0.236 warp_ms=2.988 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:32.768 21290 13819 I SnapFrame: ai frame=1800 mode=2 flow_scale=0.700 gpu_pressure=0.978 motion=0.014 complexity=0.077 confidence=0.055 artifact_risk=0.016
-11-07 23:18:34.723 21290 13819 I SnapFrame: frame=1860 gpu_ms=4.880 preprocess_ms=0.466 flow_ms=1.050 consistency_ms=0.232 warp_ms=2.981 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:34.723 21290 13819 I SnapFrame: ai frame=1860 mode=2 flow_scale=0.700 gpu_pressure=0.976 motion=0.038 complexity=0.133 confidence=0.048 artifact_risk=0.023
-11-07 23:18:36.031 21290 13819 I VkRenderer: draw reasons over 16,3s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=1720 coalesced: other=0 content=1720 geometry=0 window=0 cursor=0 frame=1720 suppressed=3466 pointer=0 winhandler=34 inputview=0 setting=0 guest=1720
-11-07 23:18:36.038 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.332 consistency=0.233 warp=2.992 total=5.175
-11-07 23:18:36.038 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.031 complexity=0.108 confidence=0.073 confident_inconsistency=0.038 (normalized)
-11-07 23:18:36.038 21290 13819 I VkRenderer: framegen delivered real=2400 made=3195 ratio=2.87 planned=3 got=2 misses=1836 timeout=3.0ms images=9 capacity=3 draw=7.90ms gap=21.34ms
-11-07 23:18:36.203 21290 13819 I SnapFrame: frame=1920 gpu_ms=4.859 preprocess_ms=0.466 flow_ms=1.031 consistency_ms=0.234 warp_ms=2.975 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:36.204 21290 13819 I SnapFrame: ai frame=1920 mode=2 flow_scale=0.700 gpu_pressure=0.972 motion=0.066 complexity=0.173 confidence=0.047 artifact_risk=0.042
-11-07 23:18:37.486 21290 13819 I SnapFrame: frame=1980 gpu_ms=4.994 preprocess_ms=0.466 flow_ms=1.151 consistency_ms=0.233 warp_ms=2.992 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:37.486 21290 13819 I SnapFrame: ai frame=1980 mode=2 flow_scale=0.700 gpu_pressure=0.999 motion=0.027 complexity=0.102 confidence=0.080 artifact_risk=0.037
-11-07 23:18:39.082 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.014 consistency=0.239 warp=3.193 total=5.065
-11-07 23:18:39.083 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.055 complexity=0.185 confidence=0.584 confident_inconsistency=0.007 (normalized)
-11-07 23:18:39.083 21290 13819 I VkRenderer: framegen delivered real=2520 made=3505 ratio=2.58 planned=3 got=3 misses=1879 timeout=3.0ms images=9 capacity=3 draw=16.83ms gap=8.65ms
-11-07 23:18:39.301 21290 13819 I SnapFrame: frame=2040 gpu_ms=5.068 preprocess_ms=0.467 flow_ms=1.018 consistency_ms=0.235 warp_ms=3.197 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:39.301 21290 13819 I SnapFrame: ai frame=2040 mode=2 flow_scale=0.700 gpu_pressure=1.014 motion=0.054 complexity=0.184 confidence=0.613 artifact_risk=0.006
-11-07 23:18:41.282 21290 13819 I SnapFrame: frame=2100 gpu_ms=5.114 preprocess_ms=0.467 flow_ms=1.090 consistency_ms=0.235 warp_ms=3.170 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:41.282 21290 13819 I SnapFrame: ai frame=2100 mode=3 flow_scale=0.700 gpu_pressure=1.023 motion=0.364 complexity=0.368 confidence=0.186 artifact_risk=0.045
-11-07 23:18:42.886 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.013 consistency=0.233 warp=3.168 total=5.032
-11-07 23:18:42.887 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.056 complexity=0.184 confidence=0.509 confident_inconsistency=0.012 (normalized)
-11-07 23:18:42.887 21290 13819 I VkRenderer: framegen delivered real=2640 made=3864 ratio=2.99 planned=3 got=3 misses=1880 timeout=3.0ms images=9 capacity=3 draw=28.83ms gap=2.87ms
-11-07 23:18:43.141 21290 13819 I SnapFrame: frame=2160 gpu_ms=5.072 preprocess_ms=0.467 flow_ms=1.024 consistency_ms=0.238 warp_ms=3.191 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:43.141 21290 13819 I SnapFrame: ai frame=2160 mode=2 flow_scale=0.700 gpu_pressure=1.014 motion=0.055 complexity=0.184 confidence=0.597 artifact_risk=0.007
-11-07 23:18:45.073 21290 13819 I SnapFrame: frame=2220 gpu_ms=5.057 preprocess_ms=0.467 flow_ms=1.017 consistency_ms=0.235 warp_ms=3.186 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:45.073 21290 13819 I SnapFrame: ai frame=2220 mode=2 flow_scale=0.700 gpu_pressure=1.011 motion=0.056 complexity=0.186 confidence=0.558 artifact_risk=0.009
-11-07 23:18:46.752 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.020 consistency=0.236 warp=3.190 total=5.065
-11-07 23:18:46.752 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.056 complexity=0.185 confidence=0.610 confident_inconsistency=0.007 (normalized)
-11-07 23:18:46.752 21290 13819 I VkRenderer: framegen delivered real=2760 made=4224 ratio=3.00 planned=3 got=3 misses=1880 timeout=3.0ms images=9 capacity=3 draw=31.98ms gap=0.23ms
-11-07 23:18:47.007 21290 13819 I SnapFrame: frame=2280 gpu_ms=5.042 preprocess_ms=0.467 flow_ms=1.019 consistency_ms=0.235 warp_ms=3.169 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:47.007 21290 13819 I SnapFrame: ai frame=2280 mode=2 flow_scale=0.700 gpu_pressure=1.008 motion=0.055 complexity=0.184 confidence=0.601 artifact_risk=0.006
-11-07 23:18:48.090 21290 21290 I SnapFrameLog: Diagnostic log enabled: /storage/emulated/0/Download/winnative/snapframe.log
-11-07 23:18:48.944 21290 13819 I SnapFrame: frame=2340 gpu_ms=5.063 preprocess_ms=0.467 flow_ms=1.021 consistency_ms=0.235 warp_ms=3.189 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:48.944 21290 13819 I SnapFrame: ai frame=2340 mode=2 flow_scale=0.700 gpu_pressure=1.013 motion=0.053 complexity=0.183 confidence=0.603 artifact_risk=0.005
-11-07 23:18:50.624 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.020 consistency=0.237 warp=3.630 total=5.506
-11-07 23:18:50.624 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.053 complexity=0.182 confidence=0.597 confident_inconsistency=0.006 (normalized)
-11-07 23:18:50.624 21290 13819 I VkRenderer: framegen delivered real=2880 made=4584 ratio=3.00 planned=3 got=3 misses=1880 timeout=3.0ms images=9 capacity=3 draw=32.06ms gap=0.20ms
-11-07 23:18:50.882 21290 13819 I SnapFrame: frame=2400 gpu_ms=5.056 preprocess_ms=0.467 flow_ms=1.014 consistency_ms=0.235 warp_ms=3.188 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:50.883 21290 13819 I SnapFrame: ai frame=2400 mode=2 flow_scale=0.700 gpu_pressure=1.011 motion=0.054 complexity=0.183 confidence=0.596 artifact_risk=0.006
-11-07 23:18:52.814 21290 13819 I SnapFrame: frame=2460 gpu_ms=5.097 preprocess_ms=0.468 flow_ms=1.083 consistency_ms=0.237 warp_ms=3.159 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:52.814 21290 13819 I SnapFrame: ai frame=2460 mode=3 flow_scale=0.700 gpu_pressure=1.019 motion=0.317 complexity=0.336 confidence=0.199 artifact_risk=0.059
-11-07 23:18:54.822 21290 13819 I VkRenderer: draw reasons over 18,8s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=1052 coalesced: other=0 content=1052 geometry=0 window=0 cursor=0 frame=1052 suppressed=2373 pointer=4 winhandler=281 inputview=0 setting=2 guest=1052
-11-07 23:18:54.822 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.111 consistency=0.236 warp=3.140 total=5.106
-11-07 23:18:54.822 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.377 complexity=0.353 confidence=0.189 confident_inconsistency=0.068 (normalized)
-11-07 23:18:54.822 21290 13819 I VkRenderer: framegen delivered real=3000 made=4936 ratio=2.93 planned=3 got=3 misses=1886 timeout=3.0ms images=9 capacity=3 draw=32.27ms gap=2.70ms
-11-07 23:18:55.166 21290 13819 I SnapFrame: frame=2520 gpu_ms=5.125 preprocess_ms=0.467 flow_ms=1.109 consistency_ms=0.235 warp_ms=3.161 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:55.167 21290 13819 I SnapFrame: ai frame=2520 mode=3 flow_scale=0.700 gpu_pressure=1.025 motion=0.415 complexity=0.353 confidence=0.184 artifact_risk=0.063
-11-07 23:18:57.385 21290 13819 I SnapFrame: frame=2580 gpu_ms=5.097 preprocess_ms=0.466 flow_ms=1.089 consistency_ms=0.236 warp_ms=3.153 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:57.385 21290 13819 I SnapFrame: ai frame=2580 mode=3 flow_scale=0.700 gpu_pressure=1.019 motion=0.293 complexity=0.328 confidence=0.222 artifact_risk=0.074
-11-07 23:18:59.327 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.106 consistency=0.234 warp=3.143 total=5.101
-11-07 23:18:59.327 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.391 complexity=0.347 confidence=0.194 confident_inconsistency=0.069 (normalized)
-11-07 23:18:59.327 21290 13819 I VkRenderer: framegen delivered real=3120 made=5296 ratio=3.00 planned=3 got=3 misses=1886 timeout=3.0ms images=9 capacity=3 draw=37.43ms gap=0.12ms
-11-07 23:18:59.654 21290 13819 I SnapFrame: frame=2640 gpu_ms=5.125 preprocess_ms=0.467 flow_ms=1.112 consistency_ms=0.237 warp_ms=3.157 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:18:59.654 21290 13819 I SnapFrame: ai frame=2640 mode=3 flow_scale=0.700 gpu_pressure=1.025 motion=0.344 complexity=0.326 confidence=0.207 artifact_risk=0.086
-11-07 23:19:02.143 21290 13819 I SnapFrame: frame=2700 gpu_ms=5.210 preprocess_ms=0.467 flow_ms=1.118 consistency_ms=0.235 warp_ms=3.238 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:02.143 21290 13819 I SnapFrame: ai frame=2700 mode=3 flow_scale=0.700 gpu_pressure=1.042 motion=0.324 complexity=0.322 confidence=0.196 artifact_risk=0.082
-11-07 23:19:04.343 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.093 consistency=0.233 warp=3.122 total=5.066
-11-07 23:19:04.343 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.428 complexity=0.363 confidence=0.186 confident_inconsistency=0.055 (normalized)
-11-07 23:19:04.343 21290 13819 I VkRenderer: framegen delivered real=3240 made=5656 ratio=3.00 planned=3 got=3 misses=1886 timeout=3.0ms images=9 capacity=3 draw=40.98ms gap=0.74ms
-11-07 23:19:04.627 21290 13819 I SnapFrame: frame=2760 gpu_ms=5.097 preprocess_ms=0.467 flow_ms=1.100 consistency_ms=0.235 warp_ms=3.143 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:04.628 21290 13819 I SnapFrame: ai frame=2760 mode=3 flow_scale=0.700 gpu_pressure=1.019 motion=0.393 complexity=0.351 confidence=0.193 artifact_risk=0.066
-11-07 23:19:06.816 21290 13819 I SnapFrame: frame=2820 gpu_ms=5.065 preprocess_ms=0.467 flow_ms=1.079 consistency_ms=0.237 warp_ms=3.131 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:06.817 21290 13819 I SnapFrame: ai frame=2820 mode=3 flow_scale=0.700 gpu_pressure=1.013 motion=0.341 complexity=0.334 confidence=0.193 artifact_risk=0.070
-11-07 23:19:08.433 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.104 consistency=0.233 warp=3.177 total=5.133
-11-07 23:19:08.434 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.416 complexity=0.357 confidence=0.192 confident_inconsistency=0.067 (normalized)
-11-07 23:19:08.434 21290 13819 I VkRenderer: framegen delivered real=3360 made=6013 ratio=2.98 planned=3 got=3 misses=1889 timeout=3.0ms images=9 capacity=3 draw=28.19ms gap=5.76ms
-11-07 23:19:08.624 21290 13819 I SnapFrame: frame=2880 gpu_ms=5.099 preprocess_ms=0.467 flow_ms=1.085 consistency_ms=0.234 warp_ms=3.160 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:08.625 21290 13819 I SnapFrame: ai frame=2880 mode=3 flow_scale=0.700 gpu_pressure=1.020 motion=0.330 complexity=0.312 confidence=0.208 artifact_risk=0.071
-11-07 23:19:10.389 21290 13819 I SnapFrame: frame=2940 gpu_ms=5.075 preprocess_ms=0.466 flow_ms=1.082 consistency_ms=0.233 warp_ms=3.142 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:10.389 21290 13819 I SnapFrame: ai frame=2940 mode=3 flow_scale=0.700 gpu_pressure=1.015 motion=0.342 complexity=0.340 confidence=0.208 artifact_risk=0.091
-11-07 23:19:11.846 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.108 consistency=0.234 warp=3.117 total=5.078
-11-07 23:19:11.846 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.389 complexity=0.358 confidence=0.192 confident_inconsistency=0.063 (normalized)
-11-07 23:19:11.846 21290 13819 I VkRenderer: framegen delivered real=3480 made=6372 ratio=2.99 planned=3 got=3 misses=1890 timeout=3.0ms images=9 capacity=3 draw=20.55ms gap=7.83ms
-11-07 23:19:12.129 21290 13819 I SnapFrame: frame=3000 gpu_ms=5.128 preprocess_ms=0.476 flow_ms=1.120 consistency_ms=0.237 warp_ms=3.144 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:12.129 21290 13819 I SnapFrame: ai frame=3000 mode=3 flow_scale=0.700 gpu_pressure=1.026 motion=0.402 complexity=0.360 confidence=0.191 artifact_risk=0.065
-11-07 23:19:13.664 21290 13819 I SnapFrame: frame=3060 gpu_ms=3.975 preprocess_ms=0.467 flow_ms=1.098 consistency_ms=0.234 warp_ms=2.024 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:13.664 21290 13819 I SnapFrame: ai frame=3060 mode=3 flow_scale=0.820 gpu_pressure=0.795 motion=0.353 complexity=0.337 confidence=0.198 artifact_risk=0.069
-11-07 23:19:15.502 21290 13819 I VkRenderer: draw reasons over 20,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=824 coalesced: other=0 content=824 geometry=0 window=0 cursor=0 frame=824 suppressed=2681 pointer=0 winhandler=1033 inputview=0 setting=0 guest=824
-11-07 23:19:15.503 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.111 consistency=0.233 warp=3.179 total=5.142
-11-07 23:19:15.503 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.323 complexity=0.319 confidence=0.206 confident_inconsistency=0.075 (normalized)
-11-07 23:19:15.503 21290 13819 I VkRenderer: framegen delivered real=3600 made=6713 ratio=2.84 planned=3 got=3 misses=1907 timeout=3.0ms images=9 capacity=3 draw=25.37ms gap=5.36ms
-11-07 23:19:15.840 21290 13819 I SnapFrame: frame=3120 gpu_ms=5.158 preprocess_ms=0.467 flow_ms=1.112 consistency_ms=0.234 warp_ms=3.194 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:15.840 21290 13819 I SnapFrame: ai frame=3120 mode=3 flow_scale=0.700 gpu_pressure=1.032 motion=0.365 complexity=0.330 confidence=0.197 artifact_risk=0.069
-11-07 23:19:17.270 21290 13819 I SnapFrame: frame=3180 gpu_ms=4.209 preprocess_ms=0.467 flow_ms=1.309 consistency_ms=0.235 warp_ms=2.046 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:17.271 21290 13819 I SnapFrame: ai frame=3180 mode=3 flow_scale=0.820 gpu_pressure=0.842 motion=0.303 complexity=0.304 confidence=0.200 artifact_risk=0.067
-11-07 23:19:17.336 21290 13819 W VkRenderer: Generated frame 3/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:19:18.639 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.108 consistency=0.237 warp=3.173 total=5.137
-11-07 23:19:18.639 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.383 complexity=0.352 confidence=0.183 confident_inconsistency=0.057 (normalized)
-11-07 23:19:18.639 21290 13819 I VkRenderer: framegen delivered real=3720 made=7041 ratio=2.73 planned=3 got=3 misses=1936 timeout=3.0ms images=9 capacity=3 draw=21.03ms gap=4.99ms
-11-07 23:19:18.793 21290 13819 I SnapFrame: frame=3240 gpu_ms=4.012 preprocess_ms=0.467 flow_ms=1.101 consistency_ms=0.237 warp_ms=2.056 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:18.794 21290 13819 I SnapFrame: ai frame=3240 mode=3 flow_scale=0.700 gpu_pressure=0.802 motion=0.310 complexity=0.321 confidence=0.197 artifact_risk=0.077
-11-07 23:19:20.030 21290 13819 I SnapFrame: frame=3300 gpu_ms=5.127 preprocess_ms=0.467 flow_ms=1.110 consistency_ms=0.236 warp_ms=3.162 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:20.030 21290 13819 I SnapFrame: ai frame=3300 mode=3 flow_scale=0.700 gpu_pressure=1.025 motion=0.449 complexity=0.356 confidence=0.143 artifact_risk=0.070
-11-07 23:19:22.043 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.101 consistency=0.236 warp=3.153 total=5.108
-11-07 23:19:22.043 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.422 complexity=0.339 confidence=0.153 confident_inconsistency=0.081 (normalized)
-11-07 23:19:22.043 21290 13819 I VkRenderer: framegen delivered real=3840 made=7348 ratio=2.56 planned=3 got=3 misses=1977 timeout=3.0ms images=9 capacity=3 draw=23.70ms gap=4.64ms
-11-07 23:19:22.338 21290 13819 I SnapFrame: frame=3360 gpu_ms=5.115 preprocess_ms=0.467 flow_ms=1.102 consistency_ms=0.236 warp_ms=3.158 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:22.338 21290 13819 I SnapFrame: ai frame=3360 mode=3 flow_scale=0.700 gpu_pressure=1.023 motion=0.444 complexity=0.359 confidence=0.150 artifact_risk=0.080
-11-07 23:19:24.269 21290 13819 I SnapFrame: frame=3420 gpu_ms=5.072 preprocess_ms=0.467 flow_ms=1.086 consistency_ms=0.235 warp_ms=3.132 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:24.270 21290 13819 I SnapFrame: ai frame=3420 mode=3 flow_scale=0.700 gpu_pressure=1.014 motion=0.436 complexity=0.358 confidence=0.148 artifact_risk=0.082
-11-07 23:19:25.716 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.096 consistency=0.237 warp=2.013 total=3.964
-11-07 23:19:25.716 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.356 complexity=0.330 confidence=0.165 confident_inconsistency=0.104 (normalized)
-11-07 23:19:25.716 21290 13819 I VkRenderer: framegen delivered real=3960 made=7706 ratio=2.98 planned=3 got=2 misses=1979 timeout=3.0ms images=9 capacity=3 draw=12.27ms gap=18.45ms
-11-07 23:19:25.906 21290 13819 I SnapFrame: frame=3480 gpu_ms=5.068 preprocess_ms=0.466 flow_ms=1.105 consistency_ms=0.237 warp_ms=3.107 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:25.907 21290 13819 I SnapFrame: ai frame=3480 mode=3 flow_scale=0.700 gpu_pressure=1.014 motion=0.397 complexity=0.336 confidence=0.154 artifact_risk=0.078
-11-07 23:19:27.662 21290 13819 I SnapFrame: frame=3540 gpu_ms=5.087 preprocess_ms=0.466 flow_ms=1.104 consistency_ms=0.234 warp_ms=3.130 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:27.662 21290 13819 I SnapFrame: ai frame=3540 mode=3 flow_scale=0.700 gpu_pressure=1.017 motion=0.408 complexity=0.350 confidence=0.151 artifact_risk=0.066
-11-07 23:19:29.571 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.068 consistency=0.237 warp=3.159 total=5.083
-11-07 23:19:29.571 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.240 complexity=0.328 confidence=0.176 confident_inconsistency=0.084 (normalized)
-11-07 23:19:29.571 21290 13819 I VkRenderer: framegen delivered real=4080 made=8061 ratio=2.96 planned=3 got=3 misses=1983 timeout=3.0ms images=9 capacity=3 draw=20.71ms gap=11.27ms
-11-07 23:19:29.816 21290 13819 I SnapFrame: frame=3600 gpu_ms=5.114 preprocess_ms=0.467 flow_ms=1.097 consistency_ms=0.236 warp_ms=3.162 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:29.816 21290 13819 I SnapFrame: ai frame=3600 mode=3 flow_scale=0.700 gpu_pressure=1.023 motion=0.332 complexity=0.351 confidence=0.172 artifact_risk=0.082
-11-07 23:19:31.530 21290 13819 I SnapFrame: frame=3660 gpu_ms=5.121 preprocess_ms=0.467 flow_ms=1.082 consistency_ms=0.233 warp_ms=3.186 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:31.530 21290 13819 I SnapFrame: ai frame=3660 mode=3 flow_scale=0.700 gpu_pressure=1.024 motion=0.330 complexity=0.343 confidence=0.180 artifact_risk=0.075
-11-07 23:19:32.960 21290 13819 I VkRenderer: draw reasons over 17,5s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=641 coalesced: other=0 content=641 geometry=0 window=0 cursor=0 frame=641 suppressed=2155 pointer=0 winhandler=875 inputview=0 setting=0 guest=641
-11-07 23:19:32.961 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.108 consistency=0.238 warp=3.161 total=5.126
-11-07 23:19:32.961 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.455 complexity=0.371 confidence=0.146 confident_inconsistency=0.058 (normalized)
-11-07 23:19:32.961 21290 13819 I VkRenderer: framegen delivered real=4200 made=8421 ratio=3.00 planned=3 got=3 misses=1983 timeout=3.0ms images=9 capacity=3 draw=15.13ms gap=13.29ms
-11-07 23:19:33.207 21290 13819 I SnapFrame: frame=3720 gpu_ms=5.136 preprocess_ms=0.467 flow_ms=1.103 consistency_ms=0.238 warp_ms=3.176 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:33.207 21290 13819 I SnapFrame: ai frame=3720 mode=3 flow_scale=0.700 gpu_pressure=1.027 motion=0.343 complexity=0.330 confidence=0.171 artifact_risk=0.077
-11-07 23:19:35.240 21290 13819 I SnapFrame: frame=3780 gpu_ms=5.148 preprocess_ms=0.467 flow_ms=1.109 consistency_ms=0.236 warp_ms=3.185 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:35.241 21290 13819 I SnapFrame: ai frame=3780 mode=3 flow_scale=0.700 gpu_pressure=1.030 motion=0.395 complexity=0.343 confidence=0.154 artifact_risk=0.081
-11-07 23:19:36.877 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.111 consistency=0.235 warp=3.155 total=5.119
-11-07 23:19:36.877 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.408 complexity=0.336 confidence=0.165 confident_inconsistency=0.096 (normalized)
-11-07 23:19:36.877 21290 13819 I VkRenderer: framegen delivered real=4320 made=8778 ratio=2.98 planned=3 got=3 misses=1985 timeout=3.0ms images=9 capacity=3 draw=22.99ms gap=9.53ms
-11-07 23:19:37.079 21290 13819 I SnapFrame: frame=3840 gpu_ms=5.099 preprocess_ms=0.467 flow_ms=1.095 consistency_ms=0.234 warp_ms=3.152 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:37.079 21290 13819 I SnapFrame: ai frame=3840 mode=3 flow_scale=0.700 gpu_pressure=1.020 motion=0.375 complexity=0.359 confidence=0.176 artifact_risk=0.099
-11-07 23:19:38.604 21290 13819 I SnapFrame: frame=3900 gpu_ms=5.131 preprocess_ms=0.467 flow_ms=1.100 consistency_ms=0.235 warp_ms=3.177 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:38.605 21290 13819 I SnapFrame: ai frame=3900 mode=3 flow_scale=0.700 gpu_pressure=1.026 motion=0.364 complexity=0.346 confidence=0.173 artifact_risk=0.085
-11-07 23:19:39.838 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.088 consistency=0.235 warp=3.151 total=5.092
-11-07 23:19:39.838 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.395 complexity=0.346 confidence=0.165 confident_inconsistency=0.096 (normalized)
-11-07 23:19:39.838 21290 13819 I VkRenderer: framegen delivered real=4440 made=9130 ratio=2.93 planned=3 got=3 misses=1993 timeout=3.0ms images=9 capacity=3 draw=13.51ms gap=11.28ms
-11-07 23:19:40.022 21290 13819 I SnapFrame: frame=3960 gpu_ms=5.109 preprocess_ms=0.466 flow_ms=1.093 consistency_ms=0.235 warp_ms=3.163 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:40.022 21290 13819 I SnapFrame: ai frame=3960 mode=3 flow_scale=0.700 gpu_pressure=1.022 motion=0.392 complexity=0.330 confidence=0.179 artifact_risk=0.086
-11-07 23:19:41.878 21290 13819 I SnapFrame: frame=4020 gpu_ms=5.105 preprocess_ms=0.466 flow_ms=1.102 consistency_ms=0.233 warp_ms=3.151 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:41.879 21290 13819 I SnapFrame: ai frame=4020 mode=3 flow_scale=0.700 gpu_pressure=1.021 motion=0.373 complexity=0.342 confidence=0.160 artifact_risk=0.069
-11-07 23:19:43.417 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.475 pyramid=0.152 flow=1.118 consistency=0.236 warp=3.157 total=5.138
-11-07 23:19:43.417 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.359 complexity=0.311 confidence=0.158 confident_inconsistency=0.072 (normalized)
-11-07 23:19:43.417 21290 13819 I VkRenderer: framegen delivered real=4560 made=9483 ratio=2.94 planned=3 got=3 misses=1999 timeout=3.0ms images=9 capacity=3 draw=20.36ms gap=9.45ms
-11-07 23:19:43.644 21290 13819 I SnapFrame: frame=4080 gpu_ms=5.097 preprocess_ms=0.466 flow_ms=1.078 consistency_ms=0.235 warp_ms=3.165 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:43.647 21290 13819 I SnapFrame: ai frame=4080 mode=3 flow_scale=0.700 gpu_pressure=1.019 motion=0.377 complexity=0.323 confidence=0.164 artifact_risk=0.068
-11-07 23:19:45.328 21290 13819 I SnapFrame: frame=4140 gpu_ms=5.067 preprocess_ms=0.467 flow_ms=1.039 consistency_ms=0.235 warp_ms=3.174 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:45.328 21290 13819 I SnapFrame: ai frame=4140 mode=3 flow_scale=0.700 gpu_pressure=1.013 motion=0.257 complexity=0.295 confidence=0.180 artifact_risk=0.073
-11-07 23:19:47.107 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.103 consistency=0.236 warp=3.170 total=5.128
-11-07 23:19:47.107 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.306 complexity=0.306 confidence=0.171 confident_inconsistency=0.091 (normalized)
-11-07 23:19:47.107 21290 13819 I VkRenderer: framegen delivered real=4680 made=9843 ratio=3.00 planned=3 got=3 misses=1999 timeout=3.0ms images=9 capacity=3 draw=14.72ms gap=15.82ms
-11-07 23:19:47.372 21290 13819 I SnapFrame: frame=4200 gpu_ms=5.142 preprocess_ms=0.467 flow_ms=1.103 consistency_ms=0.237 warp_ms=3.184 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:47.372 21290 13819 I SnapFrame: ai frame=4200 mode=3 flow_scale=0.700 gpu_pressure=1.028 motion=0.322 complexity=0.307 confidence=0.170 artifact_risk=0.085
-11-07 23:19:49.350 21290 13819 I SnapFrame: frame=4260 gpu_ms=5.155 preprocess_ms=0.467 flow_ms=1.091 consistency_ms=0.237 warp_ms=3.208 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:49.350 21290 13819 I SnapFrame: ai frame=4260 mode=3 flow_scale=0.700 gpu_pressure=1.031 motion=0.311 complexity=0.318 confidence=0.172 artifact_risk=0.083
-11-07 23:19:50.636 21290 13819 I VkRenderer: draw reasons over 17,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=625 coalesced: other=0 content=625 geometry=0 window=0 cursor=0 frame=625 suppressed=2139 pointer=0 winhandler=889 inputview=0 setting=0 guest=625
-11-07 23:19:50.637 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.094 consistency=0.238 warp=3.193 total=5.144
-11-07 23:19:50.637 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.315 complexity=0.315 confidence=0.163 confident_inconsistency=0.092 (normalized)
-11-07 23:19:50.637 21290 13819 I VkRenderer: framegen delivered real=4800 made=10198 ratio=2.96 planned=3 got=3 misses=2004 timeout=3.0ms images=9 capacity=3 draw=14.18ms gap=15.33ms
-11-07 23:19:50.805 21290 13819 I SnapFrame: frame=4320 gpu_ms=5.113 preprocess_ms=0.467 flow_ms=1.102 consistency_ms=0.235 warp_ms=3.157 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:50.806 21290 13819 I SnapFrame: ai frame=4320 mode=3 flow_scale=0.700 gpu_pressure=1.023 motion=0.322 complexity=0.309 confidence=0.165 artifact_risk=0.082
-11-07 23:19:52.239 21290 13819 I SnapFrame: frame=4380 gpu_ms=5.107 preprocess_ms=0.467 flow_ms=1.085 consistency_ms=0.237 warp_ms=3.166 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:52.240 21290 13819 I SnapFrame: ai frame=4380 mode=3 flow_scale=0.700 gpu_pressure=1.021 motion=0.301 complexity=0.312 confidence=0.181 artifact_risk=0.100
-11-07 23:19:53.444 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.067 consistency=0.235 warp=3.118 total=5.039
-11-07 23:19:53.444 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.382 complexity=0.329 confidence=0.170 confident_inconsistency=0.069 (normalized)
-11-07 23:19:53.444 21290 13819 I VkRenderer: framegen delivered real=4920 made=10534 ratio=2.80 planned=3 got=3 misses=2027 timeout=3.0ms images=9 capacity=3 draw=13.25ms gap=10.24ms
-11-07 23:19:53.610 21290 13819 I SnapFrame: frame=4440 gpu_ms=5.090 preprocess_ms=0.467 flow_ms=1.113 consistency_ms=0.238 warp_ms=3.121 flow_scale=78 active_flow=105x238 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:53.610 21290 13819 I SnapFrame: ai frame=4440 mode=3 flow_scale=0.700 gpu_pressure=1.018 motion=0.411 complexity=0.349 confidence=0.154 artifact_risk=0.073
-11-07 23:19:54.484 21290 13819 W VkRenderer: Generated frame 2/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:19:55.122 21290 13819 I SnapFrame: frame=4500 gpu_ms=5.158 preprocess_ms=0.467 flow_ms=1.113 consistency_ms=0.237 warp_ms=3.189 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:55.122 21290 13819 I SnapFrame: ai frame=4500 mode=3 flow_scale=0.700 gpu_pressure=1.032 motion=0.411 complexity=0.329 confidence=0.156 artifact_risk=0.089
-11-07 23:19:56.374 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.100 consistency=0.236 warp=2.050 total=4.004
-11-07 23:19:56.374 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.411 complexity=0.345 confidence=0.156 confident_inconsistency=0.072 (normalized)
-11-07 23:19:56.374 21290 13819 I VkRenderer: framegen delivered real=5040 made=10868 ratio=2.78 planned=3 got=3 misses=2051 timeout=3.0ms images=9 capacity=3 draw=13.35ms gap=11.04ms
-11-07 23:19:56.554 21290 13819 I SnapFrame: frame=4560 gpu_ms=5.143 preprocess_ms=0.467 flow_ms=1.110 consistency_ms=0.234 warp_ms=3.180 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:56.555 21290 13819 I SnapFrame: ai frame=4560 mode=3 flow_scale=0.700 gpu_pressure=1.029 motion=0.385 complexity=0.336 confidence=0.161 artifact_risk=0.093
-11-07 23:19:57.984 21290 13819 I SnapFrame: frame=4620 gpu_ms=5.158 preprocess_ms=0.467 flow_ms=1.100 consistency_ms=0.235 warp_ms=3.204 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:57.984 21290 13819 I SnapFrame: ai frame=4620 mode=3 flow_scale=0.700 gpu_pressure=1.032 motion=0.391 complexity=0.323 confidence=0.153 artifact_risk=0.070
-11-07 23:19:59.260 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.110 consistency=0.233 warp=3.177 total=5.139
-11-07 23:19:59.260 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.412 complexity=0.333 confidence=0.156 confident_inconsistency=0.080 (normalized)
-11-07 23:19:59.260 21290 13819 I VkRenderer: framegen delivered real=5160 made=11193 ratio=2.71 planned=3 got=3 misses=2080 timeout=3.0ms images=9 capacity=3 draw=13.33ms gap=10.49ms
-11-07 23:19:59.483 21290 13819 I SnapFrame: frame=4680 gpu_ms=5.122 preprocess_ms=0.467 flow_ms=1.116 consistency_ms=0.235 warp_ms=3.152 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:19:59.483 21290 13819 I SnapFrame: ai frame=4680 mode=3 flow_scale=0.700 gpu_pressure=1.024 motion=0.330 complexity=0.312 confidence=0.165 artifact_risk=0.087
-11-07 23:20:00.823 21290 13819 I SnapFrame: frame=4740 gpu_ms=4.832 preprocess_ms=0.466 flow_ms=0.997 consistency_ms=0.233 warp_ms=2.984 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:00.823 21290 13819 I SnapFrame: ai frame=4740 mode=2 flow_scale=0.700 gpu_pressure=0.966 motion=0.001 complexity=0.019 confidence=0.057 artifact_risk=0.001
-11-07 23:20:02.291 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=0.985 consistency=0.236 warp=3.033 total=4.872
-11-07 23:20:02.291 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.051 complexity=0.168 confidence=0.025 confident_inconsistency=0.017 (normalized)
-11-07 23:20:02.291 21290 13819 I VkRenderer: framegen delivered real=5280 made=11514 ratio=2.67 planned=3 got=3 misses=2106 timeout=3.0ms images=9 capacity=3 draw=10.18ms gap=15.22ms
-11-07 23:20:02.508 21290 13819 I SnapFrame: frame=4800 gpu_ms=4.857 preprocess_ms=0.466 flow_ms=1.004 consistency_ms=0.232 warp_ms=3.003 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:02.508 21290 13819 I SnapFrame: ai frame=4800 mode=2 flow_scale=0.700 gpu_pressure=0.971 motion=0.042 complexity=0.150 confidence=0.031 artifact_risk=0.020
-11-07 23:20:04.118 21290 13819 I SnapFrame: frame=4860 gpu_ms=4.870 preprocess_ms=0.466 flow_ms=0.989 consistency_ms=0.234 warp_ms=3.029 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:04.118 21290 13819 I SnapFrame: ai frame=4860 mode=2 flow_scale=0.700 gpu_pressure=0.974 motion=0.027 complexity=0.116 confidence=0.055 artifact_risk=0.021
-11-07 23:20:05.649 21290 13819 I VkRenderer: draw reasons over 15,0s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=598 coalesced: other=0 content=598 geometry=0 window=0 cursor=0 frame=598 suppressed=1721 pointer=0 winhandler=534 inputview=0 setting=0 guest=598
-11-07 23:20:05.650 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=0.987 consistency=0.233 warp=3.011 total=4.849
-11-07 23:20:05.650 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.043 complexity=0.143 confidence=0.037 confident_inconsistency=0.032 (normalized)
-11-07 23:20:05.650 21290 13819 I VkRenderer: framegen delivered real=5400 made=11867 ratio=2.94 planned=3 got=3 misses=2112 timeout=3.0ms images=9 capacity=3 draw=7.52ms gap=20.36ms
-11-07 23:20:05.890 21290 13819 I SnapFrame: frame=4920 gpu_ms=4.838 preprocess_ms=0.467 flow_ms=0.986 consistency_ms=0.233 warp_ms=3.000 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:05.890 21290 13819 I SnapFrame: ai frame=4920 mode=2 flow_scale=0.700 gpu_pressure=0.968 motion=0.055 complexity=0.161 confidence=0.041 artifact_risk=0.033
-11-07 23:20:07.380 21290 13819 I SnapFrame: ai frame=4980 mode=2 flow_scale=0.700 gpu_pressure=0.767 motion=0.056 complexity=0.164 confidence=0.052 artifact_risk=0.040
-11-07 23:20:08.646 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.296 consistency=0.237 warp=3.050 total=5.202
-11-07 23:20:08.646 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.095 complexity=0.209 confidence=0.048 confident_inconsistency=0.043 (normalized)
-11-07 23:20:08.646 21290 13819 I VkRenderer: framegen delivered real=5520 made=12210 ratio=2.86 planned=3 got=2 misses=2129 timeout=3.0ms images=9 capacity=3 draw=9.16ms gap=16.02ms
-11-07 23:20:08.831 21290 13819 I SnapFrame: frame=5040 gpu_ms=5.187 preprocess_ms=0.466 flow_ms=1.281 consistency_ms=0.234 warp_ms=3.054 flow_scale=74 active_flow=99x226 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:08.831 21290 13819 I SnapFrame: ai frame=5040 mode=2 flow_scale=0.700 gpu_pressure=1.037 motion=0.083 complexity=0.189 confidence=0.045 artifact_risk=0.044
-11-07 23:20:10.352 21290 13819 I SnapFrame: frame=5100 gpu_ms=5.192 preprocess_ms=0.466 flow_ms=1.300 consistency_ms=0.233 warp_ms=3.041 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:10.353 21290 13819 I SnapFrame: ai frame=5100 mode=2 flow_scale=0.700 gpu_pressure=1.038 motion=0.095 complexity=0.202 confidence=0.056 artifact_risk=0.051
-11-07 23:20:11.571 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=0.994 consistency=0.234 warp=3.046 total=4.893
-11-07 23:20:11.571 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.068 complexity=0.178 confidence=0.051 confident_inconsistency=0.043 (normalized)
-11-07 23:20:11.571 21290 13819 I VkRenderer: framegen delivered real=5640 made=12537 ratio=2.73 planned=3 got=3 misses=2158 timeout=3.0ms images=9 capacity=3 draw=11.73ms gap=12.44ms
-11-07 23:20:11.782 21290 13819 I SnapFrame: frame=5160 gpu_ms=4.925 preprocess_ms=0.467 flow_ms=1.005 consistency_ms=0.235 warp_ms=3.066 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:11.782 21290 13819 I SnapFrame: ai frame=5160 mode=2 flow_scale=0.700 gpu_pressure=0.985 motion=0.076 complexity=0.183 confidence=0.041 artifact_risk=0.041
-11-07 23:20:12.373 21290 13819 W VkRenderer: Generated frame 3/3 dropped: acquire returned 2 (swapchain images=9 capacity=3)
-11-07 23:20:13.494 21290 13819 I SnapFrame: frame=5220 gpu_ms=4.895 preprocess_ms=0.466 flow_ms=0.996 consistency_ms=0.233 warp_ms=3.048 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:13.494 21290 13819 I SnapFrame: ai frame=5220 mode=2 flow_scale=0.700 gpu_pressure=0.979 motion=0.046 complexity=0.147 confidence=0.116 artifact_risk=0.030
-11-07 23:20:15.346 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.466 pyramid=0.152 flow=1.359 consistency=0.232 warp=2.962 total=5.171
-11-07 23:20:15.346 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.099 complexity=0.192 confidence=0.146 confident_inconsistency=0.034 (normalized)
-11-07 23:20:15.346 21290 13819 I VkRenderer: framegen delivered real=5760 made=12864 ratio=2.73 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=9.89ms gap=21.72ms
-11-07 23:20:15.719 21290 13819 I SnapFrame: frame=5280 gpu_ms=5.225 preprocess_ms=0.467 flow_ms=1.106 consistency_ms=0.234 warp_ms=3.266 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:15.720 21290 13819 I SnapFrame: ai frame=5280 mode=2 flow_scale=0.700 gpu_pressure=1.045 motion=0.235 complexity=0.324 confidence=0.152 artifact_risk=0.068
-11-07 23:20:18.578 21290 13819 I SnapFrame: frame=5340 gpu_ms=5.229 preprocess_ms=0.468 flow_ms=1.114 consistency_ms=0.232 warp_ms=3.264 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:18.578 21290 13819 I SnapFrame: ai frame=5340 mode=3 flow_scale=0.700 gpu_pressure=1.046 motion=0.314 complexity=0.324 confidence=0.145 artifact_risk=0.065
-11-07 23:20:20.972 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.106 consistency=0.236 warp=3.237 total=5.199
-11-07 23:20:20.972 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.341 complexity=0.349 confidence=0.143 confident_inconsistency=0.052 (normalized)
-11-07 23:20:20.972 21290 13819 I VkRenderer: framegen delivered real=5880 made=13224 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=19.44ms gap=27.53ms
-11-07 23:20:21.395 21290 13819 I SnapFrame: frame=5400 gpu_ms=5.235 preprocess_ms=0.467 flow_ms=1.112 consistency_ms=0.236 warp_ms=3.268 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:21.395 21290 13819 I SnapFrame: ai frame=5400 mode=3 flow_scale=0.700 gpu_pressure=1.047 motion=0.335 complexity=0.346 confidence=0.143 artifact_risk=0.063
-11-07 23:20:23.874 21290 13819 I SnapFrame: frame=5460 gpu_ms=5.262 preprocess_ms=0.468 flow_ms=1.121 consistency_ms=0.233 warp_ms=3.288 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:23.874 21290 13819 I SnapFrame: ai frame=5460 mode=3 flow_scale=0.700 gpu_pressure=1.052 motion=0.352 complexity=0.360 confidence=0.144 artifact_risk=0.056
-11-07 23:20:25.858 21290 13819 I VkRenderer: draw reasons over 20,2s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=590 coalesced: other=0 content=590 geometry=0 window=0 cursor=0 frame=590 suppressed=1620 pointer=0 winhandler=467 inputview=0 setting=0 guest=590
-11-07 23:20:25.860 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.056 consistency=0.232 warp=3.263 total=5.172
-11-07 23:20:25.860 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.141 complexity=0.250 confidence=0.295 confident_inconsistency=0.053 (normalized)
-11-07 23:20:25.860 21290 13819 I VkRenderer: framegen delivered real=6000 made=13584 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=20.37ms gap=20.35ms
-11-07 23:20:26.203 21290 13819 I SnapFrame: frame=5520 gpu_ms=5.210 preprocess_ms=0.467 flow_ms=1.093 consistency_ms=0.233 warp_ms=3.264 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:26.203 21290 13819 I SnapFrame: ai frame=5520 mode=2 flow_scale=0.700 gpu_pressure=1.042 motion=0.258 complexity=0.304 confidence=0.153 artifact_risk=0.057
-11-07 23:20:28.698 21290 13819 I SnapFrame: frame=5580 gpu_ms=5.234 preprocess_ms=0.468 flow_ms=1.118 consistency_ms=0.235 warp_ms=3.261 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:28.698 21290 13819 I SnapFrame: ai frame=5580 mode=3 flow_scale=0.700 gpu_pressure=1.047 motion=0.363 complexity=0.372 confidence=0.141 artifact_risk=0.058
-11-07 23:20:30.908 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.078 consistency=0.237 warp=3.281 total=5.216
-11-07 23:20:30.908 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.222 complexity=0.310 confidence=0.220 confident_inconsistency=0.062 (normalized)
-11-07 23:20:30.908 21290 13819 I VkRenderer: framegen delivered real=6120 made=13944 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=18.34ms gap=23.36ms
-11-07 23:20:31.319 21290 13819 I SnapFrame: frame=5640 gpu_ms=5.270 preprocess_ms=0.467 flow_ms=1.094 consistency_ms=0.240 warp_ms=3.316 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:31.319 21290 13819 I SnapFrame: ai frame=5640 mode=2 flow_scale=0.700 gpu_pressure=1.054 motion=0.308 complexity=0.319 confidence=0.146 artifact_risk=0.071
-11-07 23:20:33.991 21290 13819 I SnapFrame: frame=5700 gpu_ms=5.149 preprocess_ms=0.467 flow_ms=1.062 consistency_ms=0.234 warp_ms=3.234 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:33.991 21290 13819 I SnapFrame: ai frame=5700 mode=2 flow_scale=0.700 gpu_pressure=1.030 motion=0.182 complexity=0.276 confidence=0.203 artifact_risk=0.078
-11-07 23:20:36.181 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.027 consistency=0.233 warp=3.234 total=5.113
-11-07 23:20:36.181 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.079 complexity=0.174 confidence=0.381 confident_inconsistency=0.041 (normalized)
-11-07 23:20:36.181 21290 13819 I VkRenderer: framegen delivered real=6240 made=14304 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=13.44ms gap=30.66ms
-11-07 23:20:36.495 21290 13819 I SnapFrame: frame=5760 gpu_ms=5.118 preprocess_ms=0.467 flow_ms=1.026 consistency_ms=0.234 warp_ms=3.240 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:36.495 21290 13819 I SnapFrame: ai frame=5760 mode=2 flow_scale=0.700 gpu_pressure=1.024 motion=0.108 complexity=0.225 confidence=0.352 artifact_risk=0.048
-11-07 23:20:39.246 21290 13819 I SnapFrame: frame=5820 gpu_ms=5.240 preprocess_ms=0.467 flow_ms=1.115 consistency_ms=0.235 warp_ms=3.271 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:39.246 21290 13819 I SnapFrame: ai frame=5820 mode=2 flow_scale=0.700 gpu_pressure=1.048 motion=0.329 complexity=0.343 confidence=0.146 artifact_risk=0.077
-11-07 23:20:41.370 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.041 consistency=0.233 warp=3.267 total=5.161
-11-07 23:20:41.370 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.104 complexity=0.195 confidence=0.189 confident_inconsistency=0.075 (normalized)
-11-07 23:20:41.370 21290 13819 I VkRenderer: framegen delivered real=6360 made=14664 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=14.73ms gap=28.35ms
-11-07 23:20:41.738 21290 13819 I SnapFrame: frame=5880 gpu_ms=5.218 preprocess_ms=0.467 flow_ms=1.107 consistency_ms=0.232 warp_ms=3.260 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:41.738 21290 13819 I SnapFrame: ai frame=5880 mode=2 flow_scale=0.700 gpu_pressure=1.044 motion=0.266 complexity=0.308 confidence=0.149 artifact_risk=0.068
-11-07 23:20:44.284 21290 13819 I SnapFrame: frame=5940 gpu_ms=5.219 preprocess_ms=0.468 flow_ms=1.093 consistency_ms=0.233 warp_ms=3.274 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:44.285 21290 13819 I SnapFrame: ai frame=5940 mode=2 flow_scale=0.700 gpu_pressure=1.044 motion=0.203 complexity=0.290 confidence=0.214 artifact_risk=0.072
-11-07 23:20:46.354 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.088 consistency=0.233 warp=3.242 total=5.182
-11-07 23:20:46.354 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.283 complexity=0.322 confidence=0.149 confident_inconsistency=0.072 (normalized)
-11-07 23:20:46.354 21290 13819 I VkRenderer: framegen delivered real=6480 made=15024 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=9.53ms gap=32.05ms
-11-07 23:20:46.692 21290 13819 I SnapFrame: frame=6000 gpu_ms=5.194 preprocess_ms=0.467 flow_ms=1.118 consistency_ms=0.233 warp_ms=3.224 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:46.692 21290 13819 I SnapFrame: ai frame=6000 mode=3 flow_scale=0.700 gpu_pressure=1.039 motion=0.344 complexity=0.355 confidence=0.143 artifact_risk=0.065
-11-07 23:20:49.424 21290 13819 I SnapFrame: frame=6060 gpu_ms=5.228 preprocess_ms=0.468 flow_ms=1.116 consistency_ms=0.237 warp_ms=3.255 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:49.425 21290 13819 I SnapFrame: ai frame=6060 mode=3 flow_scale=0.700 gpu_pressure=1.046 motion=0.284 complexity=0.316 confidence=0.154 artifact_risk=0.079
-11-07 23:20:51.712 21290 13819 I VkRenderer: draw reasons over 25,9s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=606 coalesced: other=0 content=606 geometry=0 window=0 cursor=0 frame=606 suppressed=2319 pointer=0 winhandler=1111 inputview=0 setting=0 guest=606
-11-07 23:20:51.712 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.106 consistency=0.232 warp=3.228 total=5.186
-11-07 23:20:51.712 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.297 complexity=0.322 confidence=0.150 confident_inconsistency=0.069 (normalized)
-11-07 23:20:51.712 21290 13819 I VkRenderer: framegen delivered real=6600 made=15384 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=9.02ms gap=35.69ms
-11-07 23:20:52.062 21290 13819 I SnapFrame: frame=6120 gpu_ms=5.158 preprocess_ms=0.467 flow_ms=1.092 consistency_ms=0.232 warp_ms=3.214 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:52.062 21290 13819 I SnapFrame: ai frame=6120 mode=3 flow_scale=0.700 gpu_pressure=1.032 motion=0.322 complexity=0.329 confidence=0.146 artifact_risk=0.065
-11-07 23:20:54.771 21290 13819 I SnapFrame: frame=6180 gpu_ms=5.194 preprocess_ms=0.467 flow_ms=1.110 consistency_ms=0.234 warp_ms=3.230 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:54.771 21290 13819 I SnapFrame: ai frame=6180 mode=3 flow_scale=0.700 gpu_pressure=1.039 motion=0.342 complexity=0.349 confidence=0.141 artifact_risk=0.059
-11-07 23:20:56.925 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.089 consistency=0.234 warp=3.189 total=5.130
-11-07 23:20:56.926 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.211 complexity=0.280 confidence=0.185 confident_inconsistency=0.084 (normalized)
-11-07 23:20:56.926 21290 13819 I VkRenderer: framegen delivered real=6720 made=15744 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=9.59ms gap=33.80ms
-11-07 23:20:57.233 21290 13819 I SnapFrame: frame=6240 gpu_ms=5.144 preprocess_ms=0.467 flow_ms=1.104 consistency_ms=0.233 warp_ms=3.188 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:57.233 21290 13819 I SnapFrame: ai frame=6240 mode=2 flow_scale=0.700 gpu_pressure=1.029 motion=0.280 complexity=0.308 confidence=0.166 artifact_risk=0.067
-11-07 23:20:59.773 21290 13819 I SnapFrame: frame=6300 gpu_ms=5.143 preprocess_ms=0.467 flow_ms=1.084 consistency_ms=0.233 warp_ms=3.206 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:20:59.773 21290 13819 I SnapFrame: ai frame=6300 mode=2 flow_scale=0.700 gpu_pressure=1.029 motion=0.209 complexity=0.281 confidence=0.176 artifact_risk=0.073
-11-07 23:21:01.928 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.017 consistency=0.233 warp=3.198 total=5.068
-11-07 23:21:01.928 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.092 complexity=0.196 confidence=0.238 confident_inconsistency=0.063 (normalized)
-11-07 23:21:01.928 21290 13819 I VkRenderer: framegen delivered real=6840 made=16104 ratio=3.00 planned=3 got=3 misses=2182 timeout=3.0ms images=9 capacity=3 draw=9.68ms gap=32.10ms
-11-07 23:21:02.356 21290 13819 I SnapFrame: frame=6360 gpu_ms=5.045 preprocess_ms=0.467 flow_ms=1.009 consistency_ms=0.234 warp_ms=3.184 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:02.356 21290 13819 I SnapFrame: ai frame=6360 mode=2 flow_scale=0.700 gpu_pressure=1.009 motion=0.035 complexity=0.121 confidence=0.625 artifact_risk=0.015
-11-07 23:21:04.878 21290 13819 I SnapFrame: frame=6420 gpu_ms=4.317 preprocess_ms=0.467 flow_ms=1.411 consistency_ms=0.237 warp_ms=2.050 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:04.878 21290 13819 I SnapFrame: ai frame=6420 mode=2 flow_scale=0.820 gpu_pressure=0.863 motion=0.397 complexity=0.385 confidence=0.156 artifact_risk=0.058
-11-07 23:21:07.051 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.055 consistency=0.235 warp=3.180 total=5.089
-11-07 23:21:07.051 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.203 complexity=0.308 confidence=0.331 confident_inconsistency=0.060 (normalized)
-11-07 23:21:07.051 21290 13819 I VkRenderer: framegen delivered real=6960 made=16445 ratio=2.84 planned=3 got=3 misses=2194 timeout=3.0ms images=9 capacity=3 draw=25.39ms gap=17.16ms
-11-07 23:21:07.425 21290 13819 I SnapFrame: frame=6480 gpu_ms=5.200 preprocess_ms=0.467 flow_ms=1.106 consistency_ms=0.235 warp_ms=3.239 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:07.426 21290 13819 I SnapFrame: ai frame=6480 mode=3 flow_scale=0.700 gpu_pressure=1.040 motion=0.368 complexity=0.339 confidence=0.179 artifact_risk=0.077
-11-07 23:21:10.007 21290 13819 I SnapFrame: frame=6540 gpu_ms=5.141 preprocess_ms=0.467 flow_ms=1.112 consistency_ms=0.233 warp_ms=3.176 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:10.008 21290 13819 I SnapFrame: ai frame=6540 mode=3 flow_scale=0.700 gpu_pressure=1.028 motion=0.408 complexity=0.345 confidence=0.172 artifact_risk=0.063
-11-07 23:21:12.325 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.116 consistency=0.234 warp=3.207 total=5.176
-11-07 23:21:12.325 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.391 complexity=0.337 confidence=0.181 confident_inconsistency=0.080 (normalized)
-11-07 23:21:12.326 21290 13819 I VkRenderer: framegen delivered real=7080 made=16805 ratio=3.00 planned=3 got=3 misses=2194 timeout=3.0ms images=9 capacity=3 draw=11.55ms gap=32.09ms
-11-07 23:21:12.729 21290 13819 I SnapFrame: frame=6600 gpu_ms=5.159 preprocess_ms=0.467 flow_ms=1.107 consistency_ms=0.231 warp_ms=3.202 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:12.729 21290 13819 I SnapFrame: ai frame=6600 mode=3 flow_scale=0.700 gpu_pressure=1.032 motion=0.396 complexity=0.337 confidence=0.186 artifact_risk=0.073
-11-07 23:21:15.311 21290 13819 I SnapFrame: frame=6660 gpu_ms=5.146 preprocess_ms=0.467 flow_ms=1.090 consistency_ms=0.236 warp_ms=3.200 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:15.311 21290 13819 I SnapFrame: ai frame=6660 mode=3 flow_scale=0.700 gpu_pressure=1.029 motion=0.297 complexity=0.327 confidence=0.233 artifact_risk=0.076
-11-07 23:21:17.362 21290 13819 I VkRenderer: draw reasons over 25,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=587 coalesced: other=0 content=587 geometry=0 window=0 cursor=0 frame=587 suppressed=2379 pointer=0 winhandler=1258 inputview=0 setting=0 guest=587
-11-07 23:21:17.363 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.315 consistency=0.234 warp=3.249 total=5.419
-11-07 23:21:17.363 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.338 complexity=0.321 confidence=0.199 confident_inconsistency=0.070 (normalized)
-11-07 23:21:17.363 21290 13819 I VkRenderer: framegen delivered real=7200 made=17158 ratio=2.94 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=13.54ms gap=28.89ms
-11-07 23:21:17.652 21290 13819 I SnapFrame: frame=6720 gpu_ms=5.166 preprocess_ms=0.467 flow_ms=1.079 consistency_ms=0.237 warp_ms=3.231 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:17.653 21290 13819 I SnapFrame: ai frame=6720 mode=2 flow_scale=0.700 gpu_pressure=1.033 motion=0.255 complexity=0.304 confidence=0.224 artifact_risk=0.108
-11-07 23:21:20.035 21290 13819 I SnapFrame: frame=6780 gpu_ms=5.189 preprocess_ms=0.467 flow_ms=1.115 consistency_ms=0.236 warp_ms=3.218 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:20.036 21290 13819 I SnapFrame: ai frame=6780 mode=3 flow_scale=0.700 gpu_pressure=1.038 motion=0.344 complexity=0.341 confidence=0.184 artifact_risk=0.084
-11-07 23:21:22.046 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.076 consistency=0.235 warp=3.195 total=5.125
-11-07 23:21:22.046 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.232 complexity=0.307 confidence=0.259 confident_inconsistency=0.083 (normalized)
-11-07 23:21:22.046 21290 13819 I VkRenderer: framegen delivered real=7320 made=17518 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=9.81ms gap=29.16ms
-11-07 23:21:22.372 21290 13819 I SnapFrame: frame=6840 gpu_ms=5.181 preprocess_ms=0.466 flow_ms=1.116 consistency_ms=0.233 warp_ms=3.214 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:22.372 21290 13819 I SnapFrame: ai frame=6840 mode=3 flow_scale=0.700 gpu_pressure=1.036 motion=0.399 complexity=0.360 confidence=0.180 artifact_risk=0.072
-11-07 23:21:24.575 21290 13819 I SnapFrame: frame=6900 gpu_ms=5.218 preprocess_ms=0.467 flow_ms=1.123 consistency_ms=0.232 warp_ms=3.245 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:24.575 21290 13819 I SnapFrame: ai frame=6900 mode=3 flow_scale=0.700 gpu_pressure=1.044 motion=0.382 complexity=0.350 confidence=0.181 artifact_risk=0.076
-11-07 23:21:26.568 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.070 consistency=0.236 warp=3.227 total=5.153
-11-07 23:21:26.568 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.314 complexity=0.312 confidence=0.192 confident_inconsistency=0.090 (normalized)
-11-07 23:21:26.568 21290 13819 I VkRenderer: framegen delivered real=7440 made=17878 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=10.89ms gap=26.79ms
-11-07 23:21:26.934 21290 13819 I SnapFrame: frame=6960 gpu_ms=5.190 preprocess_ms=0.467 flow_ms=1.110 consistency_ms=0.232 warp_ms=3.228 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:26.934 21290 13819 I SnapFrame: ai frame=6960 mode=3 flow_scale=0.700 gpu_pressure=1.038 motion=0.357 complexity=0.319 confidence=0.186 artifact_risk=0.104
-11-07 23:21:29.643 21290 13819 I SnapFrame: frame=7020 gpu_ms=5.198 preprocess_ms=0.467 flow_ms=1.091 consistency_ms=0.236 warp_ms=3.252 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:29.644 21290 13819 I SnapFrame: ai frame=7020 mode=3 flow_scale=0.700 gpu_pressure=1.040 motion=0.382 complexity=0.341 confidence=0.207 artifact_risk=0.089
-11-07 23:21:31.702 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.100 consistency=0.235 warp=3.233 total=5.188
-11-07 23:21:31.702 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.261 complexity=0.300 confidence=0.201 confident_inconsistency=0.095 (normalized)
-11-07 23:21:31.702 21290 13819 I VkRenderer: framegen delivered real=7560 made=18238 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=12.05ms gap=30.84ms
-11-07 23:21:31.974 21290 13819 I SnapFrame: frame=7080 gpu_ms=5.164 preprocess_ms=0.467 flow_ms=1.097 consistency_ms=0.235 warp_ms=3.213 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:31.974 21290 13819 I SnapFrame: ai frame=7080 mode=2 flow_scale=0.700 gpu_pressure=1.033 motion=0.353 complexity=0.322 confidence=0.190 artifact_risk=0.084
-11-07 23:21:34.309 21290 13819 I SnapFrame: frame=7140 gpu_ms=5.241 preprocess_ms=0.467 flow_ms=1.084 consistency_ms=0.236 warp_ms=3.302 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:34.309 21290 13819 I SnapFrame: ai frame=7140 mode=2 flow_scale=0.700 gpu_pressure=1.048 motion=0.279 complexity=0.312 confidence=0.234 artifact_risk=0.081
-11-07 23:21:36.373 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.103 consistency=0.233 warp=3.241 total=5.197
-11-07 23:21:36.373 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.294 complexity=0.317 confidence=0.200 confident_inconsistency=0.098 (normalized)
-11-07 23:21:36.373 21290 13819 I VkRenderer: framegen delivered real=7680 made=18598 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=11.41ms gap=27.48ms
-11-07 23:21:36.669 21290 13819 I SnapFrame: frame=7200 gpu_ms=5.219 preprocess_ms=0.467 flow_ms=1.113 consistency_ms=0.235 warp_ms=3.252 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:36.669 21290 13819 I SnapFrame: ai frame=7200 mode=3 flow_scale=0.700 gpu_pressure=1.044 motion=0.315 complexity=0.326 confidence=0.205 artifact_risk=0.095
-11-07 23:21:38.840 21290 13819 I SnapFrame: frame=7260 gpu_ms=5.220 preprocess_ms=0.467 flow_ms=1.112 consistency_ms=0.233 warp_ms=3.256 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:38.840 21290 13819 I SnapFrame: ai frame=7260 mode=3 flow_scale=0.700 gpu_pressure=1.044 motion=0.394 complexity=0.354 confidence=0.181 artifact_risk=0.069
-11-07 23:21:41.018 21290 13819 I VkRenderer: draw reasons over 23,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=604 coalesced: other=0 content=604 geometry=0 window=0 cursor=0 frame=604 suppressed=2258 pointer=0 winhandler=1050 inputview=0 setting=0 guest=604
-11-07 23:21:41.019 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.071 consistency=0.235 warp=3.233 total=5.158
-11-07 23:21:41.019 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.193 complexity=0.286 confidence=0.305 confident_inconsistency=0.079 (normalized)
-11-07 23:21:41.019 21290 13819 I VkRenderer: framegen delivered real=7800 made=18958 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=11.50ms gap=27.11ms
-11-07 23:21:41.362 21290 13819 I SnapFrame: frame=7320 gpu_ms=5.208 preprocess_ms=0.467 flow_ms=1.102 consistency_ms=0.233 warp_ms=3.254 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:41.363 21290 13819 I SnapFrame: ai frame=7320 mode=2 flow_scale=0.700 gpu_pressure=1.042 motion=0.302 complexity=0.319 confidence=0.195 artifact_risk=0.090
-11-07 23:21:43.929 21290 13819 I SnapFrame: frame=7380 gpu_ms=5.147 preprocess_ms=0.467 flow_ms=1.090 consistency_ms=0.232 warp_ms=3.206 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:43.929 21290 13819 I SnapFrame: ai frame=7380 mode=2 flow_scale=0.700 gpu_pressure=1.029 motion=0.301 complexity=0.312 confidence=0.225 artifact_risk=0.091
-11-07 23:21:46.147 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.096 consistency=0.233 warp=3.232 total=5.180
-11-07 23:21:46.147 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.273 complexity=0.313 confidence=0.213 confident_inconsistency=0.102 (normalized)
-11-07 23:21:46.147 21290 13819 I VkRenderer: framegen delivered real=7920 made=19318 ratio=3.00 planned=3 got=3 misses=2199 timeout=3.0ms images=9 capacity=3 draw=19.39ms gap=23.35ms
-11-07 23:21:46.497 21290 13819 I SnapFrame: frame=7440 gpu_ms=5.174 preprocess_ms=0.467 flow_ms=1.082 consistency_ms=0.235 warp_ms=3.237 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:46.497 21290 13819 I SnapFrame: ai frame=7440 mode=2 flow_scale=0.700 gpu_pressure=1.035 motion=0.235 complexity=0.307 confidence=0.283 artifact_risk=0.074
-11-07 23:21:49.152 21290 13819 I SnapFrame: frame=7500 gpu_ms=5.178 preprocess_ms=0.467 flow_ms=1.093 consistency_ms=0.235 warp_ms=3.232 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:49.152 21290 13819 I SnapFrame: ai frame=7500 mode=2 flow_scale=0.700 gpu_pressure=1.036 motion=0.320 complexity=0.355 confidence=0.236 artifact_risk=0.065
-11-07 23:21:51.437 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.102 consistency=0.236 warp=3.228 total=5.186
-11-07 23:21:51.437 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.391 complexity=0.340 confidence=0.184 confident_inconsistency=0.070 (normalized)
-11-07 23:21:51.437 21290 13819 I VkRenderer: framegen delivered real=8040 made=19672 ratio=2.95 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=21.19ms gap=23.22ms
-11-07 23:21:51.813 21290 13819 I SnapFrame: frame=7560 gpu_ms=5.197 preprocess_ms=0.469 flow_ms=1.109 consistency_ms=0.234 warp_ms=3.233 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:51.813 21290 13819 I SnapFrame: ai frame=7560 mode=3 flow_scale=0.700 gpu_pressure=1.039 motion=0.371 complexity=0.352 confidence=0.173 artifact_risk=0.060
-11-07 23:21:54.155 21290 13819 I SnapFrame: frame=7620 gpu_ms=5.195 preprocess_ms=0.467 flow_ms=1.115 consistency_ms=0.237 warp_ms=3.224 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:54.155 21290 13819 I SnapFrame: ai frame=7620 mode=3 flow_scale=0.700 gpu_pressure=1.039 motion=0.396 complexity=0.351 confidence=0.175 artifact_risk=0.056
-11-07 23:21:56.254 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.107 consistency=0.233 warp=3.217 total=5.177
-11-07 23:21:56.255 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.308 complexity=0.331 confidence=0.184 confident_inconsistency=0.080 (normalized)
-11-07 23:21:56.255 21290 13819 I VkRenderer: framegen delivered real=8160 made=20032 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=11.53ms gap=28.40ms
-11-07 23:21:56.580 21290 13819 I SnapFrame: frame=7680 gpu_ms=5.147 preprocess_ms=0.468 flow_ms=1.066 consistency_ms=0.234 warp_ms=3.227 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:56.580 21290 13819 I SnapFrame: ai frame=7680 mode=2 flow_scale=0.700 gpu_pressure=1.029 motion=0.245 complexity=0.308 confidence=0.207 artifact_risk=0.084
-11-07 23:21:59.084 21290 13819 I SnapFrame: frame=7740 gpu_ms=5.209 preprocess_ms=0.467 flow_ms=1.109 consistency_ms=0.238 warp_ms=3.243 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:21:59.084 21290 13819 I SnapFrame: ai frame=7740 mode=2 flow_scale=0.700 gpu_pressure=1.042 motion=0.390 complexity=0.346 confidence=0.186 artifact_risk=0.066
-11-07 23:22:01.298 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.071 consistency=0.232 warp=3.217 total=5.139
-11-07 23:22:01.298 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.281 complexity=0.321 confidence=0.244 confident_inconsistency=0.064 (normalized)
-11-07 23:22:01.298 21290 13819 I VkRenderer: framegen delivered real=8280 made=20392 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=11.37ms gap=30.55ms
-11-07 23:22:01.666 21290 13819 I SnapFrame: frame=7800 gpu_ms=5.199 preprocess_ms=0.467 flow_ms=1.107 consistency_ms=0.234 warp_ms=3.239 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:01.666 21290 13819 I SnapFrame: ai frame=7800 mode=3 flow_scale=0.700 gpu_pressure=1.040 motion=0.395 complexity=0.351 confidence=0.177 artifact_risk=0.059
-11-07 23:22:04.376 21290 13819 I SnapFrame: frame=7860 gpu_ms=5.219 preprocess_ms=0.467 flow_ms=1.104 consistency_ms=0.236 warp_ms=3.261 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:04.377 21290 13819 I SnapFrame: ai frame=7860 mode=2 flow_scale=0.700 gpu_pressure=1.044 motion=0.359 complexity=0.349 confidence=0.178 artifact_risk=0.071
-11-07 23:22:06.596 21290 13819 I VkRenderer: draw reasons over 25,6s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=604 coalesced: other=0 content=604 geometry=0 window=0 cursor=0 frame=604 suppressed=2404 pointer=0 winhandler=1215 inputview=0 setting=0 guest=604
-11-07 23:22:06.597 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.107 consistency=0.234 warp=3.278 total=5.238
-11-07 23:22:06.597 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.350 complexity=0.322 confidence=0.199 confident_inconsistency=0.078 (normalized)
-11-07 23:22:06.597 21290 13819 I VkRenderer: framegen delivered real=8400 made=20752 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=8.79ms gap=35.47ms
-11-07 23:22:06.904 21290 13819 I SnapFrame: frame=7920 gpu_ms=5.211 preprocess_ms=0.467 flow_ms=1.103 consistency_ms=0.232 warp_ms=3.256 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:06.904 21290 13819 I SnapFrame: ai frame=7920 mode=3 flow_scale=0.700 gpu_pressure=1.042 motion=0.348 complexity=0.326 confidence=0.186 artifact_risk=0.080
-11-07 23:22:09.462 21290 13819 I SnapFrame: frame=7980 gpu_ms=5.179 preprocess_ms=0.467 flow_ms=1.119 consistency_ms=0.234 warp_ms=3.207 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:09.462 21290 13819 I SnapFrame: ai frame=7980 mode=2 flow_scale=0.700 gpu_pressure=1.036 motion=0.359 complexity=0.335 confidence=0.185 artifact_risk=0.082
-11-07 23:22:11.551 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.102 consistency=0.235 warp=3.227 total=5.183
-11-07 23:22:11.551 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.317 complexity=0.350 confidence=0.206 confident_inconsistency=0.078 (normalized)
-11-07 23:22:11.551 21290 13819 I VkRenderer: framegen delivered real=8520 made=21112 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=9.20ms gap=32.09ms
-11-07 23:22:11.823 21290 13819 I SnapFrame: frame=8040 gpu_ms=5.165 preprocess_ms=0.468 flow_ms=1.086 consistency_ms=0.234 warp_ms=3.225 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:11.823 21290 13819 I SnapFrame: ai frame=8040 mode=3 flow_scale=0.700 gpu_pressure=1.033 motion=0.307 complexity=0.328 confidence=0.203 artifact_risk=0.083
-11-07 23:22:14.044 21290 13819 I SnapFrame: frame=8100 gpu_ms=5.154 preprocess_ms=0.467 flow_ms=1.091 consistency_ms=0.236 warp_ms=3.209 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:14.044 21290 13819 I SnapFrame: ai frame=8100 mode=3 flow_scale=0.700 gpu_pressure=1.031 motion=0.278 complexity=0.327 confidence=0.228 artifact_risk=0.069
-11-07 23:22:16.451 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.103 consistency=0.231 warp=3.230 total=5.184
-11-07 23:22:16.451 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.339 complexity=0.319 confidence=0.184 confident_inconsistency=0.080 (normalized)
-11-07 23:22:16.451 21290 13819 I VkRenderer: framegen delivered real=8640 made=21472 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=14.34ms gap=26.45ms
-11-07 23:22:16.814 21290 13819 I SnapFrame: frame=8160 gpu_ms=5.146 preprocess_ms=0.467 flow_ms=1.079 consistency_ms=0.232 warp_ms=3.216 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:16.814 21290 13819 I SnapFrame: ai frame=8160 mode=2 flow_scale=0.700 gpu_pressure=1.029 motion=0.303 complexity=0.324 confidence=0.221 artifact_risk=0.074
-11-07 23:22:19.286 21290 13819 I SnapFrame: frame=8220 gpu_ms=5.190 preprocess_ms=0.467 flow_ms=1.103 consistency_ms=0.235 warp_ms=3.233 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:19.286 21290 13819 I SnapFrame: ai frame=8220 mode=3 flow_scale=0.700 gpu_pressure=1.038 motion=0.408 complexity=0.355 confidence=0.178 artifact_risk=0.060
-11-07 23:22:21.761 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.101 consistency=0.232 warp=3.234 total=5.187
-11-07 23:22:21.761 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.387 complexity=0.348 confidence=0.175 confident_inconsistency=0.056 (normalized)
-11-07 23:22:21.761 21290 13819 I VkRenderer: framegen delivered real=8760 made=21832 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=12.52ms gap=31.67ms
-11-07 23:22:22.081 21290 13819 I SnapFrame: frame=8280 gpu_ms=5.175 preprocess_ms=0.468 flow_ms=1.084 consistency_ms=0.235 warp_ms=3.236 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:22.082 21290 13819 I SnapFrame: ai frame=8280 mode=2 flow_scale=0.700 gpu_pressure=1.035 motion=0.287 complexity=0.318 confidence=0.220 artifact_risk=0.076
-11-07 23:22:24.537 21290 13819 I SnapFrame: frame=8340 gpu_ms=5.157 preprocess_ms=0.467 flow_ms=1.074 consistency_ms=0.233 warp_ms=3.231 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:24.537 21290 13819 I SnapFrame: ai frame=8340 mode=2 flow_scale=0.700 gpu_pressure=1.031 motion=0.274 complexity=0.324 confidence=0.195 artifact_risk=0.086
-11-07 23:22:26.420 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.103 consistency=0.233 warp=3.242 total=5.197
-11-07 23:22:26.420 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.353 complexity=0.321 confidence=0.181 confident_inconsistency=0.099 (normalized)
-11-07 23:22:26.420 21290 13819 I VkRenderer: framegen delivered real=8880 made=22192 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=10.28ms gap=28.70ms
-11-07 23:22:26.718 21290 13819 I SnapFrame: frame=8400 gpu_ms=5.210 preprocess_ms=0.467 flow_ms=1.099 consistency_ms=0.235 warp_ms=3.257 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:26.718 21290 13819 I SnapFrame: ai frame=8400 mode=3 flow_scale=0.700 gpu_pressure=1.042 motion=0.345 complexity=0.331 confidence=0.206 artifact_risk=0.076
-11-07 23:22:29.057 21290 13819 I SnapFrame: frame=8460 gpu_ms=5.186 preprocess_ms=0.467 flow_ms=1.115 consistency_ms=0.234 warp_ms=3.217 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:29.057 21290 13819 I SnapFrame: ai frame=8460 mode=3 flow_scale=0.700 gpu_pressure=1.037 motion=0.407 complexity=0.349 confidence=0.177 artifact_risk=0.070
-11-07 23:22:31.085 21290 13819 I VkRenderer: draw reasons over 24,5s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=603 coalesced: other=0 content=603 geometry=0 window=0 cursor=0 frame=603 suppressed=2235 pointer=0 winhandler=1032 inputview=0 setting=0 guest=603
-11-07 23:22:31.086 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.029 consistency=0.233 warp=3.218 total=5.100
-11-07 23:22:31.086 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.141 complexity=0.268 confidence=0.308 confident_inconsistency=0.059 (normalized)
-11-07 23:22:31.086 21290 13819 I VkRenderer: framegen delivered real=9000 made=22552 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=10.01ms gap=28.86ms
-11-07 23:22:31.380 21290 13819 I SnapFrame: frame=8520 gpu_ms=5.088 preprocess_ms=0.467 flow_ms=1.028 consistency_ms=0.234 warp_ms=3.207 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:31.380 21290 13819 I SnapFrame: ai frame=8520 mode=2 flow_scale=0.700 gpu_pressure=1.018 motion=0.108 complexity=0.249 confidence=0.410 artifact_risk=0.038
-11-07 23:22:33.571 21290 13819 I SnapFrame: frame=8580 gpu_ms=5.131 preprocess_ms=0.467 flow_ms=1.074 consistency_ms=0.234 warp_ms=3.204 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:33.571 21290 13819 I SnapFrame: ai frame=8580 mode=3 flow_scale=0.700 gpu_pressure=1.026 motion=0.407 complexity=0.359 confidence=0.188 artifact_risk=0.058
-11-07 23:22:35.641 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.096 consistency=0.232 warp=3.249 total=5.197
-11-07 23:22:35.641 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.398 complexity=0.360 confidence=0.177 confident_inconsistency=0.061 (normalized)
-11-07 23:22:35.641 21290 13819 I VkRenderer: framegen delivered real=9120 made=22912 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=15.59ms gap=22.44ms
-11-07 23:22:35.936 21290 13819 I SnapFrame: frame=8640 gpu_ms=5.182 preprocess_ms=0.467 flow_ms=1.100 consistency_ms=0.236 warp_ms=3.227 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:35.937 21290 13819 I SnapFrame: ai frame=8640 mode=3 flow_scale=0.700 gpu_pressure=1.036 motion=0.319 complexity=0.328 confidence=0.181 artifact_risk=0.069
-11-07 23:22:38.278 21290 13819 I SnapFrame: frame=8700 gpu_ms=5.151 preprocess_ms=0.468 flow_ms=1.073 consistency_ms=0.234 warp_ms=3.224 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:38.278 21290 13819 I SnapFrame: ai frame=8700 mode=3 flow_scale=0.700 gpu_pressure=1.030 motion=0.339 complexity=0.330 confidence=0.194 artifact_risk=0.075
-11-07 23:22:40.396 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.064 consistency=0.232 warp=3.219 total=5.135
-11-07 23:22:40.396 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.287 complexity=0.324 confidence=0.244 confident_inconsistency=0.076 (normalized)
-11-07 23:22:40.396 21290 13819 I VkRenderer: framegen delivered real=9240 made=23272 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=10.23ms gap=29.23ms
-11-07 23:22:40.728 21290 13819 I SnapFrame: frame=8760 gpu_ms=5.177 preprocess_ms=0.467 flow_ms=1.073 consistency_ms=0.237 warp_ms=3.248 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:40.728 21290 13819 I SnapFrame: ai frame=8760 mode=2 flow_scale=0.700 gpu_pressure=1.035 motion=0.296 complexity=0.330 confidence=0.250 artifact_risk=0.074
-11-07 23:22:43.064 21290 13819 I SnapFrame: frame=8820 gpu_ms=5.225 preprocess_ms=0.467 flow_ms=1.095 consistency_ms=0.236 warp_ms=3.275 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:43.065 21290 13819 I SnapFrame: ai frame=8820 mode=2 flow_scale=0.700 gpu_pressure=1.045 motion=0.289 complexity=0.323 confidence=0.240 artifact_risk=0.079
-11-07 23:22:44.948 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.102 consistency=0.233 warp=3.277 total=5.231
-11-07 23:22:44.948 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.427 complexity=0.371 confidence=0.174 confident_inconsistency=0.058 (normalized)
-11-07 23:22:44.948 21290 13819 I VkRenderer: framegen delivered real=9360 made=23632 ratio=3.00 planned=3 got=3 misses=2203 timeout=3.0ms images=9 capacity=3 draw=13.16ms gap=24.83ms
-11-07 23:22:45.194 21290 13819 I SnapFrame: frame=8880 gpu_ms=5.190 preprocess_ms=0.467 flow_ms=1.052 consistency_ms=0.237 warp_ms=3.282 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:45.195 21290 13819 I SnapFrame: ai frame=8880 mode=3 flow_scale=0.700 gpu_pressure=1.038 motion=0.236 complexity=0.318 confidence=0.218 artifact_risk=0.068
-11-07 23:22:47.627 21290 13819 I SnapFrame: frame=8940 gpu_ms=5.239 preprocess_ms=0.467 flow_ms=1.086 consistency_ms=0.236 warp_ms=3.291 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:47.628 21290 13819 I SnapFrame: ai frame=8940 mode=3 flow_scale=0.700 gpu_pressure=1.048 motion=0.320 complexity=0.330 confidence=0.185 artifact_risk=0.075
-11-07 23:22:49.775 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.469 pyramid=0.152 flow=1.074 consistency=0.234 warp=3.198 total=5.127
-11-07 23:22:49.775 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.250 complexity=0.325 confidence=0.306 confident_inconsistency=0.056 (normalized)
-11-07 23:22:49.775 21290 13819 I VkRenderer: framegen delivered real=9480 made=23987 ratio=2.96 planned=3 got=3 misses=2206 timeout=3.0ms images=9 capacity=3 draw=16.45ms gap=23.77ms
-11-07 23:22:50.130 21290 13819 I SnapFrame: frame=9000 gpu_ms=5.146 preprocess_ms=0.467 flow_ms=1.099 consistency_ms=0.235 warp_ms=3.192 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:50.131 21290 13819 I SnapFrame: ai frame=9000 mode=3 flow_scale=0.700 gpu_pressure=1.029 motion=0.412 complexity=0.358 confidence=0.182 artifact_risk=0.063
-11-07 23:22:52.255 21290 13819 I SnapFrame: frame=9060 gpu_ms=5.181 preprocess_ms=0.467 flow_ms=1.102 consistency_ms=0.232 warp_ms=3.227 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:52.255 21290 13819 I SnapFrame: ai frame=9060 mode=3 flow_scale=0.700 gpu_pressure=1.036 motion=0.334 complexity=0.325 confidence=0.189 artifact_risk=0.072
-11-07 23:22:53.789 21290 13819 I VkRenderer: draw reasons over 22,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=606 coalesced: other=0 content=606 geometry=0 window=0 cursor=0 frame=606 suppressed=2282 pointer=0 winhandler=1090 inputview=0 setting=0 guest=606
-11-07 23:22:53.789 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.012 consistency=0.236 warp=3.176 total=5.042
-11-07 23:22:53.789 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.189 complexity=0.299 confidence=0.389 confident_inconsistency=0.053 (normalized)
-11-07 23:22:53.790 21290 13819 I VkRenderer: framegen delivered real=9600 made=24347 ratio=3.00 planned=3 got=3 misses=2206 timeout=3.0ms images=9 capacity=3 draw=16.84ms gap=16.65ms
-11-07 23:22:54.078 21290 13819 I SnapFrame: frame=9120 gpu_ms=5.123 preprocess_ms=0.468 flow_ms=1.061 consistency_ms=0.236 warp_ms=3.207 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:54.079 21290 13819 I SnapFrame: ai frame=9120 mode=2 flow_scale=0.700 gpu_pressure=1.025 motion=0.355 complexity=0.339 confidence=0.192 artifact_risk=0.081
-11-07 23:22:56.703 21290 13819 I SnapFrame: frame=9180 gpu_ms=5.208 preprocess_ms=0.468 flow_ms=1.092 consistency_ms=0.232 warp_ms=3.265 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:56.704 21290 13819 I SnapFrame: ai frame=9180 mode=2 flow_scale=0.700 gpu_pressure=1.042 motion=0.266 complexity=0.320 confidence=0.237 artifact_risk=0.065
-11-07 23:22:58.805 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.116 consistency=0.235 warp=3.294 total=5.265
-11-07 23:22:58.805 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.403 complexity=0.348 confidence=0.184 confident_inconsistency=0.076 (normalized)
-11-07 23:22:58.805 21290 13819 I VkRenderer: framegen delivered real=9720 made=24707 ratio=3.00 planned=3 got=3 misses=2206 timeout=3.0ms images=9 capacity=3 draw=10.28ms gap=31.48ms
-11-07 23:22:59.099 21290 13819 I SnapFrame: frame=9240 gpu_ms=5.244 preprocess_ms=0.467 flow_ms=1.093 consistency_ms=0.236 warp_ms=3.296 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:22:59.099 21290 13819 I SnapFrame: ai frame=9240 mode=3 flow_scale=0.700 gpu_pressure=1.049 motion=0.323 complexity=0.334 confidence=0.192 artifact_risk=0.084
-11-07 23:23:01.229 21290 13819 I SnapFrame: frame=9300 gpu_ms=5.184 preprocess_ms=0.468 flow_ms=1.078 consistency_ms=0.238 warp_ms=3.248 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:01.229 21290 13819 I SnapFrame: ai frame=9300 mode=3 flow_scale=0.700 gpu_pressure=1.037 motion=0.294 complexity=0.326 confidence=0.228 artifact_risk=0.081
-11-07 23:23:03.131 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.114 consistency=0.235 warp=3.275 total=5.245
-11-07 23:23:03.131 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.400 complexity=0.352 confidence=0.174 confident_inconsistency=0.057 (normalized)
-11-07 23:23:03.131 21290 13819 I VkRenderer: framegen delivered real=9840 made=25067 ratio=3.00 planned=3 got=3 misses=2206 timeout=3.0ms images=9 capacity=3 draw=10.83ms gap=25.18ms
-11-07 23:23:03.643 21290 13819 I SnapFrame: frame=9360 gpu_ms=5.242 preprocess_ms=0.468 flow_ms=1.105 consistency_ms=0.232 warp_ms=3.285 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:03.643 21290 13819 I SnapFrame: ai frame=9360 mode=3 flow_scale=0.700 gpu_pressure=1.048 motion=0.398 complexity=0.358 confidence=0.182 artifact_risk=0.070
-11-07 23:23:06.100 21290 13819 I SnapFrame: frame=9420 gpu_ms=5.192 preprocess_ms=0.467 flow_ms=1.099 consistency_ms=0.235 warp_ms=3.239 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:06.100 21290 13819 I SnapFrame: ai frame=9420 mode=2 flow_scale=0.700 gpu_pressure=1.038 motion=0.238 complexity=0.306 confidence=0.255 artifact_risk=0.079
-11-07 23:23:08.199 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.042 consistency=0.236 warp=3.256 total=5.153
-11-07 23:23:08.199 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.137 complexity=0.252 confidence=0.404 confident_inconsistency=0.052 (normalized)
-11-07 23:23:08.199 21290 13819 I VkRenderer: framegen delivered real=9960 made=25422 ratio=2.96 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=18.22ms gap=24.19ms
-11-07 23:23:08.551 21290 13819 I SnapFrame: frame=9480 gpu_ms=5.197 preprocess_ms=0.467 flow_ms=1.103 consistency_ms=0.236 warp_ms=3.238 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:08.551 21290 13819 I SnapFrame: ai frame=9480 mode=2 flow_scale=0.700 gpu_pressure=1.039 motion=0.328 complexity=0.353 confidence=0.226 artifact_risk=0.051
-11-07 23:23:10.965 21290 13819 I SnapFrame: frame=9540 gpu_ms=5.159 preprocess_ms=0.467 flow_ms=1.041 consistency_ms=0.232 warp_ms=3.267 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:10.966 21290 13819 I SnapFrame: ai frame=9540 mode=2 flow_scale=0.700 gpu_pressure=1.032 motion=0.148 complexity=0.269 confidence=0.382 artifact_risk=0.053
-11-07 23:23:13.109 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.054 consistency=0.235 warp=3.234 total=5.142
-11-07 23:23:13.109 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.196 complexity=0.302 confidence=0.293 confident_inconsistency=0.062 (normalized)
-11-07 23:23:13.109 21290 13819 I VkRenderer: framegen delivered real=10080 made=25782 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=9.61ms gap=31.13ms
-11-07 23:23:13.591 21290 13819 I SnapFrame: frame=9600 gpu_ms=5.160 preprocess_ms=0.467 flow_ms=1.054 consistency_ms=0.235 warp_ms=3.252 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:13.591 21290 13819 I SnapFrame: ai frame=9600 mode=2 flow_scale=0.700 gpu_pressure=1.032 motion=0.200 complexity=0.296 confidence=0.266 artifact_risk=0.063
-11-07 23:23:16.386 21290 13819 I SnapFrame: frame=9660 gpu_ms=5.223 preprocess_ms=0.467 flow_ms=1.090 consistency_ms=0.238 warp_ms=3.275 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:16.386 21290 13819 I SnapFrame: ai frame=9660 mode=2 flow_scale=0.700 gpu_pressure=1.045 motion=0.360 complexity=0.365 confidence=0.222 artifact_risk=0.056
-11-07 23:23:18.831 21290 13819 I VkRenderer: draw reasons over 25,0s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=596 coalesced: other=0 content=596 geometry=0 window=0 cursor=0 frame=596 suppressed=2421 pointer=0 winhandler=1251 inputview=0 setting=0 guest=596
-11-07 23:23:18.833 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.030 consistency=0.231 warp=3.221 total=5.101
-11-07 23:23:18.833 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.133 complexity=0.258 confidence=0.470 confident_inconsistency=0.040 (normalized)
-11-07 23:23:18.833 21290 13819 I VkRenderer: framegen delivered real=10200 made=26142 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=13.37ms gap=34.59ms
-11-07 23:23:19.205 21290 13819 I SnapFrame: frame=9720 gpu_ms=5.082 preprocess_ms=0.467 flow_ms=1.006 consistency_ms=0.233 warp_ms=3.224 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:19.205 21290 13819 I SnapFrame: ai frame=9720 mode=2 flow_scale=0.700 gpu_pressure=1.016 motion=0.041 complexity=0.148 confidence=0.704 artifact_risk=0.015
-11-07 23:23:22.151 21290 13819 I SnapFrame: frame=9780 gpu_ms=5.256 preprocess_ms=0.467 flow_ms=1.106 consistency_ms=0.235 warp_ms=3.296 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:22.151 21290 13819 I SnapFrame: ai frame=9780 mode=3 flow_scale=0.700 gpu_pressure=1.051 motion=0.349 complexity=0.356 confidence=0.221 artifact_risk=0.062
-11-07 23:23:24.626 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.104 consistency=0.235 warp=3.294 total=5.254
-11-07 23:23:24.626 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.321 complexity=0.346 confidence=0.221 confident_inconsistency=0.059 (normalized)
-11-07 23:23:24.626 21290 13819 I VkRenderer: framegen delivered real=10320 made=26502 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=13.14ms gap=34.80ms
-11-07 23:23:25.042 21290 13819 I SnapFrame: frame=9840 gpu_ms=5.171 preprocess_ms=0.467 flow_ms=1.096 consistency_ms=0.233 warp_ms=3.223 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:25.043 21290 13819 I SnapFrame: ai frame=9840 mode=3 flow_scale=0.700 gpu_pressure=1.034 motion=0.336 complexity=0.353 confidence=0.226 artifact_risk=0.051
-11-07 23:23:27.589 21290 13819 I SnapFrame: frame=9900 gpu_ms=5.138 preprocess_ms=0.467 flow_ms=1.083 consistency_ms=0.233 warp_ms=3.203 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:27.589 21290 13819 I SnapFrame: ai frame=9900 mode=2 flow_scale=0.700 gpu_pressure=1.028 motion=0.307 complexity=0.328 confidence=0.231 artifact_risk=0.064
-11-07 23:23:29.725 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.030 consistency=0.244 warp=3.199 total=5.092
-11-07 23:23:29.725 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.115 complexity=0.241 confidence=0.470 confident_inconsistency=0.043 (normalized)
-11-07 23:23:29.725 21290 13819 I VkRenderer: framegen delivered real=10440 made=26862 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=11.22ms gap=31.39ms
-11-07 23:23:30.105 21290 13819 I SnapFrame: frame=9960 gpu_ms=5.068 preprocess_ms=0.467 flow_ms=1.022 consistency_ms=0.234 warp_ms=3.193 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:30.105 21290 13819 I SnapFrame: ai frame=9960 mode=2 flow_scale=0.700 gpu_pressure=1.014 motion=0.132 complexity=0.258 confidence=0.437 artifact_risk=0.047
-11-07 23:23:32.657 21290 13819 I SnapFrame: frame=10020 gpu_ms=5.089 preprocess_ms=0.467 flow_ms=1.041 consistency_ms=0.236 warp_ms=3.193 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:32.658 21290 13819 I SnapFrame: ai frame=10020 mode=2 flow_scale=0.700 gpu_pressure=1.018 motion=0.127 complexity=0.236 confidence=0.294 artifact_risk=0.072
-11-07 23:23:35.017 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.033 consistency=0.236 warp=3.177 total=5.065
-11-07 23:23:35.017 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.126 complexity=0.243 confidence=0.343 confident_inconsistency=0.061 (normalized)
-11-07 23:23:35.017 21290 13819 I VkRenderer: framegen delivered real=10560 made=27222 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=10.64ms gap=33.40ms
-11-07 23:23:35.554 21290 13819 I SnapFrame: frame=10080 gpu_ms=5.064 preprocess_ms=0.467 flow_ms=1.021 consistency_ms=0.234 warp_ms=3.190 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:35.555 21290 13819 I SnapFrame: ai frame=10080 mode=2 flow_scale=0.700 gpu_pressure=1.013 motion=0.131 complexity=0.250 confidence=0.386 artifact_risk=0.054
-11-07 23:23:38.310 21290 13819 I SnapFrame: frame=10140 gpu_ms=5.142 preprocess_ms=0.467 flow_ms=1.087 consistency_ms=0.234 warp_ms=3.203 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:38.311 21290 13819 I SnapFrame: ai frame=10140 mode=2 flow_scale=0.700 gpu_pressure=1.028 motion=0.324 complexity=0.337 confidence=0.234 artifact_risk=0.064
-11-07 23:23:40.465 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.096 consistency=0.235 warp=3.243 total=5.194
-11-07 23:23:40.465 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.340 complexity=0.354 confidence=0.238 confident_inconsistency=0.059 (normalized)
-11-07 23:23:40.465 21290 13819 I VkRenderer: framegen delivered real=10680 made=27582 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=9.37ms gap=36.07ms
-11-07 23:23:40.845 21290 13819 I SnapFrame: frame=10200 gpu_ms=5.178 preprocess_ms=0.467 flow_ms=1.091 consistency_ms=0.235 warp_ms=3.233 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:40.845 21290 13819 I SnapFrame: ai frame=10200 mode=2 flow_scale=0.700 gpu_pressure=1.036 motion=0.234 complexity=0.293 confidence=0.262 artifact_risk=0.078
-11-07 23:23:43.427 21290 13819 I SnapFrame: frame=10260 gpu_ms=5.130 preprocess_ms=0.467 flow_ms=1.051 consistency_ms=0.234 warp_ms=3.226 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:43.428 21290 13819 I SnapFrame: ai frame=10260 mode=2 flow_scale=0.700 gpu_pressure=1.026 motion=0.161 complexity=0.266 confidence=0.357 artifact_risk=0.063
-11-07 23:23:45.727 21290 13819 I VkRenderer: draw reasons over 26,9s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=599 coalesced: other=0 content=599 geometry=0 window=0 cursor=0 frame=599 suppressed=2406 pointer=0 winhandler=1215 inputview=0 setting=0 guest=599
-11-07 23:23:45.728 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.067 consistency=0.236 warp=3.195 total=5.116
-11-07 23:23:45.728 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.310 complexity=0.328 confidence=0.230 confident_inconsistency=0.065 (normalized)
-11-07 23:23:45.728 21290 13819 I VkRenderer: framegen delivered real=10800 made=27942 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms images=9 capacity=3 draw=9.24ms gap=34.63ms
-11-07 23:23:46.095 21290 13819 I SnapFrame: frame=10320 gpu_ms=5.133 preprocess_ms=0.467 flow_ms=1.089 consistency_ms=0.236 warp_ms=3.189 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:46.095 21290 13819 I SnapFrame: ai frame=10320 mode=3 flow_scale=0.700 gpu_pressure=1.027 motion=0.350 complexity=0.357 confidence=0.220 artifact_risk=0.057
-11-07 23:23:48.870 21290 13819 I SnapFrame: frame=10380 gpu_ms=5.166 preprocess_ms=0.475 flow_ms=1.074 consistency_ms=0.233 warp_ms=3.231 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=0 ai_quality=0
-11-07 23:23:48.870 21290 13819 I SnapFrame: ai frame=10380 mode=2 flow_scale=0.700 gpu_pressure=1.033 motion=0.182 complexity=0.278 confidence=0.359 artifact_risk=0.052
-11-07 23:23:51.097 21290 13819 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.076 consistency=0.235 warp=3.198 total=5.128
-11-07 23:23:51.097 21290 13819 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.183 complexity=0.281 confidence=0.326 confident_inconsistency=0.064 (normalized)
-11-07 23:23:51.097 21290 13819 I VkRenderer: framegen delivered real=10920 made=28302 ratio=3.00 planned=3 got=3 misses=2209 timeout=3.0ms im
+11-08 00:07:28.478  9288 20341 I SnapFrame: frame=1440 gpu_ms=5.228 preprocess_ms=0.467 flow_ms=1.320 consistency_ms=0.236 warp_ms=3.053 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:07:28.478  9288 20341 I SnapFrame: ai frame=1440 mode=2 flow_scale=0.820 gpu_pressure=0.747 motion=0.046 complexity=0.133 confidence=0.136 artifact_risk=0.045
+11-08 00:07:29.289  9288 20341 I VkRenderer: draw reasons over 16,4s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=982 coalesced: other=0 content=982 geometry=0 window=0 cursor=0 frame=982 suppressed=2032 pointer=6 winhandler=68 inputview=0 setting=1 guest=982
+11-08 00:07:29.290  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.323 consistency=0.239 warp=3.045 total=5.227
+11-08 00:07:29.290  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.050 complexity=0.141 confidence=0.132 confident_inconsistency=0.039 (normalized)
+11-08 00:07:29.290  9288 20341 I VkRenderer: framegen delivered real=2400 made=3076 ratio=2.94 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=7.96ms gap=25.78ms
+11-08 00:07:30.394  9288 20341 I SnapFrame: frame=1500 gpu_ms=5.226 preprocess_ms=0.466 flow_ms=1.337 consistency_ms=0.236 warp_ms=3.034 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:07:30.394  9288 20341 I SnapFrame: ai frame=1500 mode=2 flow_scale=0.820 gpu_pressure=0.747 motion=0.063 complexity=0.159 confidence=0.135 artifact_risk=0.046
+11-08 00:07:33.824  9288 20341 I SnapFrame: frame=1560 gpu_ms=5.501 preprocess_ms=0.467 flow_ms=1.430 consistency_ms=0.239 warp_ms=3.213 flow_scale=90 active_flow=121x275 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:07:33.824  9288 20341 I SnapFrame: ai frame=1560 mode=2 flow_scale=0.820 gpu_pressure=0.786 motion=0.476 complexity=0.361 confidence=0.035 artifact_risk=0.040
+11-08 00:07:34.970  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.171 flow=1.576 consistency=0.236 warp=3.902 total=6.354
+11-08 00:07:34.970  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.536 complexity=0.400 confidence=0.197 confident_inconsistency=0.071 (normalized)
+11-08 00:07:34.970  9288 20341 I VkRenderer: framegen delivered real=2520 made=3436 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=9.67ms gap=37.65ms
+11-08 00:07:36.357  9288 20341 I SnapFrame: frame=1620 gpu_ms=6.029 preprocess_ms=0.467 flow_ms=1.322 consistency_ms=0.237 warp_ms=3.850 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:36.357  9288 20341 I SnapFrame: ai frame=1620 mode=3 flow_scale=0.820 gpu_pressure=0.861 motion=0.535 complexity=0.403 confidence=0.209 artifact_risk=0.070
+11-08 00:07:38.886  9288 20341 I SnapFrame: frame=1680 gpu_ms=6.324 preprocess_ms=0.487 flow_ms=1.581 consistency_ms=0.236 warp_ms=3.869 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:38.886  9288 20341 I SnapFrame: ai frame=1680 mode=3 flow_scale=0.820 gpu_pressure=0.903 motion=0.528 complexity=0.404 confidence=0.212 artifact_risk=0.074
+11-08 00:07:40.034  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.694 consistency=0.236 warp=3.920 total=6.470
+11-08 00:07:40.034  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.532 complexity=0.402 confidence=0.219 confident_inconsistency=0.068 (normalized)
+11-08 00:07:40.034  9288 20341 I VkRenderer: framegen delivered real=2640 made=3796 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=13.69ms gap=28.53ms
+11-08 00:07:41.415  9288 20341 I SnapFrame: frame=1740 gpu_ms=6.012 preprocess_ms=0.467 flow_ms=1.310 consistency_ms=0.238 warp_ms=3.845 flow_scale=78 active_flow=105x238 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:41.415  9288 20341 I SnapFrame: ai frame=1740 mode=3 flow_scale=0.820 gpu_pressure=0.859 motion=0.532 complexity=0.403 confidence=0.209 artifact_risk=0.072
+11-08 00:07:43.909  9288 20341 I SnapFrame: frame=1800 gpu_ms=6.529 preprocess_ms=0.468 flow_ms=1.716 consistency_ms=0.248 warp_ms=3.946 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:43.909  9288 20341 I SnapFrame: ai frame=1800 mode=3 flow_scale=0.820 gpu_pressure=0.933 motion=0.532 complexity=0.403 confidence=0.206 artifact_risk=0.075
+11-08 00:07:45.095  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.696 consistency=0.237 warp=3.821 total=6.374
+11-08 00:07:45.095  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.534 complexity=0.404 confidence=0.193 confident_inconsistency=0.078 (normalized)
+11-08 00:07:45.095  9288 20341 I VkRenderer: framegen delivered real=2760 made=4156 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=13.14ms gap=28.96ms
+11-08 00:07:46.459  9288 20341 I SnapFrame: frame=1860 gpu_ms=6.510 preprocess_ms=0.468 flow_ms=1.704 consistency_ms=0.240 warp_ms=3.946 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:46.459  9288 20341 I SnapFrame: ai frame=1860 mode=3 flow_scale=0.700 gpu_pressure=0.930 motion=0.530 complexity=0.405 confidence=0.215 artifact_risk=0.068
+11-08 00:07:49.028  9288 20341 I SnapFrame: frame=1920 gpu_ms=6.209 preprocess_ms=0.468 flow_ms=1.481 consistency_ms=0.236 warp_ms=3.872 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:49.030  9288 20341 I SnapFrame: ai frame=1920 mode=3 flow_scale=0.700 gpu_pressure=0.887 motion=0.532 complexity=0.406 confidence=0.219 artifact_risk=0.068
+11-08 00:07:49.491  9288  9288 I SnapFrame: candidate reconstruction mode=2
+11-08 00:07:50.151  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.333 consistency=0.237 warp=3.873 total=6.063
+11-08 00:07:50.151  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.535 complexity=0.405 confidence=0.218 confident_inconsistency=0.069 (normalized)
+11-08 00:07:50.151  9288 20341 I VkRenderer: framegen delivered real=2880 made=4516 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=13.47ms gap=28.74ms
+11-08 00:07:50.846  9288  9288 I SnapFrame: candidate reconstruction mode=1
+11-08 00:07:51.520  9288 20341 I SnapFrame: frame=1980 gpu_ms=5.945 preprocess_ms=0.467 flow_ms=1.706 consistency_ms=0.238 warp_ms=3.381 flow_scale=82 active_flow=110x250 candidate_mode=1 candidate_enabled=0 ai_quality=1
+11-08 00:07:51.521  9288 20341 I SnapFrame: ai frame=1980 mode=3 flow_scale=0.820 gpu_pressure=0.849 motion=0.532 complexity=0.408 confidence=0.212 artifact_risk=0.072
+11-08 00:07:53.346  9288  9288 I SnapFrame: candidate reconstruction mode=0
+11-08 00:07:54.042  9288 20341 I SnapFrame: frame=2040 gpu_ms=6.361 preprocess_ms=0.467 flow_ms=1.589 consistency_ms=0.238 warp_ms=3.892 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:54.042  9288 20341 I SnapFrame: ai frame=2040 mode=3 flow_scale=0.820 gpu_pressure=0.909 motion=0.535 complexity=0.407 confidence=0.224 artifact_risk=0.066
+11-08 00:07:55.065  9288  9288 I SnapFrame: candidate reconstruction mode=2
+11-08 00:07:55.196  9288 20341 I VkRenderer: draw reasons over 25,9s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=602 coalesced: other=0 content=602 geometry=0 window=0 cursor=0 frame=602 suppressed=1196 pointer=0 winhandler=0 inputview=0 setting=1 guest=602
+11-08 00:07:55.196  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.318 consistency=0.236 warp=3.838 total=6.013
+11-08 00:07:55.196  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.527 complexity=0.406 confidence=0.227 confident_inconsistency=0.070 (normalized)
+11-08 00:07:55.196  9288 20341 I VkRenderer: framegen delivered real=3000 made=4876 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=12.37ms gap=29.65ms
+11-08 00:07:56.028  9288  9288 I SnapFrame: candidate reconstruction mode=1
+11-08 00:07:56.588  9288 20341 I SnapFrame: frame=2100 gpu_ms=5.906 preprocess_ms=0.468 flow_ms=1.693 consistency_ms=0.238 warp_ms=3.355 flow_scale=82 active_flow=110x250 candidate_mode=1 candidate_enabled=0 ai_quality=1
+11-08 00:07:56.588  9288 20341 I SnapFrame: ai frame=2100 mode=3 flow_scale=0.820 gpu_pressure=0.844 motion=0.525 complexity=0.406 confidence=0.219 artifact_risk=0.074
+11-08 00:07:58.326  9288  9288 I SnapFrame: candidate reconstruction mode=0
+11-08 00:07:59.116  9288 20341 I SnapFrame: frame=2160 gpu_ms=6.464 preprocess_ms=0.467 flow_ms=1.702 consistency_ms=0.236 warp_ms=3.907 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:07:59.116  9288 20341 I SnapFrame: ai frame=2160 mode=3 flow_scale=0.740 gpu_pressure=0.923 motion=0.542 complexity=0.407 confidence=0.218 artifact_risk=0.067
+11-08 00:08:00.276  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.312 consistency=0.258 warp=3.869 total=6.059
+11-08 00:08:00.276  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.543 complexity=0.406 confidence=0.209 confident_inconsistency=0.070 (normalized)
+11-08 00:08:00.276  9288 20341 I VkRenderer: framegen delivered real=3120 made=5236 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=13.63ms gap=28.72ms
+11-08 00:08:01.692  9288 20341 I SnapFrame: frame=2220 gpu_ms=6.023 preprocess_ms=0.467 flow_ms=1.322 consistency_ms=0.237 warp_ms=3.845 flow_scale=78 active_flow=105x238 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:01.695  9288 20341 I SnapFrame: ai frame=2220 mode=3 flow_scale=0.820 gpu_pressure=0.860 motion=0.536 complexity=0.404 confidence=0.215 artifact_risk=0.069
+11-08 00:08:03.134  9288  9288 I SnapFrameLog: Diagnostic log enabled: /storage/emulated/0/Download/winnative/snapframe.log
+11-08 00:08:04.686  9288 20341 I SnapFrame: frame=2280 gpu_ms=6.026 preprocess_ms=0.467 flow_ms=1.321 consistency_ms=0.234 warp_ms=3.851 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:04.686  9288 20341 I SnapFrame: ai frame=2280 mode=3 flow_scale=0.780 gpu_pressure=0.861 motion=0.541 complexity=0.408 confidence=0.219 artifact_risk=0.068
+11-08 00:08:05.776  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.687 consistency=0.235 warp=3.344 total=5.887
+11-08 00:08:05.776  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.617 complexity=0.316 confidence=0.024 confident_inconsistency=0.102 (normalized)
+11-08 00:08:05.776  9288 20341 I VkRenderer: framegen delivered real=3240 made=5596 ratio=3.00 planned=3 got=3 misses=1659 timeout=3.0ms images=9 capacity=3 draw=12.68ms gap=33.16ms
+11-08 00:08:07.151  9288 20341 I SnapFrame: frame=2340 gpu_ms=5.847 preprocess_ms=0.468 flow_ms=1.675 consistency_ms=0.236 warp_ms=3.315 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:07.151  9288 20341 I SnapFrame: ai frame=2340 mode=3 flow_scale=0.820 gpu_pressure=0.835 motion=0.673 complexity=0.339 confidence=0.020 artifact_risk=0.089
+11-08 00:08:09.715  9288 20341 I SnapFrame: frame=2400 gpu_ms=5.890 preprocess_ms=0.469 flow_ms=1.684 consistency_ms=0.236 warp_ms=3.348 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:09.715  9288 20341 I SnapFrame: ai frame=2400 mode=3 flow_scale=0.820 gpu_pressure=0.841 motion=0.533 complexity=0.384 confidence=0.029 artifact_risk=0.130
+11-08 00:08:10.735  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.691 consistency=0.238 warp=3.361 total=5.912
+11-08 00:08:10.735  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.619 complexity=0.361 confidence=0.044 confident_inconsistency=0.098 (normalized)
+11-08 00:08:10.735  9288 20341 I VkRenderer: framegen delivered real=3360 made=5951 ratio=2.96 planned=3 got=3 misses=1661 timeout=3.0ms images=9 capacity=3 draw=11.60ms gap=29.72ms
+11-08 00:08:12.014  9288 20341 I SnapFrame: frame=2460 gpu_ms=5.864 preprocess_ms=0.468 flow_ms=1.676 consistency_ms=0.236 warp_ms=3.332 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:12.014  9288 20341 I SnapFrame: ai frame=2460 mode=3 flow_scale=0.820 gpu_pressure=0.838 motion=0.601 complexity=0.330 confidence=0.028 artifact_risk=0.106
+11-08 00:08:14.614  9288 20341 I SnapFrame: frame=2520 gpu_ms=5.849 preprocess_ms=0.468 flow_ms=1.675 consistency_ms=0.233 warp_ms=3.321 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:14.615  9288 20341 I SnapFrame: ai frame=2520 mode=3 flow_scale=0.820 gpu_pressure=0.836 motion=0.629 complexity=0.365 confidence=0.024 artifact_risk=0.093
+11-08 00:08:15.779  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.486 pyramid=0.153 flow=1.697 consistency=0.241 warp=3.359 total=5.936
+11-08 00:08:15.779  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.705 complexity=0.330 confidence=0.040 confident_inconsistency=0.118 (normalized)
+11-08 00:08:15.779  9288 20341 I VkRenderer: framegen delivered real=3480 made=6306 ratio=2.96 planned=3 got=3 misses=1664 timeout=3.0ms images=9 capacity=3 draw=11.24ms gap=30.78ms
+11-08 00:08:17.275  9288 20341 I SnapFrame: frame=2580 gpu_ms=5.904 preprocess_ms=0.468 flow_ms=1.704 consistency_ms=0.237 warp_ms=3.342 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:17.276  9288 20341 I SnapFrame: ai frame=2580 mode=3 flow_scale=0.820 gpu_pressure=0.843 motion=0.750 complexity=0.280 confidence=0.021 artifact_risk=0.097
+11-08 00:08:19.815  9288 20341 I SnapFrame: frame=2640 gpu_ms=5.893 preprocess_ms=0.469 flow_ms=1.678 consistency_ms=0.238 warp_ms=3.357 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:19.816  9288 20341 I SnapFrame: ai frame=2640 mode=3 flow_scale=0.820 gpu_pressure=0.842 motion=0.760 complexity=0.291 confidence=0.016 artifact_risk=0.096
+11-08 00:08:20.969  9288 20341 I VkRenderer: draw reasons over 25,8s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=601 coalesced: other=0 content=601 geometry=0 window=0 cursor=0 frame=601 suppressed=1864 pointer=0 winhandler=682 inputview=0 setting=0 guest=601
+11-08 00:08:20.969  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.698 consistency=0.238 warp=3.353 total=5.910
+11-08 00:08:20.969  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.691 complexity=0.353 confidence=0.115 confident_inconsistency=0.086 (normalized)
+11-08 00:08:20.969  9288 20341 I VkRenderer: framegen delivered real=3600 made=6666 ratio=3.00 planned=3 got=3 misses=1664 timeout=3.0ms images=9 capacity=3 draw=11.47ms gap=31.77ms
+11-08 00:08:22.410  9288 20341 I SnapFrame: frame=2700 gpu_ms=5.890 preprocess_ms=0.470 flow_ms=1.677 consistency_ms=0.237 warp_ms=3.353 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:22.411  9288 20341 I SnapFrame: ai frame=2700 mode=3 flow_scale=0.820 gpu_pressure=0.841 motion=0.727 complexity=0.280 confidence=0.015 artifact_risk=0.099
+11-08 00:08:24.787  9288 20341 I SnapFrame: frame=2760 gpu_ms=6.295 preprocess_ms=0.467 flow_ms=1.682 consistency_ms=0.237 warp_ms=3.757 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:24.787  9288 20341 I SnapFrame: ai frame=2760 mode=3 flow_scale=0.820 gpu_pressure=0.899 motion=0.585 complexity=0.362 confidence=0.155 artifact_risk=0.091
+11-08 00:08:25.862  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.684 consistency=0.236 warp=3.344 total=5.884
+11-08 00:08:25.862  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.678 complexity=0.330 confidence=0.014 confident_inconsistency=0.083 (normalized)
+11-08 00:08:25.862  9288 20341 I VkRenderer: framegen delivered real=3720 made=7026 ratio=3.00 planned=3 got=3 misses=1664 timeout=3.0ms images=9 capacity=3 draw=12.15ms gap=28.56ms
+11-08 00:08:27.369  9288 20341 I SnapFrame: frame=2820 gpu_ms=5.892 preprocess_ms=0.469 flow_ms=1.665 consistency_ms=0.237 warp_ms=3.369 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:27.369  9288 20341 I SnapFrame: ai frame=2820 mode=3 flow_scale=0.820 gpu_pressure=0.842 motion=0.672 complexity=0.349 confidence=0.025 artifact_risk=0.138
+11-08 00:08:29.577  9288 20341 I SnapFrame: frame=2880 gpu_ms=5.891 preprocess_ms=0.468 flow_ms=1.694 consistency_ms=0.237 warp_ms=3.339 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:29.578  9288 20341 I SnapFrame: ai frame=2880 mode=3 flow_scale=0.820 gpu_pressure=0.842 motion=0.730 complexity=0.307 confidence=0.017 artifact_risk=0.117
+11-08 00:08:30.604  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.153 flow=1.770 consistency=0.253 warp=3.261 total=5.904
+11-08 00:08:30.604  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.609 complexity=0.272 confidence=0.023 confident_inconsistency=0.116 (normalized)
+11-08 00:08:30.604  9288 20341 I VkRenderer: framegen delivered real=3840 made=7382 ratio=2.97 planned=3 got=3 misses=1666 timeout=3.0ms images=9 capacity=3 draw=11.49ms gap=28.17ms
+11-08 00:08:32.081  9288 20341 I SnapFrame: frame=2940 gpu_ms=5.844 preprocess_ms=0.468 flow_ms=1.680 consistency_ms=0.237 warp_ms=3.307 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:32.082  9288 20341 I SnapFrame: ai frame=2940 mode=3 flow_scale=0.820 gpu_pressure=0.835 motion=0.635 complexity=0.293 confidence=0.033 artifact_risk=0.120
+11-08 00:08:34.688  9288 20341 I SnapFrame: frame=3000 gpu_ms=5.774 preprocess_ms=0.467 flow_ms=1.693 consistency_ms=0.238 warp_ms=3.223 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:34.688  9288 20341 I SnapFrame: ai frame=3000 mode=3 flow_scale=0.820 gpu_pressure=0.825 motion=0.553 complexity=0.313 confidence=0.051 artifact_risk=0.117
+11-08 00:08:35.792  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.153 flow=1.644 consistency=0.238 warp=3.190 total=5.692
+11-08 00:08:35.792  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.722 complexity=0.260 confidence=0.035 confident_inconsistency=0.119 (normalized)
+11-08 00:08:35.792  9288 20341 I VkRenderer: framegen delivered real=3960 made=7742 ratio=3.00 planned=3 got=3 misses=1666 timeout=3.0ms images=9 capacity=3 draw=11.37ms gap=31.80ms
+11-08 00:08:37.132  9288 20341 I SnapFrame: frame=3060 gpu_ms=5.746 preprocess_ms=0.467 flow_ms=1.668 consistency_ms=0.237 warp_ms=3.222 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:37.132  9288 20341 I SnapFrame: ai frame=3060 mode=3 flow_scale=0.820 gpu_pressure=0.821 motion=0.684 complexity=0.275 confidence=0.025 artifact_risk=0.104
+11-08 00:08:39.381  9288 20341 I SnapFrame: frame=3120 gpu_ms=5.697 preprocess_ms=0.487 flow_ms=1.646 consistency_ms=0.239 warp_ms=3.172 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:39.381  9288 20341 I SnapFrame: ai frame=3120 mode=3 flow_scale=0.820 gpu_pressure=0.814 motion=0.644 complexity=0.271 confidence=0.023 artifact_risk=0.112
+11-08 00:08:40.605  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.666 consistency=0.254 warp=3.212 total=5.751
+11-08 00:08:40.605  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.590 complexity=0.293 confidence=0.022 confident_inconsistency=0.118 (normalized)
+11-08 00:08:40.605  9288 20341 I VkRenderer: framegen delivered real=4080 made=8102 ratio=3.00 planned=3 got=3 misses=1666 timeout=3.0ms images=9 capacity=3 draw=11.04ms gap=29.12ms
+11-08 00:08:41.974  9288 20341 I SnapFrame: frame=3180 gpu_ms=5.088 preprocess_ms=0.467 flow_ms=2.151 consistency_ms=0.240 warp_ms=2.078 flow_scale=84 active_flow=113x257 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:41.975  9288 20341 I SnapFrame: ai frame=3180 mode=3 flow_scale=0.820 gpu_pressure=0.727 motion=0.524 complexity=0.321 confidence=0.202 artifact_risk=0.093
+11-08 00:08:44.091  9288 20341 I SnapFrame: frame=3240 gpu_ms=5.774 preprocess_ms=0.469 flow_ms=1.685 consistency_ms=0.236 warp_ms=3.232 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:44.092  9288 20341 I SnapFrame: ai frame=3240 mode=3 flow_scale=0.820 gpu_pressure=0.825 motion=0.619 complexity=0.307 confidence=0.067 artifact_risk=0.129
+11-08 00:08:44.972  9288 20341 I VkRenderer: draw reasons over 24,0s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=583 coalesced: other=0 content=583 geometry=0 window=0 cursor=0 frame=583 suppressed=2053 pointer=0 winhandler=924 inputview=0 setting=0 guest=583
+11-08 00:08:44.974  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.153 flow=1.666 consistency=0.253 warp=3.148 total=5.688
+11-08 00:08:44.974  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.589 complexity=0.307 confidence=0.063 confident_inconsistency=0.118 (normalized)
+11-08 00:08:44.974  9288 20341 I VkRenderer: framegen delivered real=4200 made=8454 ratio=2.93 planned=3 got=3 misses=1672 timeout=3.0ms images=9 capacity=3 draw=10.95ms gap=25.49ms
+11-08 00:08:46.210  9288 20341 I SnapFrame: frame=3300 gpu_ms=5.720 preprocess_ms=0.467 flow_ms=1.681 consistency_ms=0.239 warp_ms=3.180 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:46.210  9288 20341 I SnapFrame: ai frame=3300 mode=3 flow_scale=0.820 gpu_pressure=0.817 motion=0.619 complexity=0.351 confidence=0.134 artifact_risk=0.110
+11-08 00:08:48.671  9288 20341 I SnapFrame: frame=3360 gpu_ms=6.190 preprocess_ms=0.487 flow_ms=1.663 consistency_ms=0.237 warp_ms=3.650 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:48.672  9288 20341 I SnapFrame: ai frame=3360 mode=3 flow_scale=0.820 gpu_pressure=0.884 motion=0.634 complexity=0.320 confidence=0.127 artifact_risk=0.099
+11-08 00:08:49.721  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.491 pyramid=0.152 flow=1.677 consistency=0.238 warp=3.661 total=6.218
+11-08 00:08:49.721  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.631 complexity=0.322 confidence=0.125 confident_inconsistency=0.102 (normalized)
+11-08 00:08:49.721  9288 20341 I VkRenderer: framegen delivered real=4320 made=8813 ratio=2.99 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=10.91ms gap=28.55ms
+11-08 00:08:51.072  9288 20341 I SnapFrame: frame=3420 gpu_ms=6.147 preprocess_ms=0.467 flow_ms=1.662 consistency_ms=0.237 warp_ms=3.627 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:51.072  9288 20341 I SnapFrame: ai frame=3420 mode=3 flow_scale=0.820 gpu_pressure=0.878 motion=0.634 complexity=0.317 confidence=0.121 artifact_risk=0.097
+11-08 00:08:53.528  9288 20341 I SnapFrame: frame=3480 gpu_ms=5.824 preprocess_ms=0.469 flow_ms=1.695 consistency_ms=0.237 warp_ms=3.271 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:53.529  9288 20341 I SnapFrame: ai frame=3480 mode=3 flow_scale=0.820 gpu_pressure=0.832 motion=0.630 complexity=0.291 confidence=0.065 artifact_risk=0.122
+11-08 00:08:54.621  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.636 consistency=0.416 warp=3.969 total=6.641
+11-08 00:08:54.621  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.595 complexity=0.301 confidence=0.126 confident_inconsistency=0.111 (normalized)
+11-08 00:08:54.621  9288 20341 I VkRenderer: framegen delivered real=4440 made=9173 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=10.95ms gap=29.95ms
+11-08 00:08:56.008  9288 20341 I SnapFrame: frame=3540 gpu_ms=6.257 preprocess_ms=0.467 flow_ms=1.666 consistency_ms=0.236 warp_ms=3.736 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:08:56.008  9288 20341 I SnapFrame: ai frame=3540 mode=3 flow_scale=0.820 gpu_pressure=0.894 motion=0.590 complexity=0.302 confidence=0.078 artifact_risk=0.113
+11-08 00:08:58.483  9288 20341 I SnapFrame: frame=3600 gpu_ms=5.765 preprocess_ms=0.468 flow_ms=1.652 consistency_ms=0.238 warp_ms=3.255 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:08:58.483  9288 20341 I SnapFrame: ai frame=3600 mode=3 flow_scale=0.820 gpu_pressure=0.824 motion=0.627 complexity=0.301 confidence=0.054 artifact_risk=0.114
+11-08 00:08:59.454  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.650 consistency=0.239 warp=3.279 total=5.787
+11-08 00:08:59.455  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.581 complexity=0.301 confidence=0.075 confident_inconsistency=0.154 (normalized)
+11-08 00:08:59.455  9288 20341 I VkRenderer: framegen delivered real=4560 made=9533 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.45ms gap=28.72ms
+11-08 00:09:00.788  9288 20341 I SnapFrame: frame=3660 gpu_ms=5.804 preprocess_ms=0.468 flow_ms=1.682 consistency_ms=0.236 warp_ms=3.266 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:00.788  9288 20341 I SnapFrame: ai frame=3660 mode=3 flow_scale=0.820 gpu_pressure=0.829 motion=0.616 complexity=0.302 confidence=0.076 artifact_risk=0.115
+11-08 00:09:03.285  9288 20341 I SnapFrame: frame=3720 gpu_ms=5.870 preprocess_ms=0.468 flow_ms=1.684 consistency_ms=0.240 warp_ms=3.326 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:03.285  9288 20341 I SnapFrame: ai frame=3720 mode=3 flow_scale=0.820 gpu_pressure=0.839 motion=0.599 complexity=0.308 confidence=0.070 artifact_risk=0.111
+11-08 00:09:04.335  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.685 consistency=0.239 warp=3.301 total=5.845
+11-08 00:09:04.335  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.582 complexity=0.314 confidence=0.073 confident_inconsistency=0.122 (normalized)
+11-08 00:09:04.335  9288 20341 I VkRenderer: framegen delivered real=4680 made=9893 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.59ms gap=29.17ms
+11-08 00:09:05.741  9288 20341 I SnapFrame: frame=3780 gpu_ms=5.882 preprocess_ms=0.467 flow_ms=1.683 consistency_ms=0.237 warp_ms=3.342 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:05.741  9288 20341 I SnapFrame: ai frame=3780 mode=3 flow_scale=0.820 gpu_pressure=0.840 motion=0.652 complexity=0.285 confidence=0.056 artifact_risk=0.109
+11-08 00:09:08.262  9288 20341 I SnapFrame: frame=3840 gpu_ms=5.775 preprocess_ms=0.467 flow_ms=1.670 consistency_ms=0.240 warp_ms=3.246 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:08.262  9288 20341 I SnapFrame: ai frame=3840 mode=3 flow_scale=0.820 gpu_pressure=0.825 motion=0.674 complexity=0.277 confidence=0.054 artifact_risk=0.101
+11-08 00:09:09.421  9288 20341 I VkRenderer: draw reasons over 24,4s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=597 coalesced: other=0 content=597 geometry=0 window=0 cursor=0 frame=597 suppressed=2059 pointer=0 winhandler=877 inputview=0 setting=0 guest=597
+11-08 00:09:09.421  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.646 consistency=0.240 warp=3.244 total=5.751
+11-08 00:09:09.421  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.538 complexity=0.317 confidence=0.096 confident_inconsistency=0.139 (normalized)
+11-08 00:09:09.422  9288 20341 I VkRenderer: framegen delivered real=4800 made=10253 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.12ms gap=31.25ms
+11-08 00:09:10.959  9288 20341 I SnapFrame: frame=3900 gpu_ms=5.727 preprocess_ms=0.467 flow_ms=1.634 consistency_ms=0.236 warp_ms=3.238 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:10.960  9288 20341 I SnapFrame: ai frame=3900 mode=3 flow_scale=0.820 gpu_pressure=0.818 motion=0.612 complexity=0.306 confidence=0.065 artifact_risk=0.128
+11-08 00:09:13.344  9288 20341 I SnapFrame: frame=3960 gpu_ms=6.272 preprocess_ms=0.468 flow_ms=1.701 consistency_ms=0.237 warp_ms=3.714 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:09:13.345  9288 20341 I SnapFrame: ai frame=3960 mode=3 flow_scale=0.820 gpu_pressure=0.896 motion=0.583 complexity=0.355 confidence=0.201 artifact_risk=0.091
+11-08 00:09:14.266  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.685 consistency=0.237 warp=3.698 total=6.240
+11-08 00:09:14.266  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.487 complexity=0.370 confidence=0.284 confident_inconsistency=0.091 (normalized)
+11-08 00:09:14.266  9288 20341 I VkRenderer: framegen delivered real=4920 made=10613 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.18ms gap=29.15ms
+11-08 00:09:15.587  9288 20341 I SnapFrame: frame=4020 gpu_ms=5.812 preprocess_ms=0.467 flow_ms=1.675 consistency_ms=0.237 warp_ms=3.281 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:15.587  9288 20341 I SnapFrame: ai frame=4020 mode=3 flow_scale=0.820 gpu_pressure=0.830 motion=0.635 complexity=0.348 confidence=0.124 artifact_risk=0.110
+11-08 00:09:17.813  9288 20341 I SnapFrame: frame=4080 gpu_ms=5.813 preprocess_ms=0.468 flow_ms=1.678 consistency_ms=0.238 warp_ms=3.276 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:17.814  9288 20341 I SnapFrame: ai frame=4080 mode=3 flow_scale=0.820 gpu_pressure=0.830 motion=0.661 complexity=0.291 confidence=0.053 artifact_risk=0.094
+11-08 00:09:18.755  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.668 consistency=0.235 warp=3.119 total=5.642
+11-08 00:09:18.755  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.558 complexity=0.348 confidence=0.055 confident_inconsistency=0.084 (normalized)
+11-08 00:09:18.755  9288 20341 I VkRenderer: framegen delivered real=5040 made=10973 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.71ms gap=25.88ms
+11-08 00:09:19.889  9288 20341 I SnapFrame: frame=4140 gpu_ms=5.782 preprocess_ms=0.468 flow_ms=1.668 consistency_ms=0.238 warp_ms=3.257 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:09:19.889  9288 20341 I SnapFrame: ai frame=4140 mode=3 flow_scale=0.820 gpu_pressure=0.826 motion=0.545 complexity=0.327 confidence=0.138 artifact_risk=0.127
+11-08 00:09:22.121  9288 20341 I SnapFrame: frame=4200 gpu_ms=6.320 preprocess_ms=0.468 flow_ms=1.676 consistency_ms=0.240 warp_ms=3.785 flow_scale=74 active_flow=99x226 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:09:22.121  9288 20341 I SnapFrame: ai frame=4200 mode=3 flow_scale=0.700 gpu_pressure=0.903 motion=0.622 complexity=0.341 confidence=0.156 artifact_risk=0.099
+11-08 00:09:22.990  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.661 consistency=0.239 warp=3.781 total=6.301
+11-08 00:09:22.990  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.619 complexity=0.341 confidence=0.154 confident_inconsistency=0.101 (normalized)
+11-08 00:09:22.990  9288 20341 I VkRenderer: framegen delivered real=5160 made=11333 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.58ms gap=23.65ms
+11-08 00:09:24.040  9288 20341 I SnapFrame: frame=4260 gpu_ms=5.816 preprocess_ms=0.468 flow_ms=1.697 consistency_ms=0.236 warp_ms=3.263 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:24.040  9288 20341 I SnapFrame: ai frame=4260 mode=3 flow_scale=0.820 gpu_pressure=0.831 motion=0.700 complexity=0.296 confidence=0.060 artifact_risk=0.114
+11-08 00:09:26.068  9288 20341 I SnapFrame: frame=4320 gpu_ms=6.216 preprocess_ms=0.468 flow_ms=1.648 consistency_ms=0.237 warp_ms=3.711 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:09:26.068  9288 20341 I SnapFrame: ai frame=4320 mode=3 flow_scale=0.820 gpu_pressure=0.888 motion=0.624 complexity=0.348 confidence=0.166 artifact_risk=0.100
+11-08 00:09:26.961  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.660 consistency=0.239 warp=3.248 total=5.767
+11-08 00:09:26.961  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.579 complexity=0.326 confidence=0.130 confident_inconsistency=0.126 (normalized)
+11-08 00:09:26.961  9288 20341 I VkRenderer: framegen delivered real=5280 made=11693 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.38ms gap=21.69ms
+11-08 00:09:28.536  9288 20341 I SnapFrame: frame=4380 gpu_ms=5.795 preprocess_ms=0.467 flow_ms=1.665 consistency_ms=0.237 warp_ms=3.274 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:28.536  9288 20341 I SnapFrame: ai frame=4380 mode=3 flow_scale=0.820 gpu_pressure=0.828 motion=0.574 complexity=0.286 confidence=0.061 artifact_risk=0.129
+11-08 00:09:31.034  9288 20341 I SnapFrame: frame=4440 gpu_ms=5.840 preprocess_ms=0.467 flow_ms=1.691 consistency_ms=0.236 warp_ms=3.294 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:31.034  9288 20341 I SnapFrame: ai frame=4440 mode=3 flow_scale=0.820 gpu_pressure=0.834 motion=0.626 complexity=0.336 confidence=0.067 artifact_risk=0.120
+11-08 00:09:32.102  9288 20341 I VkRenderer: draw reasons over 22,7s: requested=600 continuous=0 transientReq=0 transientActive=0 guestPresents=600 coalesced: other=0 content=600 geometry=0 window=0 cursor=0 frame=600 suppressed=1724 pointer=0 winhandler=524 inputview=0 setting=0 guest=600
+11-08 00:09:32.103  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.467 pyramid=0.152 flow=1.699 consistency=0.237 warp=3.248 total=5.803
+11-08 00:09:32.103  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.646 complexity=0.295 confidence=0.054 confident_inconsistency=0.110 (normalized)
+11-08 00:09:32.103  9288 20341 I VkRenderer: framegen delivered real=5400 made=12053 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=11.56ms gap=31.24ms
+11-08 00:09:33.327  9288 20341 I SnapFrame: frame=4500 gpu_ms=5.776 preprocess_ms=0.468 flow_ms=1.653 consistency_ms=0.240 warp_ms=3.263 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:33.328  9288 20341 I SnapFrame: ai frame=4500 mode=3 flow_scale=0.820 gpu_pressure=0.825 motion=0.725 complexity=0.295 confidence=0.055 artifact_risk=0.096
+11-08 00:09:35.518  9288 20341 I SnapFrame: frame=4560 gpu_ms=6.305 preprocess_ms=0.467 flow_ms=1.692 consistency_ms=0.236 warp_ms=3.757 flow_scale=70 active_flow=94x214 candidate_mode=0 candidate_enabled=1 ai_quality=1
+11-08 00:09:35.519  9288 20341 I SnapFrame: ai frame=4560 mode=3 flow_scale=0.700 gpu_pressure=0.901 motion=0.500 complexity=0.383 confidence=0.297 artifact_risk=0.090
+11-08 00:09:36.382  9288 20341 I VkRenderer: SnapFrame GPU ms: luma=0.468 pyramid=0.152 flow=1.666 consistency=0.240 warp=3.258 total=5.785
+11-08 00:09:36.383  9288 20341 I VkRenderer: SnapFrame latest completed flow metrics: motion=0.585 complexity=0.309 confidence=0.068 confident_inconsistency=0.120 (normalized)
+11-08 00:09:36.383  9288 20341 I VkRenderer: framegen delivered real=5520 made=12413 ratio=3.00 planned=3 got=3 misses=1673 timeout=3.0ms images=9 capacity=3 draw=12.25ms gap=23.48ms
+11-08 00:09:37.557  9288 20341 I SnapFrame: frame=4620 gpu_ms=5.823 preprocess_ms=0.468 flow_ms=1.661 consistency_ms=0.241 warp_ms=3.301 flow_scale=82 active_flow=110x250 candidate_mode=0 candidate_enabled=0 ai_quality=0
+11-08 00:09:37.557  9288 20341 I SnapFrame: ai frame=4620 mode=3 flow_scale=0.820 gpu_pressure=0.832 motion=0.612 complexity=0.293 confidence=0.060 artifact_risk=0.130
+11-08 00:09:39.717  9288 20341 I SnapFrame: frame=4680 gpu_ms
