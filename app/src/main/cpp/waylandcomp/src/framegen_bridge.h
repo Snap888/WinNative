@@ -42,8 +42,8 @@ void vkp_framegen_set_tuning(float flow_scale, float refresh_hz);
 /* Flow resolution in pixels of the frame's short side (DIS only) and the target output rate
  * both engines pace to (0 = follow the panel). */
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
-/* Experimental SnapFrame four-candidate reconstruction; off keeps the legacy midpoint warp. */
-void vkp_framegen_set_candidate_reconstruction(int enabled);
+/* SnapFrame candidate reconstruction: 0=AI automatic, 1=off, 2=on. */
+void vkp_framegen_set_candidate_reconstruction(int mode);
 /* Same codes as VulkanRenderer.getFrameGenProblem(): -1 not known yet (device not up), 0 fine,
  * 1 the driver lacks what the selected engine needs (vkp_framegen_caps_reason says what),
  * 2 the engine failed to start / build its chain. */
