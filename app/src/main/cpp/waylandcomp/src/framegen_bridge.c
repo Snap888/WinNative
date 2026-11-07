@@ -21,7 +21,7 @@ static _Atomic int   g_armed;
 static _Atomic int   g_mult = 2;
 static _Atomic int   g_dis_min_side = 180;
 static _Atomic int   g_target_fps;
-static _Atomic int   g_candidate_reconstruction;
+static _Atomic int   g_candidate_reconstruction; /* 0=AI auto, 1=off, 2=on */
 static _Atomic int   g_cfg_dirty = 1;
 static float g_flow = 0.8f, g_refresh_hz;          /* under g_lock */
 static char *g_cache_path;                          /* under g_lock */
@@ -138,8 +138,9 @@ void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps) {
     atomic_store(&g_cfg_dirty, 1);
 }
 
-void vkp_framegen_set_candidate_reconstruction(int enabled) {
-    atomic_store(&g_candidate_reconstruction, enabled ? 1 : 0);
+void vkp_framegen_set_candidate_reconstruction(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    atomic_store(&g_candidate_reconstruction, mode);
     atomic_store(&g_cfg_dirty, 1);
 }
 
