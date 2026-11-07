@@ -1279,6 +1279,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         renderer.setSnapFrameGenerationEnabled(snapFrameGenEnabled);
         renderer.setSnapFrameDebugFlow(disFrameGenDebugFlow);
         renderer.setSnapFrameDebugMode(snapFrameDebugMode);
+        renderer.setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
         if (snapFrameGenEnabled) {
             renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
             renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
@@ -5560,7 +5561,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 disFrameGenDebugFlow,
                 snapFrameDebugMode,
                 snapFrameCandidateMode,
-                waylandMode);
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable());
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -6010,6 +6014,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                                 Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON, mode));
                         if (waylandMode) {
                             WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
                         }
                         saveFrameGenerationSettings();
                         renderDrawerMenu();
