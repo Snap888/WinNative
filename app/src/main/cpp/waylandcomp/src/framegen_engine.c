@@ -311,8 +311,11 @@ void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
 }
 
 int fge_flow_metrics(float metrics[4]) {
-    if (!metrics || !g_snap) return 0;
-    return snap_frame_vk_get_flow_metrics(g_snap, metrics);
+    if (!metrics) return 0;
+    pthread_mutex_lock(&g_snap_lock);
+    int valid = g_snap ? snap_frame_vk_get_flow_metrics(g_snap, metrics) : 0;
+    pthread_mutex_unlock(&g_snap_lock);
+    return valid;
 }
 
 const char *fge_engine_name(int kind) {
