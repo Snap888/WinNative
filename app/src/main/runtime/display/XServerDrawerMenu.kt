@@ -626,10 +626,16 @@ data class XServerDrawerState(
     val frameGenMultiplier: Int = 2,
     val frameGenTargetRate: Int = 0,
     val frameGenFlowScale: Int = 70,
+    val snapFrameGenAvailable: Boolean = false,
+    val snapFrameGenEnabled: Boolean = false,
     val disFrameGenEnabled: Boolean = false,
     val disFrameGenScale: Int = 180,
     val disFrameGenTargetFps: Int = 0,
     val disFrameGenDebugFlow: Boolean = false,
+    val snapFrameDebugMode: Int = 0,
+    val snapFrameCandidateMode: Int = 0,
+    val snapFrameCandidateAvailable: Boolean = false,
+    val snapFrameLogEnabled: Boolean = false,
     val screenEffectsCardExpanded: Boolean = false,
     val sgsrEnabled: Boolean = false,
     val sgsrSharpness: Int = 100,
@@ -1048,6 +1054,10 @@ interface XServerDrawerActionListener {
     fun onDisFrameGenTargetFpsSelected(rate: Int)
 
     fun onDisDebugFlowChanged(enabled: Boolean)
+
+    fun onSnapFrameDebugModeChanged(mode: Int)
+    fun onSnapFrameCandidateModeChanged(mode: Int)
+    fun onSnapFrameLogChanged(enabled: Boolean)
 
     fun onScreenEffectsCardExpandedChanged(expanded: Boolean)
 
@@ -1507,6 +1517,8 @@ fun withFrameGenState(
     targetRate: Int,
     flowScale: Int,
     frameGenTitle: String,
+    snapFrameAvailable: Boolean = false,
+    snapFrameEnabled: Boolean = false,
 ): XServerDrawerState =
     state.copy(
         items =
@@ -1516,10 +1528,12 @@ fun withFrameGenState(
                     title = frameGenTitle,
                     subtitle = "",
                     icon = Icons.Outlined.Speed,
-                    active = enabled || state.fpsLimit > 0,
+                    active = enabled || snapFrameEnabled || state.disFrameGenEnabled || state.fpsLimit > 0,
                 ),
         frameGenAvailable = available,
         frameGenEnabled = enabled,
+        snapFrameGenAvailable = snapFrameAvailable,
+        snapFrameGenEnabled = snapFrameEnabled,
         frameGenMultiplier = multiplier.coerceIn(2, FrameGenMultipliers.last()),
         frameGenTargetRate = targetRate.coerceAtLeast(0),
         frameGenFlowScale = flowScale.coerceIn(FrameGenFlowScaleMin, FrameGenFlowScaleMax),
@@ -1531,13 +1545,22 @@ fun withDisFrameGenState(
     scale: Int,
     targetFps: Int,
     debugFlow: Boolean,
+    snapDebugMode: Int = state.snapFrameDebugMode,
+    candidateMode: Int = state.snapFrameCandidateMode,
+    candidateAvailable: Boolean = state.snapFrameCandidateAvailable,
+    snapLogEnabled: Boolean = state.snapFrameLogEnabled,
 ): XServerDrawerState =
     state.copy(
         disFrameGenEnabled = enabled,
         frameGenEnabled = state.frameGenEnabled && !enabled,
+        snapFrameGenEnabled = state.snapFrameGenEnabled && !enabled,
         disFrameGenScale = scale.coerceIn(DisFrameGenScaleMin, DisFrameGenScaleMax),
         disFrameGenTargetFps = targetFps.coerceAtLeast(0),
         disFrameGenDebugFlow = debugFlow,
+        snapFrameDebugMode = snapDebugMode.coerceIn(0, 2),
+        snapFrameCandidateMode = candidateMode.coerceIn(0, 2),
+        snapFrameCandidateAvailable = candidateAvailable,
+        snapFrameLogEnabled = snapLogEnabled,
         items =
             state.items.map { item ->
                 if (item.itemId == R.id.main_menu_frame_generation) {

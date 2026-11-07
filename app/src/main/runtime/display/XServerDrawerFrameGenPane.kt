@@ -73,17 +73,22 @@ internal fun FrameGenPaneContent(
                         .padding(horizontal = (12f * paneScale).dp, vertical = (12f * paneScale).dp),
                 verticalArrangement = Arrangement.spacedBy((10f * paneScale).dp),
             ) {
-                val engine = FrameGenEngine.of(state.frameGenEnabled, state.disFrameGenEnabled)
+                val engine = FrameGenEngine.of(state.frameGenEnabled, state.disFrameGenEnabled, state.snapFrameGenEnabled)
 
                 FrameGenEngineSection(
                     engine = engine,
                     lsfgAvailable = state.frameGenAvailable,
+                    snapFrameAvailable = state.snapFrameGenAvailable,
                     targetRate = state.frameGenTargetRate,
                     multiplier = state.frameGenMultiplier,
                     flowScale = state.frameGenFlowScale,
                     disScale = state.disFrameGenScale,
                     disTargetFps = state.disFrameGenTargetFps,
                     disDebugFlow = state.disFrameGenDebugFlow,
+                    snapDebugMode = state.snapFrameDebugMode,
+                    candidateMode = state.snapFrameCandidateMode,
+                    candidateAvailable = state.snapFrameCandidateAvailable,
+                    logEnabled = state.snapFrameLogEnabled,
                     maxRefreshRate = state.maxRefreshRate,
                     paneScale = paneScale,
                     onEngineSelected = listener::onFrameGenEngineSelected,
@@ -93,6 +98,9 @@ internal fun FrameGenPaneContent(
                     onDisScaleChanged = listener::onDisFrameGenScaleChanged,
                     onDisTargetFpsSelected = listener::onDisFrameGenTargetFpsSelected,
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
+                    onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
+                    onCandidateModeChanged = listener::onSnapFrameCandidateModeChanged,
+                    onLogChanged = listener::onSnapFrameLogChanged,
                 )
 
                 ThinDivider()
@@ -138,12 +146,17 @@ internal fun FrameGenPaneContent(
 internal fun FrameGenEngineSection(
     engine: FrameGenEngine,
     lsfgAvailable: Boolean,
+    snapFrameAvailable: Boolean,
     targetRate: Int,
     multiplier: Int,
     flowScale: Int,
     disScale: Int,
     disTargetFps: Int,
     disDebugFlow: Boolean,
+    snapDebugMode: Int,
+    candidateMode: Int,
+    candidateAvailable: Boolean,
+    logEnabled: Boolean,
     maxRefreshRate: Int,
     paneScale: Float,
     onEngineSelected: (FrameGenEngine) -> Unit,
@@ -153,16 +166,27 @@ internal fun FrameGenEngineSection(
     onDisScaleChanged: (Int) -> Unit,
     onDisTargetFpsSelected: (Int) -> Unit,
     onDisDebugFlowChanged: (Boolean) -> Unit,
+    onSnapDebugModeChanged: (Int) -> Unit,
+    onCandidateModeChanged: (Int) -> Unit,
+    onLogChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         PaneSectionLabel(stringResource(R.string.session_drawer_frame_generation))
 
         FrameGenEngineSwitch(
             selected = engine,
-            selectableFor = { it != FrameGenEngine.LSFG || lsfgAvailable },
+            selectableFor = { engine -> when (engine) {
+                FrameGenEngine.LSFG -> lsfgAvailable
+                FrameGenEngine.SNAPFRAME -> snapFrameAvailable
+                else -> true
+            } },
             onSelected = onEngineSelected,
             paneScale = paneScale,
         )
+
+        if (!snapFrameAvailable) {
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_unavailable), paneScale)
+        }
 
         when (engine) {
             FrameGenEngine.OFF ->
@@ -181,6 +205,9 @@ internal fun FrameGenEngineSection(
                     stringResource(R.string.session_drawer_dis_frame_generation_note),
                     paneScale,
                 )
+
+            FrameGenEngine.SNAPFRAME ->
+                FrameGenNote(stringResource(R.string.session_drawer_snapframe_note), paneScale)
         }
 
         FrameGenReveal(visible = engine == FrameGenEngine.LSFG) {
@@ -193,6 +220,25 @@ internal fun FrameGenEngineSection(
                 onTargetRateSelected = onTargetRateSelected,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
+            )
+        }
+
+        FrameGenReveal(visible = engine == FrameGenEngine.SNAPFRAME) {
+            SnapFrameOptions(
+                multiplier = multiplier,
+                flowScale = flowScale,
+                debugFlow = disDebugFlow,
+                debugMode = snapDebugMode,
+                candidateMode = candidateMode,
+                candidateAvailable = candidateAvailable,
+                logEnabled = logEnabled,
+                paneScale = paneScale,
+                onMultiplierSelected = onMultiplierSelected,
+                onFlowScaleChanged = onFlowScaleChanged,
+                onDebugFlowChanged = onDisDebugFlowChanged,
+                onDebugModeChanged = onSnapDebugModeChanged,
+                onCandidateModeChanged = onCandidateModeChanged,
+                onLogChanged = onLogChanged,
             )
         }
 
@@ -464,6 +510,98 @@ private fun LosslessFrameGenOptions(
             onSelected = { onFlowScaleChanged(it.flowScale) },
             paneScale = paneScale,
         )
+    }
+}
+
+@Composable
+private fun SnapFrameOptions(
+    multiplier: Int,
+    flowScale: Int,
+    debugFlow: Boolean,
+    debugMode: Int,
+    candidateMode: Int,
+    candidateAvailable: Boolean,
+    logEnabled: Boolean,
+    paneScale: Float,
+    onMultiplierSelected: (Int) -> Unit,
+    onFlowScaleChanged: (Int) -> Unit,
+    onDebugFlowChanged: (Boolean) -> Unit,
+    onDebugModeChanged: (Int) -> Unit,
+    onCandidateModeChanged: (Int) -> Unit,
+    onLogChanged: (Boolean) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+        FrameGenFieldLabel(stringResource(R.string.session_drawer_frame_generation_multiplier), paneScale)
+        ChipFlow {
+            FrameGenMultipliers.forEach { option ->
+                HUDToggleChip(
+                    label = stringResource(R.string.session_drawer_frame_generation_multiplier_value, option),
+                    checked = multiplier == option,
+                    onClick = { onMultiplierSelected(option) },
+                    modifier = Modifier.paneNavItem(
+                        cornerRadius = (16f * paneScale).dp,
+                        onActivate = { onMultiplierSelected(option) },
+                    ),
+                )
+            }
+        }
+        FrameGenPresetRow(
+            selected = FrameGenPreset.fromFlowScale(flowScale),
+            onSelected = { onFlowScaleChanged(it.flowScale) },
+            paneScale = paneScale,
+        )
+        NavBooleanRow(
+            title = stringResource(R.string.session_drawer_dis_debug_flow),
+            checked = debugFlow,
+            onCheckedChange = onDebugFlowChanged,
+        )
+        if (debugFlow) {
+            FrameGenFieldLabel("Flow Viewer", paneScale)
+            ChipFlow {
+                listOf("Motion", "Confidence", "Consistency").forEachIndexed { index, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = debugMode == index,
+                        onClick = { onDebugModeChanged(index) },
+                        modifier = Modifier.paneNavItem(
+                            cornerRadius = (16f * paneScale).dp,
+                            onActivate = { onDebugModeChanged(index) },
+                        ),
+                    )
+                }
+            }
+        }
+        FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
+        if (candidateAvailable) {
+            FrameGenFieldLabel(stringResource(R.string.session_drawer_snapframe_candidate_mode), paneScale)
+            ChipFlow {
+                listOf(
+                    0 to R.string.session_drawer_snapframe_candidate_auto,
+                    1 to R.string.session_drawer_snapframe_candidate_off,
+                    2 to R.string.session_drawer_snapframe_candidate_on,
+                ).forEach { (mode, labelRes) ->
+                    HUDToggleChip(
+                        label = stringResource(labelRes),
+                        checked = candidateMode == mode,
+                        onClick = { onCandidateModeChanged(mode) },
+                        modifier = Modifier.paneNavItem(
+                            cornerRadius = (16f * paneScale).dp,
+                            onActivate = { onCandidateModeChanged(mode) },
+                        ),
+                    )
+                }
+            }
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_note), paneScale)
+        } else {
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_wayland_only), paneScale)
+        }
+        NavBooleanRow(
+            title = stringResource(R.string.session_drawer_snapframe_diagnostic_log),
+            checked = logEnabled,
+            onCheckedChange = onLogChanged,
+        )
+        FrameGenNote(stringResource(R.string.session_drawer_snapframe_diagnostic_log_note), paneScale)
+                FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
 }
 

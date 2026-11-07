@@ -26,7 +26,7 @@
 #endif
 #include <vulkan/vulkan.h>
 
-enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1 };
+enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1, VKP_FG_ENGINE_SNAPFRAME = 2 };
 /* Hard ceiling on generated frames per source frame, as on X11: DIS goes to 8x, LSFG to 4x. */
 #define VKP_FG_MAX_GENERATIONS 7
 #define VKP_FG_LSFG_MAX_GENERATIONS 3
@@ -42,10 +42,13 @@ void vkp_framegen_set_tuning(float flow_scale, float refresh_hz);
 /* Flow resolution in pixels of the frame's short side (DIS only) and the target output rate
  * both engines pace to (0 = follow the panel). */
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
+/* SnapFrame candidate reconstruction: 0=AI automatic, 1=off, 2=on. */
+void vkp_framegen_set_candidate_reconstruction(int mode);
 /* Same codes as VulkanRenderer.getFrameGenProblem(): -1 not known yet (device not up), 0 fine,
  * 1 the driver lacks what the selected engine needs (vkp_framegen_caps_reason says what),
  * 2 the engine failed to start / build its chain. */
 int vkp_framegen_problem(void);
+int vkp_framegen_engine_available(int kind);
 const char *vkp_framegen_caps_reason(void);
 /* Same shape as VulkanRenderer.getFrameGenStats(): {generations trusted, generations planned,
  * real (source) fps, presented fps incl. generated frames, thermal (-1 = none), ms per

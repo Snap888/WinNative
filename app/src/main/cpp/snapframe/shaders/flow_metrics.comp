@@ -1,0 +1,52 @@
+#version 450
+// One-workgroup reduction over SnapFrame's existing flow + FB consistency.
+// Output channels: mean normalized motion, motion-magnitude deviation,
+// confidence weighted by FB consistency, and forward-confidence inconsistency risk.
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
+layout(set = 0, binding = 0) uniform sampler2D motionField;
+layout(set = 0, binding = 1) uniform sampler2D consistencyField;
+layout(set = 0, binding = 2) uniform sampler2D globalMotion;
+layout(set = 0, binding = 3) uniform sampler2D localMotion;
+layout(set = 0, binding = 4, rgba32f) writeonly uniform image2D metricsOutput;
+shared vec4 partial[128];
+void main() {
+    uint lane = gl_LocalInvocationID.x;
+    ivec2 extent = textureSize(motionField, 0);
+    uint total = uint(extent.x * extent.y);
+    vec4 accum = vec4(0.0);
+    for (uint i = lane; i < total; i += 128u) {
+        ivec2 p = ivec2(int(i % uint(extent.x)), int(i / uint(extent.x)));
+        vec4 flow = texelFetch(motionField, p, 0);
+        float consistency = clamp(texelFetch(consistencyField, p, 0).r, 0.0, 1.0);
+        float magnitude = clamp(length(flow.xy) / 12.0, 0.0, 1.0);
+        vec4 globalFlow = texelFetch(globalMotion, p, 0);
+        ivec2 localExtent = textureSize(localMotion, 0);
+        ivec2 localCoord = clamp(ivec2((vec2(p) + 0.5) * vec2(localExtent) / vec2(extent)),
+                                 ivec2(0), localExtent - ivec2(1));
+        vec4 localFlowValue = texelFetch(localMotion, localCoord, 0);
+        float divergence = clamp(length(globalFlow.xy - localFlowValue.xy) / 8.0, 0.0, 1.0);
+        float forwardConfidence = clamp(flow.z, 0.0, 1.0);
+        float confidence = forwardConfidence * consistency;
+        // Highlight blocks whose forward matcher is confident but whose
+        // combined FB/local-confidence mask does not support that vector.
+        accum.x += magnitude;
+        accum.y += magnitude * magnitude;
+        accum.z += confidence;
+        accum.w += max(forwardConfidence * (1.0 - consistency), divergence);
+    }
+    partial[lane] = accum;
+    barrier();
+    for (uint stride = 64u; stride > 0u; stride >>= 1u) {
+        if (lane < stride) partial[lane] += partial[lane + stride];
+        barrier();
+    }
+    if (lane == 0u) {
+        float inv = total > 0u ? 1.0 / float(total) : 0.0;
+        float mean = partial[0].x * inv;
+        float variance = max(0.0, partial[0].y * inv - mean * mean);
+        float deviation = sqrt(variance);
+        float confidence = clamp(partial[0].z * inv, 0.0, 1.0);
+        float risk = clamp(partial[0].w * inv, 0.0, 1.0);
+        imageStore(metricsOutput, ivec2(0), vec4(mean, deviation, confidence, risk));
+    }
+}

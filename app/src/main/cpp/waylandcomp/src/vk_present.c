@@ -123,12 +123,12 @@ static VkResult timed_wait(VkFence fence, uint64_t timeout) {
 /* The scene image (effects path only): every draw composited 1:1 at scene size, the input of the
  * screen-effect chain (effects_chain.c) — and of frame generation once that lands. Recreated on a
  * scene size change; frames are fenced, so never while the GPU reads it. */
-static struct { VkImage img; VkDeviceMemory mem; int w, h; } g_scene;
+static struct { VkImage img; VkDeviceMemory mem; VkImageView view; int w, h; } g_scene;
 
 /* HDR composition (hdr_compose.h): the 10-bit image every draw is blitted into 1:1 in its own encoding
  * ("mixed"), and the 10-bit HDR picture the encode pass makes of it for the game's display layer. Only
  * ever created while an HDR game shares the scene with something the display layer cannot show alone. */
-struct vkp_img_slot { VkImage img; VkDeviceMemory mem; int w, h; VkFormat fmt; };
+struct vkp_img_slot { VkImage img; VkDeviceMemory mem; VkImageView view; int w, h; VkFormat fmt; };
 static struct vkp_img_slot g_mixed, g_hdrscene, g_fgscene;
 #define HDR_FMT VK_FORMAT_A2B10G10R10_UNORM_PACK32
 /* Frame generation with HDR frames through an HDR10 swapchain: the scene, the effects and the engine's
@@ -1155,6 +1155,7 @@ static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkI
 static void destroy_scene_image(void) {
     if (g_scene.img) hdrc_forget_image(g_scene.img); /* the HDR pass may have drawn into it */
     if (g_scene.img) blendp_forget_image(g_scene.img);
+    if (g_scene.view) g_vk.DestroyImageView(g_dev, g_scene.view, NULL);
     if (g_scene.img) g_vk.DestroyImage(g_dev, g_scene.img, NULL);
     if (g_scene.mem) g_vk.FreeMemory(g_dev, g_scene.mem, NULL);
     memset(&g_scene, 0, sizeof(g_scene));
@@ -1183,6 +1184,11 @@ static int ensure_scene_image(int w, int h) {
     r = g_vk.AllocateMemory(g_dev, &mai, NULL, &g_scene.mem);
     if (r != VK_SUCCESS) { LOGE("effects: scene image %dx%d: vkAllocateMemory %s", w, h, vk_result_name(r)); destroy_scene_image(); return -1; }
     g_vk.BindImageMemory(g_dev, g_scene.img, g_scene.mem, 0);
+    VkImageViewCreateInfo vci = {.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,.image=g_scene.img,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,.format=VK_FORMAT_R8G8B8A8_UNORM,
+        .subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+    r = g_vk.CreateImageView(g_dev,&vci,NULL,&g_scene.view);
+    if (r != VK_SUCCESS) { destroy_scene_image(); return -1; }
     g_scene.w = w; g_scene.h = h;
     wnc_log("effects", "scene image %dx%d for the effect chain", w, h);
     return 0;
@@ -1193,6 +1199,7 @@ static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImag
     if (s->img && s->w == w && s->h == h && s->fmt == fmt) return 0;
     if (s->img) hdrc_forget_image(s->img);
     if (s->img) blendp_forget_image(s->img);
+    if (s->view) g_vk.DestroyImageView(g_dev,s->view,NULL);
     if (s->img) g_vk.DestroyImage(g_dev, s->img, NULL);
     if (s->mem) g_vk.FreeMemory(g_dev, s->mem, NULL);
     memset(s, 0, sizeof(*s));
@@ -1217,6 +1224,10 @@ static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImag
         return -1;
     }
     g_vk.BindImageMemory(g_dev, s->img, s->mem, 0);
+    VkImageViewCreateInfo vci = {.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,.image=s->img,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,.format=fmt,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+    r = g_vk.CreateImageView(g_dev,&vci,NULL,&s->view);
+    if (r != VK_SUCCESS) { g_vk.DestroyImage(g_dev,s->img,NULL); g_vk.FreeMemory(g_dev,s->mem,NULL); memset(s,0,sizeof(*s)); return -1; }
     s->w = w; s->h = h; s->fmt = fmt;
     char fname[24];
     vk_format_short(fmt, fname, sizeof(fname));
@@ -1686,6 +1697,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     int ngen = 0;
     VkImage gens[VKP_FG_MAX_GENERATIONS] = {VK_NULL_HANDLE};
     VkImage result = scene_img;
+    VkImageView result_view = deep ? g_fgscene.view : g_scene.view;
     int rw = scene_w, rh = scene_h;
     if (!pass) {
         VkImageMemoryBarrier b_present = {
@@ -1706,6 +1718,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
              * base under an HDR picture) must not flip the chain's format back every frame. */
             vkp_effects_set_formats(scene_fmt, scene_fmt);
             result = vkp_effects_run(cmd, scene_img, scene_w, scene_h, mapped_w, mapped_h, &rw, &rh);
+            result_view = vkp_effects_view(result);
             result_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         }
         /* Hand-off: from here the frame lives in GENERAL - the frame-generation engines copy and
@@ -1725,7 +1738,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         /* 3. Frame generation (the hook): the result is frame N; the engine interpolates between
          *    N-1 and N and hands back the frames that belong in between. Shown first, N last. */
         if (fg) {
-            ngen = vkp_framegen_run(cmd, result, VK_NULL_HANDLE, rw, rh, scene_fmt, gens);
+            ngen = vkp_framegen_run(cmd, result, result_view, rw, rh, scene_fmt, gens);
             if (ngen < 0) ngen = 0;
             if (ngen > VKP_FG_MAX_GENERATIONS) ngen = VKP_FG_MAX_GENERATIONS;
         }

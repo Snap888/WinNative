@@ -16,6 +16,7 @@
 
 #include "vk_state.h"
 #include "vk_driver.h"
+#include "../../../waylandcomp/src/vk_loader.h"
 
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
@@ -75,6 +76,8 @@ static void create_lsfg(VkRenderer* r);
 static void destroy_lsfg(VkRenderer* r);
 static void create_dis(VkRenderer* r);
 static void destroy_dis(VkRenderer* r);
+static void create_snap(VkRenderer* r);
+static void destroy_snap(VkRenderer* r);
 static uint32_t framegen_extra_images(const VkRenderer* r);
 static void framegen_rebuild_swapchain(VkRenderer* r);
 static bool create_quad_vbo(VkRenderer* r);
@@ -1315,7 +1318,7 @@ static bool create_swapchain(VkRenderer* r, uint32_t fallback_width, uint32_t fa
         sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // blit source for the encoder mirror
     }
     bool transfer_dst_capable = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0;
-    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested) && transfer_dst_capable;
+    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested || r->snap_requested) && transfer_dst_capable;
     if (r->swapchain_transfer_dst) sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     r->swapchain_storage = r->framegen_requested
@@ -1945,8 +1948,32 @@ static void create_dis(VkRenderer* r) {
     vkr_dis_set_debug_flow(r->dis, r->dis_debug_flow);
 }
 
+static void destroy_snap(VkRenderer* r) {
+    if (!r->snap) return;
+    snap_frame_vk_destroy(r->snap);
+    r->snap = NULL;
+    r->framegen_real_frames = 0;
+    r->framegen_made_frames = 0;
+}
+
+static void create_snap(VkRenderer* r) {
+    if (r->snap || !r->device || !r->physical_device) return;
+    r->snap = snap_frame_vk_create(r->device, r->physical_device);
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, r->snap_debug_mode);
+    if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, r->snap_candidate_reconstruction_mode);
+    if (!r->snap) {
+        VK_LOGW("SnapFrame Vulkan backend unavailable on this X11 device");
+        return;
+    }
+    VK_LOGI("SnapFrame Vulkan backend created on existing X11 device/queue");
+}
+
 static uint32_t framegen_extra_images(const VkRenderer* r) {
-    if (!r->framegen_requested && !r->dis_requested) return 0;
+    if (!r->framegen_requested && !r->dis_requested && !r->snap_requested) return 0;
+    if (r->snap_requested) {
+        uint32_t n = r->framegen_multiplier > 1 ? r->framegen_multiplier - 1 : 1;
+        return n > 3u ? 3u : n;
+    }
     if (r->dis_requested) return VKR_DIS_MAX_GENERATIONS;
     if (r->framegen_target_rate != 0) return VKR_LSFG_MAX_GENERATIONS;
 
@@ -2612,8 +2639,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
         destroy_sgsr1_resources(r);
     }
 
-    const bool framegen_on = r->framegen_requested || r->dis_requested;
+    const bool framegen_on = r->framegen_requested || r->dis_requested || r->snap_requested;
     const bool use_dis = r->dis != NULL;
+    const bool use_snap = r->snap != NULL;
     bool via_composite = framegen_on && r->framegen_supported
                       && r->swapchain_transfer_dst;
 
@@ -2634,9 +2662,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t framegen_capacity = 0;
-    if (via_composite && (r->lsfg || r->dis) && r->swapchain_image_count > 2) {
+    if (via_composite && (r->lsfg || r->dis || r->snap) && r->swapchain_image_count > 2) {
         framegen_capacity = r->swapchain_image_count - 2;
-        const uint32_t engine_max = r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS;
+        const uint32_t engine_max = r->snap ? 3u : (r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS);
         if (framegen_capacity > engine_max) framegen_capacity = engine_max;
         if (VK_FRAMES_IN_FLIGHT + framegen_capacity > VK_MAX_COMPOSITE_TARGETS) {
             framegen_capacity = VK_MAX_COMPOSITE_TARGETS - VK_FRAMES_IN_FLIGHT;
@@ -2657,6 +2685,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             || (r->dis && vkr_dis_needs_rebuild(r->dis, composite_extent.width,
                                                 composite_extent.height, r->swapchain_format,
                                                 dis_content));
+        if (r->snap && r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM) {
+            VK_LOGW("SnapFrame currently requires an RGBA8 X11 swapchain format");
+            framegen_capacity = 0;
+        }
         if (composite_stale || chain_stale) {
             if (r->dis) {
                 vkDeviceWaitIdle(r->device);
@@ -2682,11 +2714,26 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                      dis_content)) {
                     framegen_capacity = 0;
                 }
+            } else if (r->snap) {
+                if (!snap_frame_vk_prepare(r->snap, composite_extent.width,
+                                           composite_extent.height, r->swapchain_format,
+                                           (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+                    VK_LOGW("SnapFrame resource preparation failed for X11 output");
+                    framegen_capacity = 0;
+                }
             }
         }
     } else if (r->composite_built) {
         wait_inflight_frames(r);
         destroy_composite_targets(r);
+    }
+
+    if (via_composite && r->snap
+        && !snap_frame_vk_prepare(r->snap, composite_extent.width, composite_extent.height,
+                                  r->swapchain_format,
+                                  (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+        VK_LOGW("SnapFrame X11 frame resources are unavailable");
+        framegen_capacity = 0;
     }
 
     uint32_t framegen_planned = 0;
@@ -2703,6 +2750,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
             framegen_planned = vkr_dis_plan(r->dis, framegen_capacity,
                                             __atomic_load_n(&r->framegen_source_frames,
                                                             __ATOMIC_RELAXED));
+        } else if (r->snap) {
+            framegen_planned = snap_frame_vk_has_history(r->snap)
+                                   ? (r->framegen_multiplier > 1
+                                          ? r->framegen_multiplier - 1 : 0) : 0;
+            if (framegen_planned > 3u) framegen_planned = 3u;
+            if (framegen_planned > framegen_capacity) framegen_planned = framegen_capacity;
         }
     }
 
@@ -2883,8 +2936,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     if (composite) {
-        if ((use_dis || r->lsfg) && framegen_capacity > 0) {
-            if (use_dis) {
+        if ((use_dis || r->lsfg || use_snap) && framegen_capacity > 0) {
+            if (use_snap) {
+                uint32_t snap_process_count = gen_count;
+                /* UINT32_MAX requests a flow-only update when no extra swapchain image was acquired. */
+                if (r->snap_debug_flow && snap_process_count == 0)
+                    snap_process_count = UINT32_MAX;
+                if (!snap_frame_vk_process(r->snap, f->cmd, composite->image,
+                                           composite->view, snap_process_count)) gen_count = 0;
+            } else if (use_dis) {
                 vkr_dis_process(r->dis, f->cmd, composite->image,
                                 composite->width, composite->height, gen_count);
             } else {
@@ -2895,7 +2955,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             for (uint32_t g = 0; g < gen_count; g++) {
                 const uint32_t idx = gen_image_index[g];
                 if (r->swapchain_storage) {
-                    if (use_dis) {
+                    if (use_snap) {
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count,
+                                               r->swapchain_images[idx], r->swapchain_views[idx]);
+                    } else if (use_dis) {
                         vkr_dis_generate_into(r->dis, f->cmd, g, idx,
                                               r->swapchain_images[idx], r->swapchain_views[idx],
                                               r->swapchain_extent.width,
@@ -2930,10 +2993,25 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                       VK_ACCESS_TRANSFER_WRITE_BIT, 0);
                 } else {
                     VkCompositeTarget* gt = &r->composite[VK_FRAMES_IN_FLIGHT + g];
-                    vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
-                                           gt->image, gt->view,
-                                           r->swapchain_extent.width,
-                                           r->swapchain_extent.height);
+                    if (use_snap) {
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                                          VK_ACCESS_SHADER_WRITE_BIT);
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count, gt->image, gt->view);
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                          VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                          VK_ACCESS_TRANSFER_READ_BIT);
+                    } else {
+                        vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
+                                               gt->image, gt->view,
+                                               r->swapchain_extent.width,
+                                               r->swapchain_extent.height);
+                    }
                     blit_composite_to_swapchain(r, f->cmd, gt, r->swapchain_images[idx]);
                 }
             }
@@ -2950,6 +3028,19 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 r->framegen_draw_ns = 0;
                 r->framegen_gap_ns = 0;
                 r->framegen_timed_frames = 0;
+                if (use_snap) {
+                    float snap_stages[5], snap_total = 0.0f;
+                    if (snap_frame_vk_get_telemetry(r->snap, snap_stages, &snap_total)) {
+                        VK_LOGI("SnapFrame GPU ms: luma=%.3f pyramid=%.3f flow=%.3f consistency=%.3f warp=%.3f total=%.3f",
+                                snap_stages[0], snap_stages[1], snap_stages[2],
+                                snap_stages[3], snap_stages[4], snap_total);
+                    }
+                    float snap_metrics[4];
+                    if (snap_frame_vk_get_flow_metrics(r->snap, snap_metrics)) {
+                        VK_LOGI("SnapFrame latest completed flow metrics: motion=%.3f complexity=%.3f confidence=%.3f confident_inconsistency=%.3f (normalized)",
+                                snap_metrics[0], snap_metrics[1], snap_metrics[2], snap_metrics[3]);
+                    }
+                }
                 VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u got=%u "
                         "misses=%llu timeout=%.1fms images=%u capacity=%u draw=%.2fms gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
@@ -2963,7 +3054,21 @@ static bool record_and_submit_frame(VkRenderer* r) {
             }
         }
 
-        if (use_dis && r->dis_debug_flow) {
+        // Keep the flow viewer latched to the latest completed flow field. Generated-frame
+        // acquisition is opportunistic; tying diagnostics to gen_count made the view blink
+        // whenever the swapchain could not supply an extra image.
+        if (use_snap && r->snap_debug_flow) {
+            vkr_image_barrier(f->cmd, composite->image,
+                              VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                              VK_ACCESS_SHADER_WRITE_BIT);
+            snap_frame_vk_debug_into(r->snap, f->cmd, composite->image, composite->view,
+                                     composite->width, composite->height);
+            blit_composite_to_swapchain(r, f->cmd, composite, r->swapchain_images[image_index]);
+        } else if (use_dis && r->dis_debug_flow) {
             vkr_dis_debug_into(r->dis, f->cmd, r->swapchain_images[image_index],
                                r->swapchain_extent.width, r->swapchain_extent.height);
             vkr_image_barrier(f->cmd, r->swapchain_images[image_index],
@@ -3234,6 +3339,10 @@ JNIEXPORT jlong JNICALL JNI_FN(nativeCreate)(JNIEnv* env, jclass clazz,
     if (!create_instance(r)) goto fail;
     if (!pick_physical_device(r)) goto fail;
     if (!create_device(r)) goto fail;
+    if (vk_loader_bind_external(vkd.GetInstanceProcAddr, r->instance, r->device) != 0) {
+        VK_LOGE("SnapFrame Vulkan dispatch could not bind to the X11 renderer device");
+        goto fail;
+    }
     query_device_caps(r);
     if (!create_command_pool(r)) goto fail;
     if (!create_descriptor_pool(r, r->caps.descriptor_pool_capacity)) goto fail;
@@ -3302,6 +3411,7 @@ JNIEXPORT void JNICALL JNI_FN(nativeDestroy)(JNIEnv* env, jclass clazz, jlong ha
     if (!r) return;
 
     if (r->device) vkDeviceWaitIdle(r->device);
+    destroy_snap(r);
 
     // Drain any in-flight uploads and tear down the staging pool before destroying images.
     vkr_staging_pool_destroy(r);
@@ -3846,6 +3956,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationEnabled)(JNIEnv* env, jcla
         wait_inflight_frames(r);
         destroy_lsfg(r);
     } else if (r->device && r->lsfg_cache_path) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_dis(r);
         r->dis_requested = false;
         create_lsfg(r);
@@ -3862,6 +3974,94 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsFrameGenerationSupported)(JNIEnv* env,
     VkRenderer* r = (VkRenderer*)(intptr_t)handle;
     if (!r) return JNI_FALSE;
     return r->framegen_supported ? JNI_TRUE : JNI_FALSE;
+}
+
+/* This probe must work before FG is enabled; it checks surface/format capabilities,
+ * not the current framegen_requested or swapchain_transfer_dst state. */
+JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* env, jclass clazz,
+                                                                        jlong handle) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r || !r->physical_device || !r->device || !r->framegen_supported
+        || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
+        || r->swapchain_image_count <= 2u) return JNI_FALSE;
+    VkPhysicalDeviceProperties props;
+    memset(&props, 0, sizeof(props));
+    vkGetPhysicalDeviceProperties(r->physical_device, &props);
+    if (!props.limits.timestampComputeAndGraphics || props.limits.timestampPeriod <= 0.0f)
+        return JNI_FALSE;
+    const VkFormat formats[] = { VK_FORMAT_R16_SFLOAT,
+        VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM };
+    const VkFormatFeatureFlags need = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    for (uint32_t i = 0; i < 3; i++) {
+        VkFormatProperties fp;
+        memset(&fp, 0, sizeof(fp));
+        vkGetPhysicalDeviceFormatProperties(r->physical_device, formats[i], &fp);
+        if ((fp.optimalTilingFeatures & need) != need) return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameGenerationEnabled)(JNIEnv* env, jclass clazz,
+                                                                    jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    const bool want = enabled == JNI_TRUE;
+    if (r->snap_requested == want) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_requested = want;
+    if (!want) {
+        wait_inflight_frames(r);
+        destroy_snap(r);
+    } else if (r->device) {
+        destroy_lsfg(r);
+        destroy_dis(r);
+        r->framegen_requested = false;
+        r->dis_requested = false;
+        create_snap(r);
+        if (!r->snap) r->snap_requested = false;
+    }
+    framegen_rebuild_swapchain(r);
+    pthread_mutex_unlock(&r->render_mutex);
+    VK_LOGI("SnapFrame X11 path %s (backend=%s)", want ? "enabled" : "disabled",
+            r->snap ? "ready" : "unavailable");
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugFlow)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_flow = enabled == JNI_TRUE;
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugMode)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_mode = selected;
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameCandidateReconstruction)(JNIEnv* env, jclass clazz,
+                                                                          jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_candidate_reconstruction_mode = selected;
+    if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
 }
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationShaders)(JNIEnv* env, jclass clazz,
@@ -3943,6 +4143,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetDisFrameGenerationEnabled)(JNIEnv* env, j
         wait_inflight_frames(r);
         destroy_dis(r);
     } else if (r->device) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_lsfg(r);
         r->framegen_requested = false;
         create_dis(r);

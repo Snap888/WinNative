@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
 
 project(Winlator)
+include(CTest)
 
 include(FetchContent)
 
@@ -136,6 +137,10 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 # WFG frame generator (DIS optical flow + interpolation), linked by libwinlator and libwnwayland.
 add_subdirectory(wfg)
 
+# SnapFrame's independent Vulkan compute backend, using the Wayland compositor's Turnip dispatch.
+add_subdirectory(snapai)
+add_subdirectory(snapframe)
+
 # ----------------------------------------------------------------------------
 # Winlator native library (X-server, AHB, Vulkan compositor, helpers)
 # ----------------------------------------------------------------------------
@@ -151,6 +156,7 @@ add_library(winlator SHARED
         winlator/process_lifecycle.c
         winlator/vulkan.c
         winlator/vk/vk_dispatch.c
+        waylandcomp/src/vk_loader.c
         winlator/vk/vk_image.c
         winlator/vk/vk_renderer.c
         winlator/vk/lsfg/lsfg_dll.c
@@ -181,6 +187,8 @@ target_compile_definitions(winlator PRIVATE
 target_include_directories(winlator PRIVATE
         ${xz_SOURCE_DIR}/src/liblzma/api
         winlator/vk
+        waylandcomp/src
+        snapframe/include
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -188,6 +196,7 @@ target_compile_features(winlator PRIVATE cxx_std_17)
 
 target_link_libraries(winlator
         wfg
+        snapframe_vk
         log
         android
         mediandk

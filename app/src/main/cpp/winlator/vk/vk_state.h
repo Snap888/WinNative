@@ -16,6 +16,7 @@
 #include "vk_dispatch.h"
 #include "lsfg/vkr_lsfg.h"
 #include "vkr_dis.h"
+#include "../../snapframe/include/snap_frame_vk.h"
 
 #define VK_FRAMEGEN_MAX_GENERATIONS \
     (VKR_DIS_MAX_GENERATIONS > VKR_LSFG_MAX_GENERATIONS ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS)
@@ -428,6 +429,11 @@ typedef struct VkRenderer {
     char*             lsfg_cache_path;
     struct VkrDis*    dis;
     bool              dis_requested;
+    SnapFrameVk*      snap;
+    bool              snap_requested;
+    bool              snap_debug_flow;
+    uint32_t          snap_debug_mode;
+    uint32_t          snap_candidate_reconstruction_mode;
     uint32_t          dis_scale;
     uint32_t          dis_target_fps;
     bool              dis_debug_flow;

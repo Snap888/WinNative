@@ -1,18 +1,17 @@
 # Frame generation
 
-WinNative can interpolate extra frames between the ones your game actually renders.
-Interpolation runs **on the Android side**, inside WinNative's own Vulkan compositor rather than
-inside the Wine container, so it works with any graphics API Wine can drive — DXVK, WineD3D or
-native Vulkan alike.
+WinNative can interpolate extra frames between the ones your game actually renders. Interpolation
+runs **on the Android side**, inside WinNative's Vulkan compositor rather than inside the Wine
+container, so it works with any graphics API Wine can drive — DXVK, WineD3D or native Vulkan alike.
 
-There are **two engines**, both in the **FG** tab of the session drawer. Pick one — they are
-mutually exclusive, because the compositor drives a single interpolator per frame, and each keeps
-its own settings so switching between them does not disturb the other.
+There are **three independent engines** in the **FG** tab of the session drawer. Pick one; the
+compositor drives a single interpolator per frame. Each engine keeps its own settings.
 
 | Engine | Needs | Character |
 | --- | --- | --- |
-| **Lossless Scaling (LSFG)** | Your own copy of Lossless Scaling on Steam | The 25-shader chain from Lossless Scaling, ported to Vulkan |
+| **Lossless Scaling (LSFG)** | Your own copy of Lossless Scaling on Steam | The LSFG shader chain ported to Vulkan |
 | **WFG** | Nothing — ships with the APK | Dense Inverse Search optical flow, fully open source |
+| **SnapFrame** *(experimental)* | Wayland compositor and a compatible Turnip Vulkan device | Native SnapFrame compute pipeline with bidirectional flow, occlusion handling, multi-phase warp and Snap AI GPU-budget control |
 
 ## Lossless Scaling (LSFG)
 
@@ -23,8 +22,8 @@ The DLL is parsed as data and never executed.
 
 **Setup:** sign in to Steam, install Lossless Scaling, then open **Container Settings → Frame
 Generation**. WinNative finds the DLL automatically from your Steam library; if it can't, use
-**Select Lossless.dll…** to point at it. The LSFG half of the **FG** tab stays disabled until
-the shaders import successfully.
+**Select Lossless.dll…** to point at it. The LSFG half of the **FG** tab stays disabled until the
+shaders import successfully.
 
 ## WFG — WinNative/Winlator Frame Generator
 
@@ -33,23 +32,37 @@ complete open-source Dense Inverse Search frame generator built into WinNative �
 that ship with the APK — so it works on a fresh install with no Steam account and no
 `Lossless.dll`. Turn it on in the **FG** tab and it runs.
 
+## SnapFrame — native Vulkan *(experimental branch)*
+
+SnapFrame is a separate frame-generation engine built into the Wayland compositor. It uses the
+compositor's existing Vulkan device and FIFO present loop; it does not depend on LSFG, DIS or WFG.
+The runtime selector enables it only when the current Vulkan device supports the required storage
+formats and compute timestamp queries.
+
+The pipeline builds a three-level luma pyramid, estimates forward/backward optical flow, rejects
+inconsistent flow with an occlusion mask, and reconstructs distinct temporal phases for 2×, 3× and
+4× output. Snap AI consumes measured stage GPU times and scales the selected Flow Scale baseline
+down when the GPU exceeds its budget.
+
+SnapFrame settings are available in **per-game Game Settings** and the in-game **FG** overlay.
+The branch is experimental: a successful APK build and physical Turnip/Adreno stress test are
+still required before calling it hardware-validated. Current scene-cut resets are event/frame-gap
+based rather than pixel-content detection.
+
 ## Controls
 
 | Control | Engine | What it does |
 | --- | --- | --- |
-| Generate Frames | Both | Master toggle |
-| Multiplier | LSFG | 2× / 3× / 4× — generated frames per rendered frame |
+| Generate Frames | LSFG / WFG | Master toggle |
+| Engine | SnapFrame | Select OFF / LSFG / DIS / SnapFrame in the overlay; per-game settings offer LSFG or SnapFrame |
+| Multiplier | LSFG / SnapFrame | 2× / 3× / 4× generated phases |
 | Adaptive Target | LSFG | Aim for a specific output rate (60/90/120/144/165) instead of a fixed multiplier |
-| Flow Scale | LSFG | 25–100%, resolution of the optical-flow pyramid; lower is cheaper and softer |
-| Resolution Scale | WFG | Fast / Balance — 180 / 252 pixels on the frame's **shorter** side |
-| Target FPS | WFG | Max refresh rate, or a specific one (60/90/120/144/165). Generation pauses while the game runs below ~20 fps and resumes above 24 fps: below that a fast camera turn outruns the motion search and every frame waits 50+ ms for the next real one |
+| Flow Scale | LSFG / SnapFrame | 25–100%; SnapFrame treats this as the AI's upper baseline |
+| Snap AI | SnapFrame | Automatically reduces Flow Scale when measured GPU time exceeds the target budget |
+| Resolution Scale | WFG | Fast / Balance — 180 / 252 pixels on the frame's shorter side |
+| Target FPS | WFG | Max refresh rate, or a specific one (60/90/120/144/165) |
 | Show flow | WFG | Debug view: renders the estimated motion field instead of the frame |
-| FPS Limiter | Both | Caps the game's own frame rate, from 15 fps upward |
-
-WFG states its Resolution Scale in pixels rather than as a percentage on purpose: a fixed pixel
-budget costs the same on a 720p container and a 1440p one, whereas the same percentage would cost
-four times as much on the larger container without telling the search anything more about the
-motion. Lower is cheaper; higher tracks small or fast-moving detail better.
+| FPS Limiter | All | Caps the game's own frame rate, from 15 fps upward |
 
 ## What to expect
 
@@ -63,7 +76,8 @@ gives the most even pacing.
 
 ## Credits
 
-Both engines are other people's work. The LSFG chain derives from **Camille LaVey**'s Vulkan port
+LSFG and WFG are other people's work. The LSFG chain derives from **Camille LaVey**'s Vulkan port
 in the Eden Emulator Project, which derives from **PancakeTAS**'s lsfg-vk; the WFG engine was
-contributed by **qwertypower** of DEVAR Entertainment LLC. See [CREDITS.md](../CREDITS.md) for
-the full attribution, including which source files came from where.
+contributed by **qwertypower** of DEVAR Entertainment LLC. SnapFrame is the independent engine
+integrated from the [Snap_AI_Engine project](https://github.com/Snap888/Snap_AI_Engine). See
+[CREDITS.md](../CREDITS.md) for the full attribution, including source-file origins.

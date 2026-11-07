@@ -21,6 +21,7 @@ static _Atomic int   g_armed;
 static _Atomic int   g_mult = 2;
 static _Atomic int   g_dis_min_side = 180;
 static _Atomic int   g_target_fps;
+static _Atomic int   g_candidate_reconstruction; /* 0=AI auto, 1=off, 2=on */
 static _Atomic int   g_cfg_dirty = 1;
 static float g_flow = 0.8f, g_refresh_hz;          /* under g_lock */
 static char *g_cache_path;                          /* under g_lock */
@@ -92,7 +93,7 @@ static int64_t now_ns(void) {
 /* ====================================================================== app controls */
 
 void vkp_framegen_set_engine(int kind) {
-    if (kind != VKP_FG_ENGINE_LSFG && kind != VKP_FG_ENGINE_DIS) kind = VKP_FG_ENGINE_LSFG;
+    if (kind != VKP_FG_ENGINE_LSFG && kind != VKP_FG_ENGINE_DIS && kind != VKP_FG_ENGINE_SNAPFRAME) kind = VKP_FG_ENGINE_LSFG;
     atomic_store(&g_kind, kind);
     atomic_store(&g_failed_kind, -1);
     atomic_store(&g_cfg_dirty, 1);
@@ -137,6 +138,12 @@ void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps) {
     atomic_store(&g_cfg_dirty, 1);
 }
 
+void vkp_framegen_set_candidate_reconstruction(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    atomic_store(&g_candidate_reconstruction, mode);
+    atomic_store(&g_cfg_dirty, 1);
+}
+
 static int start_failed_for(int kind) {
     return atomic_load(&g_failed_kind) == kind && atomic_load(&g_failed_cache_gen) == atomic_load(&g_cache_gen);
 }
@@ -156,7 +163,14 @@ int vkp_framegen_problem(void) {
     if (g_engine_ok && g_engine_kind == kind && fge_unavailable()) return 2;
     return 0;
 }
-const char *vkp_framegen_caps_reason(void) { return fge_caps_reason(); }
+const char *vkp_framegen_caps_reason(void) { return fge_caps_reason_for(atomic_load(&g_kind)); }
+int vkp_framegen_engine_available(int kind) {
+    if (!g_dev_ready || g_dev_lost || !fge_caps_ok(kind)) return 0;
+    if (kind == VKP_FG_ENGINE_SNAPFRAME &&
+        (!g_vk.CreateQueryPool || !g_vk.DestroyQueryPool || !g_vk.GetQueryPoolResults ||
+         !g_vk.CmdResetQueryPool || !g_vk.CmdWriteTimestamp)) return 0;
+    return 1;
+}
 
 void vkp_framegen_stats(float out[6]) {
     float accepted = 0.0f, src = 0.0f, thermal = -1.0f;
@@ -168,7 +182,7 @@ void vkp_framegen_stats(float out[6]) {
     out[2] = g_source_rate;
     out[3] = g_presented_rate;
     out[4] = thermal;
-    out[5] = -1.0f;
+    out[5] = accepted;
 }
 
 unsigned vkp_framegen_stats_take(void) { return atomic_exchange(&g_stat_generated, 0u); }
@@ -185,6 +199,12 @@ const void *vkp_framegen_device_features(VkInstance inst, PFN_vkGetInstanceProcA
 }
 
 void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int features_enabled) {
+    if (g_dev_lost) {
+        /* Device-loss handles are invalid: discard them without issuing Vulkan destruction calls. */
+        memset(g_ring, 0, sizeof(g_ring)); g_ring_n = 0;
+        g_engine_ok = 0; g_engine_kind = -1; g_engine_cache_gen = -1;
+        g_built_w = g_built_h = 0; g_dev_ready = 0; g_dev_lost = 0;
+    }
     g_dev = dev; g_queue = queue; g_qfam = qfam; g_features_enabled = features_enabled;
 #define R(n) vk.n = (PFN_vk##n)g_vk.GetDeviceProcAddr(dev, "vk" #n)
     R(CreateImage); R(DestroyImage); R(CreateImageView); R(DestroyImageView);
@@ -193,13 +213,21 @@ void vkp_framegen_device_ready(VkDevice dev, VkQueue queue, uint32_t qfam, int f
 #undef R
     g_vk.GetPhysicalDeviceMemoryProperties(g_pd, &g_memprops);
     fge_device_ready(g_gipa, g_inst, g_pd, dev, queue, qfam, features_enabled);
-    g_dev_ready = vk.CreateImage && vk.CreateImageView && vk.CmdPipelineBarrier;
-    FGLOG("engines ready on the compositor's device: LSFG Native %s (%s), WFG Native %s",
-          fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable", fge_caps_reason(),
-          fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable");
+    g_dev_ready = vk.CreateImage && vk.DestroyImage && vk.CreateImageView &&
+        vk.DestroyImageView && vk.GetImageMemoryRequirements && vk.AllocateMemory &&
+        vk.FreeMemory && vk.BindImageMemory && vk.CmdPipelineBarrier && vk.DeviceWaitIdle;
+    if (!g_dev_ready) {
+        FGLOG("frame generation disabled: compositor Vulkan device is missing required image/memory entry points");
+        return;
+    }
+    FGLOG("engines ready on the compositor's device: LSFG Native %s, WFG Native %s, SnapFrame Vulkan %s (%s)",
+          fge_caps_ok(VKP_FG_ENGINE_LSFG) ? "available" : "unavailable",
+          fge_caps_ok(VKP_FG_ENGINE_DIS) ? "available" : "unavailable",
+          fge_caps_ok(VKP_FG_ENGINE_SNAPFRAME) ? "available" : "unavailable",
+          fge_caps_reason_for(VKP_FG_ENGINE_SNAPFRAME));
 }
 
-void vkp_framegen_device_lost(void) { g_dev_lost = 1; }
+void vkp_framegen_device_lost(void) { g_dev_lost = 1; fge_device_lost(); }
 
 /* ====================================================================== ring */
 
@@ -238,21 +266,35 @@ static int ensure_ring(uint32_t w, uint32_t h, VkFormat fmt, uint32_t n) {
             .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
-        if (vk.CreateImage(g_dev, &ici, NULL, &r->img) != VK_SUCCESS) { destroy_ring(); return 0; }
+        if (vk.CreateImage(g_dev, &ici, NULL, &r->img) != VK_SUCCESS) {
+            FGLOG("generation ring image creation failed at slot %u (%ux%u)", i, w, h);
+            destroy_ring();
+            return 0;
+        }
+        /* Count the slot immediately so every partial allocation is reclaimed on failure. */
+        g_ring_n = i + 1;
         VkMemoryRequirements req;
         vk.GetImageMemoryRequirements(g_dev, r->img, &req);
         int idx = memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         VkMemoryAllocateInfo mai = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
                                     .allocationSize = req.size, .memoryTypeIndex = (uint32_t)idx};
-        if (idx < 0 || vk.AllocateMemory(g_dev, &mai, NULL, &r->mem) != VK_SUCCESS) { destroy_ring(); return 0; }
-        vk.BindImageMemory(g_dev, r->img, r->mem, 0);
+        if (idx < 0 || vk.AllocateMemory(g_dev, &mai, NULL, &r->mem) != VK_SUCCESS) {
+            FGLOG("generation ring allocation failed at slot %u (%ux%u)", i, w, h);
+            destroy_ring();
+            return 0;
+        }
+        VkResult bind_result = vk.BindImageMemory(g_dev, r->img, r->mem, 0);
+        if (bind_result != VK_SUCCESS) {
+            FGLOG("generation ring bind failed at slot %u: VkResult=%d", i, (int)bind_result);
+            destroy_ring();
+            return 0;
+        }
         VkImageViewCreateInfo vci = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = r->img,
             .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = fmt,
             .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
         if (vk.CreateImageView(g_dev, &vci, NULL, &r->view) != VK_SUCCESS) { destroy_ring(); return 0; }
         r->fresh = 1;
-        g_ring_n = i + 1;
     }
     g_ring_w = w; g_ring_h = h; g_ring_fmt = fmt;
     LOGD("framegen: generation ring %ux%u x%u", w, h, n);
@@ -290,6 +332,7 @@ int vkp_framegen_active(void) {
 /* DIS fills the gap to the refresh rate itself; LSFG takes the multiplier's share, or with a
  * target rate lets its pacer pick the count. Either way, up to the engine's most. */
 static uint32_t generation_slots(void) {
+    if (atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME) { uint32_t m=(uint32_t)atomic_load(&g_mult); return m>1?m-1:0; }
     if (atomic_load(&g_kind) == VKP_FG_ENGINE_DIS) return VKP_FG_MAX_GENERATIONS;
     if (atomic_load(&g_target_fps) > 0) return VKP_FG_LSFG_MAX_GENERATIONS;
     uint32_t m = (uint32_t)atomic_load(&g_mult);
@@ -334,6 +377,7 @@ static int ensure_engine(int kind) {
 
 static int g_logged_mult;
 static void log_arm_transition(int armed, int kind, int mult) {
+    if (armed != g_was_armed && g_engine_ok) fge_reset_history();
     if (armed == g_was_armed) {
         if (armed && mult != g_logged_mult) {
             g_logged_mult = mult;
@@ -356,7 +400,6 @@ static void log_arm_transition(int armed, int kind, int mult) {
 
 int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view, int w, int h,
                      VkFormat fmt, VkImage gens[VKP_FG_MAX_GENERATIONS]) {
-    (void)scene_view;
     int kind = atomic_load(&g_kind);
     int armed = atomic_load(&g_armed);
     int mult = atomic_load(&g_mult);
@@ -370,6 +413,7 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
         pthread_mutex_lock(&g_lock); flow = g_flow; hz = g_refresh_hz; pthread_mutex_unlock(&g_lock);
         fge_configure((uint32_t)mult, flow, hz, atomic_load(&g_dis_min_side),
                       atomic_load(&g_target_fps));
+        fge_set_candidate_reconstruction(atomic_load(&g_candidate_reconstruction));
     }
     if (!fge_prepare((uint32_t)w, (uint32_t)h, fmt)) {
         if (fmt != VK_FORMAT_R8G8B8A8_UNORM && fge_unavailable()) {
@@ -427,7 +471,21 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
                           0, 0, NULL, 0, NULL, nb, bars);
 
     /* Frame N in; the shared passes (the whole flow pyramid) run only when generating. */
-    fge_process(cmd, scene, (uint32_t)w, (uint32_t)h, n_gen);
+    SnapFrameVulkanOutputSlot snap_outputs[SNAP_FRAME_MAX_MULTIPLIER-1] = {{0}};
+    for (uint32_t i=0;i<n_gen && i<SNAP_FRAME_MAX_MULTIPLIER-1;i++) {
+        snap_outputs[i].image=g_ring[i].img;snap_outputs[i].view=g_ring[i].view;
+        snap_outputs[i].layout=VK_IMAGE_LAYOUT_GENERAL;snap_outputs[i].final_layout=VK_IMAGE_LAYOUT_GENERAL;
+    }
+    n_gen = fge_process(cmd, scene, scene_view, (uint32_t)w, (uint32_t)h, fmt, n_gen, snap_outputs);
+    g_planned = n_gen;
+    /* Readback is delayed by the four-slot GPU ring; this only logs completed samples. */
+    if (kind == VKP_FG_ENGINE_SNAPFRAME && (g_source_frames % 120u) == 0u) {
+        float m[4];
+        if (fge_flow_metrics(m)) {
+            FGLOG("SnapFrame GPU metrics: motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f (normalized)",
+                  (double)m[0], (double)m[1], (double)m[2], (double)m[3]);
+        }
+    }
     for (uint32_t g = 0; g < n_gen; g++) {
         fge_generate(cmd, g, n_gen, g_ring[g].img, g_ring[g].view, (uint32_t)w, (uint32_t)h);
         gens[g] = g_ring[g].img;

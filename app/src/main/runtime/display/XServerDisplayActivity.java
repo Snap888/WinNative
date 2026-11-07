@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.os.Environment;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -503,6 +504,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private String frameGenCachePath = null;
     private float frameGenRefreshRate = 0f;
     private boolean disFrameGenEnabled = false;
+    private boolean snapFrameGenEnabled = false;
     private SystemFrameGenMonitor systemFrameGenMonitor = null;
     private boolean systemFrameGenSupported = false;
     private boolean systemFrameGenHudEnabled = false;
@@ -530,6 +532,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int disFrameGenScale = DIS_FRAME_GEN_SCALE_DEFAULT;
     private int disFrameGenTargetFps = 0;
     private boolean disFrameGenDebugFlow = false;
+    private int snapFrameDebugMode = 0;
+    private int snapFrameCandidateMode = WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO;
+    private boolean snapFrameLogEnabled = false;
+    private Process snapFrameLogcatProcess;
+    private java.io.File snapFrameLogFile;
     private boolean sgsrEnabled = false;
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
@@ -883,6 +890,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         String containerMultiplier = container != null ? container.getExtra("frameGenMultiplier", "2") : "2";
         String containerTargetRate = container != null ? container.getExtra("frameGenTargetRate", "0") : "0";
         String containerFlowScale = container != null ? container.getExtra("frameGenFlowScale", "70") : "70";
+        String containerSnapFrame = container != null ? container.getExtra("snapFrameGen", "0") : "0";
+        String containerCandidateMode = container != null ? container.getExtra("snapFrameCandidateMode", "0") : "0";
 
         frameGenEnabled = "1".equals(getFrameGenSetting("frameGen", containerValue));
         frameGenMultiplier = clampFrameGenMultiplier(
@@ -891,6 +900,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 parseSettingInt(getFrameGenSetting("frameGenTargetRate", containerTargetRate), 0));
         frameGenFlowScale = clampFrameGenFlowScale(
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
+        snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
+        snapFrameLogEnabled = "1".equals(getFrameGenSetting("snapFrameLog", container != null ? container.getExtra("snapFrameLog", "0") : "0"));
+        if (snapFrameLogEnabled) startSnapFrameDiagnosticLog();
+        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON,
+                        parseSettingInt(getFrameGenSetting("snapFrameCandidateMode", containerCandidateMode), 0)));
+        if (snapFrameGenEnabled) { frameGenEnabled = false; disFrameGenEnabled = false; }
 
         if (frameGenEnabled) {
             int result = com.winlator.cmod.feature.library.LosslessAutoImport.INSTANCE.sync(this).getResult();
@@ -923,6 +939,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
 
         applyFrameGeneration(renderer);
+        applySnapFrameGeneration(renderer);
     }
 
     private void applyFrameGeneration(VulkanRenderer renderer) {
@@ -950,8 +967,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
      * X11 renderer is given; the setters are stores its thread picks up on its next frame. */
     private void applyWaylandFrameGeneration() {
         if (!waylandMode) return;
+        WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
 
-        if (frameGenEnabled && frameGenCachePath != null) {
+        if (snapFrameGenEnabled) {
+            WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
+            WaylandCompositor.nativeSetEngineTuning(0, frameGenTargetRate);
+            WaylandCompositor.nativeSetFrameGenTuning(frameGenFlowScale / 100f, frameGenRefreshRate);
+            WaylandCompositor.nativeSetFrameGenArmed(true, frameGenMultiplier);
+        } else if (frameGenEnabled && frameGenCachePath != null) {
             WaylandCompositor.nativeSetLsfgCachePath(frameGenCachePath);
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_LSFG);
             WaylandCompositor.nativeSetEngineTuning(disFrameGenScale, frameGenTargetRate);
@@ -969,12 +992,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     private void syncFrameGenerationHud() {
         applyWaylandFrameGeneration();
-        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled;
+        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled || snapFrameGenEnabled;
         boolean systemFrameGen = !ourFrameGen && systemFrameGenHudEnabled;
         boolean active = ourFrameGen || systemFrameGen;
 
         FrameRating.OutputFrameSource source;
-        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled) {
+        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled || snapFrameGenEnabled) {
             source = waylandMode ? waylandFrameGenOutputSource : frameGenOutputSource;
         } else if (systemFrameGen) {
             source = ensureSystemFrameGenMonitor();
@@ -1248,7 +1271,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         applyFrameGeneration(renderer);
         applyDisFrameGeneration(renderer);
-        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled) {
+        applySnapFrameGeneration(renderer);
+        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled && !snapFrameGenEnabled) {
             applyPreferredRefreshRate();
         }
         saveFrameGenerationSettings();
@@ -1256,22 +1280,89 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         renderDrawerMenu();
     }
 
+    private void applySnapFrameGeneration(VulkanRenderer renderer) {
+        if (renderer == null || waylandMode) return;
+        renderer.setSnapFrameGenerationEnabled(snapFrameGenEnabled);
+        renderer.setSnapFrameDebugFlow(disFrameGenDebugFlow);
+        renderer.setSnapFrameDebugMode(snapFrameDebugMode);
+        renderer.setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+        if (snapFrameGenEnabled) {
+            renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
+            renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
+            Log.i("XServerDisplayActivity", "SnapFrame X11 requested multiplier=" + frameGenMultiplier
+                    + " flowScale=" + frameGenFlowScale + " available="
+                    + renderer.isSnapFrameGenerationAvailable());
+        }
+    }
+
+    private void startSnapFrameDiagnosticLog() {
+        if (snapFrameLogcatProcess != null && snapFrameLogcatProcess.isAlive()) return;
+        try {
+            java.io.File directory = new java.io.File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "winnative");
+            if (!directory.exists() && !directory.mkdirs()) {
+                Log.e("SnapFrameLog", "Cannot create log directory: " + directory);
+                snapFrameLogEnabled = false;
+                return;
+            }
+            snapFrameLogFile = new java.io.File(directory, "snapframe.log");
+            /* Verify scoped-storage / all-files access before starting logcat. */
+            java.io.File probe = new java.io.File(directory, ".snapframe-write-test");
+            try (java.io.FileOutputStream ignored = new java.io.FileOutputStream(probe, false)) {
+                ignored.write(0);
+            } finally {
+                probe.delete();
+            }
+            // Do not clear the device log buffer: capture only our tags from this point onward.
+            snapFrameLogcatProcess = new ProcessBuilder(
+                    "logcat", "-v", "threadtime", "-f", snapFrameLogFile.getAbsolutePath(),
+                    "SnapFrame:I", "VkRenderer:I", "SnapFrameLog:I", "*:S")
+                    .redirectErrorStream(true).start();
+            Log.i("SnapFrameLog", "Diagnostic log enabled: " + snapFrameLogFile.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e("SnapFrameLog", "Cannot start logcat capture", e);
+            snapFrameLogEnabled = false;
+            snapFrameLogcatProcess = null;
+        }
+    }
+
+    private void stopSnapFrameDiagnosticLog() {
+        Process process = snapFrameLogcatProcess;
+        snapFrameLogcatProcess = null;
+        if (process != null) {
+            process.destroy();
+            try { process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+        Log.i("SnapFrameLog", "Diagnostic log disabled");
+    }
+
     private void saveFrameGenerationSettings() {
         if (shortcut != null) {
             boolean overridden = saveFrameGenOverride("frameGen", frameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("snapFrameGen", snapFrameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("frameGenEngine", snapFrameGenEnabled ? "1" : "0", "0");
             overridden |= saveFrameGenOverride("frameGenMultiplier",
                     String.valueOf(frameGenMultiplier), "2");
             overridden |= saveFrameGenOverride("frameGenTargetRate",
                     String.valueOf(frameGenTargetRate), "0");
             overridden |= saveFrameGenOverride("frameGenFlowScale",
                     String.valueOf(frameGenFlowScale), "70");
+            overridden |= saveFrameGenOverride("snapFrameCandidateMode",
+                    String.valueOf(snapFrameCandidateMode), "0");
+            overridden |= saveFrameGenOverride("snapFrameLog", snapFrameLogEnabled ? "1" : "0", "0");
             if (overridden) shortcut.putExtra("use_container_defaults", "0");
             shortcut.saveData();
         } else if (container != null) {
             container.putExtra("frameGen", frameGenEnabled ? "1" : "0");
+            container.putExtra("snapFrameGen", snapFrameGenEnabled ? "1" : "0");
+            container.putExtra("frameGenEngine", snapFrameGenEnabled ? "1" : "0");
             container.putExtra("frameGenMultiplier", String.valueOf(frameGenMultiplier));
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));
+            container.putExtra("snapFrameCandidateMode", String.valueOf(snapFrameCandidateMode));
+            container.putExtra("snapFrameLog", snapFrameLogEnabled ? "1" : "0");
             container.saveData();
         }
     }
@@ -5142,6 +5233,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     @Override
     protected void onDestroy() {
+        stopSnapFrameDiagnosticLog();
         activityDestroyed.set(true);
         detachWaylandSession();
         stopSteamControllerSupport();
@@ -5506,14 +5598,26 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 frameGenMultiplier,
                 frameGenTargetRate,
                 frameGenFlowScale,
-                getString(R.string.session_drawer_frame_generation));
+                getString(R.string.session_drawer_frame_generation),
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
+                snapFrameGenEnabled);
 
         state = XServerDrawerMenuKt.withDisFrameGenState(
                 state,
                 disFrameGenEnabled,
                 disFrameGenScale,
                 disFrameGenTargetFps,
-                disFrameGenDebugFlow);
+                disFrameGenDebugFlow,
+                snapFrameDebugMode,
+                snapFrameCandidateMode,
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
+                snapFrameLogEnabled);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -5899,6 +6003,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         if (lsfg && frameGenCachePath == null) return;
                         frameGenEnabled = lsfg;
                         disFrameGenEnabled = engine == FrameGenEngine.DIS;
+                        snapFrameGenEnabled = engine == FrameGenEngine.SNAPFRAME;
                         applyFrameGenerationLive();
                     }
 
@@ -5942,7 +6047,39 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         disFrameGenDebugFlow = enabled;
                         if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setDisDebugFlow(enabled);
+                            xServerView.getRenderer().setSnapFrameDebugFlow(enabled);
                         }
+                        applyFrameGenerationLive();
+                    }
+
+                    @Override
+                    public void onSnapFrameDebugModeChanged(int mode) {
+                        snapFrameDebugMode = Math.max(0, Math.min(2, mode));
+                        if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameDebugMode(snapFrameDebugMode);
+                        }
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameCandidateModeChanged(int mode) {
+                        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON, mode));
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        }
+                        saveFrameGenerationSettings();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameLogChanged(boolean enabled) {
+                        snapFrameLogEnabled = enabled;
+                        if (enabled) startSnapFrameDiagnosticLog();
+                        else stopSnapFrameDiagnosticLog();
+                        saveFrameGenerationSettings();
                         renderDrawerMenu();
                     }
 

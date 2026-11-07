@@ -14,6 +14,7 @@
 #define VK_USE_PLATFORM_ANDROID_KHR
 #endif
 #include <vulkan/vulkan.h>
+#include "snap_frame/snap_frame_vulkan.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,6 +34,10 @@ void fge_device_ready(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
 int fge_caps_ok(int kind);
 /* Why the LSFG gates fail ("supported" when they pass); static string. */
 const char *fge_caps_reason(void);
+const char *fge_caps_reason_for(int kind);
+void fge_device_lost(void);
+void fge_reset_history(void);
+void fge_set_candidate_reconstruction(int mode);
 /* 1 when the engines can generate in `fmt` on this device (storage + linear sampling), beyond the
  * ring format probed at fge_probe - the FP16 scene of HDR frames (vk_present.c). */
 int fge_format_ok(VkFormat fmt);
@@ -51,7 +56,7 @@ int fge_prepare(uint32_t w, uint32_t h, VkFormat fmt);
 /* How many frames to generate for this source frame (0 until the history is valid). */
 uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rate);
 /* Take the scene image (GENERAL) as frame N and run the shared part of the chain. */
-void fge_process(VkCommandBuffer cmd, VkImage source, uint32_t w, uint32_t h, uint32_t gens);
+uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, VkFormat format, uint32_t gens, const SnapFrameVulkanOutputSlot *outputs);
 /* Synthesise generated frame g of `count` into a storage image (GENERAL). */
 void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, VkImageView view,
                   uint32_t w, uint32_t h);
@@ -59,6 +64,8 @@ void fge_generate(VkCommandBuffer cmd, uint32_t g, uint32_t count, VkImage img, 
 void fge_forget_targets(void);
 /* Engine-side telemetry: accepted generations, source rate (0 = engine has none), thermal. */
 void fge_telemetry(float *accepted, float *source_rate, float *thermal);
+/* Last completed SnapFrame GPU reduction, normalized to 0..1. Returns 0 for other engines. */
+int fge_flow_metrics(float metrics[4]);
 const char *fge_engine_name(int kind);
 /* "lsfg-native"/"dis-native" build provenance for the start log line. */
 const char *fge_build_info(void);
