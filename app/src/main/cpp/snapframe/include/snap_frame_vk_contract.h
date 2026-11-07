@@ -9,6 +9,16 @@ enum { VK_FORMAT_R8G8B8A8_UNORM = 37, VK_FORMAT_B8G8R8A8_UNORM = 44, VK_FORMAT_R
 #endif
 
 enum {
+    SNAP_FRAME_CANDIDATE_AI_AUTO = 0u,
+    SNAP_FRAME_CANDIDATE_FORCE_OFF = 1u,
+    SNAP_FRAME_CANDIDATE_FORCE_ON = 2u
+};
+
+static inline uint32_t snap_frame_vk_candidate_mode(uint32_t mode) {
+    return mode <= SNAP_FRAME_CANDIDATE_FORCE_ON ? mode : SNAP_FRAME_CANDIDATE_AI_AUTO;
+}
+
+enum {
     SNAP_FRAME_DEBUG_MOTION = 0u,
     SNAP_FRAME_DEBUG_CONFIDENCE = 1u,
     SNAP_FRAME_DEBUG_CONSISTENCY = 2u,
