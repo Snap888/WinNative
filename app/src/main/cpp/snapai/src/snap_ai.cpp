@@ -111,18 +111,38 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   } else if (h->cfg.profile == SNAP_AI_PROFILE_QUALITY) {
     scale = 0.96f; radius = 1.12f; threshold = 0.42f;
   }
-  const float uncertainty = clamp01((1.0f - h->confidence) * 0.65f + risk * 0.35f);
-  const float easy = (1.0f - h->complexity) * h->confidence * (1.0f - risk);
-  const float hard = clamp01(h->complexity * 0.55f + uncertainty * 0.45f);
-  if (easy > 0.52f) {
-    scale -= 0.20f * easy;
-    if (passes > h->cfg.min_refinement_passes) --passes;
-    reuse = easy > 0.70f; mode = SNAP_AI_MODE_CONSERVATIVE;
-  }
-  if (hard > 0.42f) {
-    scale += 0.12f * hard; radius += 0.45f * hard;
-    if (passes < h->cfg.max_refinement_passes) ++passes;
-    artifact = uncertainty > 0.30f || risk > 0.25f; mode = SNAP_AI_MODE_QUALITY;
+  /* Low raw confidence is a safety condition, not a reason to enter QUALITY.
+     The previous policy treated uncertainty as "hard motion", expanded the search
+     window and selected QUALITY exactly when the matcher was least trustworthy.
+     Use the current frame's raw confidence for this safety gate; the EMA is retained
+     for stable complexity/telemetry but must not hide a sudden confidence collapse. */
+  const float uncertainty = clamp01((1.0f - raw_q) * 0.65f + risk * 0.35f);
+  const float easy = (1.0f - h->complexity) * raw_q * (1.0f - risk);
+  const float hard = clamp01(h->complexity * 0.55f + (1.0f - h->confidence) * 0.45f);
+  const bool unreliable_flow = raw_q < 0.18f || risk > 0.20f;
+  if (unreliable_flow) {
+    /* Keep the baseline flow scale/search radius and use the midpoint fallback.
+       Ask the host for bidirectional/artifact checks; never reuse stale flow here. */
+    mode = SNAP_AI_MODE_CONSERVATIVE;
+    scale = 1.0f;
+    radius = 1.0f;
+    passes = h->cfg.min_refinement_passes;
+    reuse = false;
+    artifact = true;
+  } else {
+    if (easy > 0.52f) {
+      scale -= 0.20f * easy;
+      if (passes > h->cfg.min_refinement_passes) --passes;
+      reuse = easy > 0.70f; mode = SNAP_AI_MODE_CONSERVATIVE;
+    }
+    if (hard > 0.42f) {
+      scale += 0.12f * hard;
+      /* Expand the matcher only when current-frame confidence supports it. */
+      radius += 0.30f * hard * clamp01((raw_q - 0.18f) / 0.32f);
+      if (passes < h->cfg.max_refinement_passes) ++passes;
+      artifact = uncertainty > 0.30f || risk > 0.25f;
+      mode = SNAP_AI_MODE_QUALITY;
+    }
   }
   if (h->pressure > 0.90f) scale = std::min(scale, 0.70f);
   else if (h->pressure > 0.75f) scale = std::min(scale, 0.82f);
