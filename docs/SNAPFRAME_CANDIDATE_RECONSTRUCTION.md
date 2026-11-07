@@ -47,7 +47,7 @@ The native control is exposed on both display paths:
 
 | Mode | Value | Behaviour |
 |---|---:|---|
-| AI automatic | 0 | Enable only when Snap AI selects `SNAP_AI_MODE_QUALITY`, motion and flow confidence exceed conservative minimums, artifact risk is below 0.20, and normalized GPU pressure is below 0.98; disable above 1.15 |
+| AI automatic | 0 | Enable only when Snap AI selects `SNAP_AI_MODE_QUALITY`, motion and flow confidence exceed conservative minimums, artifact risk is at or below 0.10, and normalized GPU pressure is below 0.98; disable above 1.15 |
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
