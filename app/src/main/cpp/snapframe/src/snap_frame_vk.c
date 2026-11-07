@@ -201,7 +201,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     e->timestamp_period_ms=props.limits.timestampPeriod/1000000.0f;
     SnapAIConfig ai_cfg; snap_ai_default_config(&ai_cfg);
     ai_cfg.min_flow_scale=0.25f; ai_cfg.max_flow_scale=1.0f;
-    ai_cfg.target_gpu_budget_ms=5.0f; ai_cfg.hysteresis=0.08f; ai_cfg.warmup_frames=8;
+    ai_cfg.target_gpu_budget_ms=7.0f; ai_cfg.hysteresis=0.08f; ai_cfg.warmup_frames=8;
     e->ai=snap_ai_create(&ai_cfg); if(!e->ai)goto fail;
     VkQueryPoolCreateInfo qi={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,.queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=40};
     if(g_vk.CreateQueryPool(d,&qi,NULL,&e->query_pool)!=VK_SUCCESS)goto fail;
@@ -338,15 +338,20 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
                 metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
                 metrics.motion_magnitude=flow_metrics[0];metrics.motion_complexity=flow_metrics[1];
-                metrics.flow_confidence=flow_metrics[2];metrics.gpu_pressure=total/5.0f;
+                metrics.flow_confidence=flow_metrics[2];metrics.gpu_pressure=total/7.0f;
                 metrics.artifact_risk=flow_metrics[3];metrics.telemetry_valid=1;
                 SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
                 if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK){
                     if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO){
                         /* Hysteresis prevents candidate compute from oscillating near the GPU budget. */
-                        if(decision.mode!=SNAP_AI_MODE_QUALITY || metrics.gpu_pressure>0.90f)
+                        const int candidate_scene = metrics.motion_magnitude >= 0.12f &&
+                            metrics.motion_complexity >= 0.18f &&
+                            metrics.flow_confidence >= 0.12f &&
+                            metrics.artifact_risk <= 0.20f;
+                        if(decision.mode!=SNAP_AI_MODE_QUALITY || !candidate_scene ||
+                           metrics.gpu_pressure>1.15f)
                             e->ai_quality_mode=0;
-                        else if(metrics.gpu_pressure<0.75f)
+                        else if(metrics.gpu_pressure<0.98f)
                             e->ai_quality_mode=1;
                         e->candidate_reconstruction_enabled=e->ai_quality_mode;
                     }
