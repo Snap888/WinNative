@@ -1780,6 +1780,8 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         if (qr != VK_SUCCESS) {
             if (qr == VK_ERROR_DEVICE_LOST) device_lost("submit");
             else LOGE("present: submit %d/%d failed (%d)", k + 1, presents, (int)qr);
+            /* Preserve earlier generated presents that succeeded before this slot's submit failed. */
+            vkp_framegen_presented(presented_gen, 0);
             /* The acquired image is never presented; the swapchain would be stuck with it. */
             if (g_dev_state != -2) destroy_swapchain();
             return -1;
