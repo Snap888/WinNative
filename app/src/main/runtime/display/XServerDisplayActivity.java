@@ -902,6 +902,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
         snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
         snapFrameLogEnabled = "1".equals(getFrameGenSetting("snapFrameLog", container != null ? container.getExtra("snapFrameLog", "0") : "0"));
+        if (snapFrameLogEnabled) startSnapFrameDiagnosticLog();
         snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
                 Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON,
                         parseSettingInt(getFrameGenSetting("snapFrameCandidateMode", containerCandidateMode), 0)));
@@ -5227,6 +5228,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     @Override
     protected void onDestroy() {
+        stopSnapFrameDiagnosticLog();
         activityDestroyed.set(true);
         detachWaylandSession();
         stopSteamControllerSupport();
