@@ -40,7 +40,7 @@ struct SnapFrameVk {
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
     struct sf_image candidates[SF_PHASES][4],candidate_weights[SF_PHASES];
     uint32_t candidate_reconstruction_mode; int candidate_reconstruction_enabled,ai_quality_mode;
-    uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; VkFormat format;
+    uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; float search_radius_scale; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4]; uint32_t query_slot;
@@ -201,7 +201,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     e->timestamp_period_ms=props.limits.timestampPeriod/1000000.0f;
     SnapAIConfig ai_cfg; snap_ai_default_config(&ai_cfg);
     ai_cfg.min_flow_scale=0.25f; ai_cfg.max_flow_scale=1.0f;
-    ai_cfg.target_gpu_budget_ms=7.0f; ai_cfg.hysteresis=0.08f; ai_cfg.warmup_frames=8;
+    ai_cfg.target_gpu_budget_ms=7.0f; ai_cfg.hysteresis=0.08f; ai_cfg.warmup_frames=8; e->search_radius_scale=1.0f;
     e->ai=snap_ai_create(&ai_cfg); if(!e->ai)goto fail;
     VkQueryPoolCreateInfo qi={.sType=VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,.queryType=VK_QUERY_TYPE_TIMESTAMP,.queryCount=40};
     if(g_vk.CreateQueryPool(d,&qi,NULL,&e->query_pool)!=VK_SUCCESS)goto fail;
@@ -214,7 +214,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
     if(g_vk.CreateDescriptorPool(d,&pi,NULL,&e->pool)!=VK_SUCCESS)goto fail;
     if(!pipeline_create(e,&e->luma,snap_luma_downsample_comp,snap_luma_downsample_comp_size,2,1,0)||
        !pipeline_create(e,&e->pyramid,snap_pyramid_downsample_comp,snap_pyramid_downsample_comp_size,2,1,0)||
-       !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,8)||
+       !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,12)||
        !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
        !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
        !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
@@ -356,12 +356,14 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                         e->candidate_reconstruction_enabled=e->ai_quality_mode;
                     }
                     if(decision.mode!=SNAP_AI_MODE_BYPASS){
+                        e->search_radius_scale=fmaxf(0.75f,fminf(1.5f,decision.search_radius_scale));
                         uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
                         if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
                     } else {
                         /* BYPASS means no AI policy is active: restore the user's baseline,
                            otherwise an earlier QUALITY decision leaves flow permanently reduced. */
                         e->flow_percent=e->manual_flow_percent;
+                        e->search_radius_scale=1.0f;
                         e->ai_quality_mode=0;
                         if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO)
                             e->candidate_reconstruction_enabled=0;
@@ -405,20 +407,21 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     write_timestamp(e,cmd,3);write_timestamp(e,cmd,4);
     v[0]=e->prev[2].view;v[1]=e->curr[2].view;v[2]=e->forward.view;update_set(e,&e->flow,0,3,3,v);
     v[0]=e->curr[2].view;v[1]=e->prev[2].view;v[2]=e->backward.view;update_set(e,&e->flow,1,3,3,v);
-    uint32_t flow_pc[2]={e->active_flow_w,e->active_flow_h};
+    struct {uint32_t width,height;float search_radius_scale;} flow_pc={
+        e->active_flow_w,e->active_flow_h,e->search_radius_scale};
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[0],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->flow.layout,0,1,&e->flow.sets[1],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdPushConstants(cmd,e->flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     write_timestamp(e,cmd,5);
     v[0]=e->forward.view;v[1]=e->backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
     update_set(e,&e->consistency,0,4,11,v);
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),flow_pc);
+    g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
     write_timestamp(e,cmd,6);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     if(e->metrics_enabled){
