@@ -28,7 +28,10 @@ foreach(token IN ITEMS
         "candidate_reconstruct8"
         "candidate_reconstruct16"
         "candidate_reconstruction_enabled"
-        "barrier_compute(cmd)")
+        "barrier_compute(cmd)"
+        "SF_LOGI"
+        "SNAP_AI_MODE_BYPASS"
+        "manual_flow_percent")
     string(FIND "${host}" "${token}" found)
     if(found EQUAL -1)
         message(FATAL_ERROR "SnapFrame host is missing candidate integration token: ${token}")
