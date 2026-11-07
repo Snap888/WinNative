@@ -2938,8 +2938,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
     if (composite) {
         if ((use_dis || r->lsfg || use_snap) && framegen_capacity > 0) {
             if (use_snap) {
+                uint32_t snap_process_count = gen_count;
+                /* UINT32_MAX requests a flow-only update when no extra swapchain image was acquired. */
+                if (r->snap_debug_flow && snap_process_count == 0)
+                    snap_process_count = UINT32_MAX;
                 if (!snap_frame_vk_process(r->snap, f->cmd, composite->image,
-                                           composite->view, gen_count)) gen_count = 0;
+                                           composite->view, snap_process_count)) gen_count = 0;
             } else if (use_dis) {
                 vkr_dis_process(r->dis, f->cmd, composite->image,
                                 composite->width, composite->height, gen_count);
