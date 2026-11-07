@@ -24,6 +24,10 @@ endforeach()
 file(READ "${HOST_FILE}" host)
 foreach(token IN ITEMS
         "candidate_warp"
+        "local_flow"
+        "motion_fusion"
+        "fused_forward"
+        "fused_backward"
         "candidate_score"
         "candidate_reconstruct8"
         "candidate_reconstruct16"
