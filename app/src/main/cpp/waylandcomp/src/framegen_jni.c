@@ -44,9 +44,9 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetEngine
 
 JNIEXPORT void JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFrameCandidateReconstruction(
-        JNIEnv *env, jclass clazz, jboolean enabled) {
+        JNIEnv *env, jclass clazz, jint mode) {
     (void)env; (void)clazz;
-    vkp_framegen_set_candidate_reconstruction(enabled ? 1 : 0);
+    vkp_framegen_set_candidate_reconstruction((int)mode);
 }
 
 JNIEXPORT jint JNICALL
