@@ -15,4 +15,5 @@ add_test(NAME snapframe_candidate_reconstruction_contract
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_DIR=${CMAKE_CURRENT_LIST_DIR}/..
         -DHOST_FILE=${CMAKE_CURRENT_LIST_DIR}/../src/snap_frame_vk.c
+        -DRENDERER_FILE=${CMAKE_CURRENT_LIST_DIR}/../../winlator/vk/vk_renderer.c
         -P ${CMAKE_CURRENT_LIST_DIR}/check_candidate_reconstruction.cmake)
