@@ -2,17 +2,17 @@
 // One-workgroup reduction over SnapFrame's existing flow + FB consistency.
 // Output channels: mean normalized motion, motion-magnitude deviation,
 // confidence weighted by FB consistency, and complementary artifact risk.
-layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D motionField;
 layout(set = 0, binding = 1) uniform sampler2D consistencyField;
 layout(set = 0, binding = 2, rgba32f) writeonly uniform image2D metricsOutput;
-shared vec4 partial[256];
+shared vec4 partial[128];
 void main() {
     uint lane = gl_LocalInvocationID.x;
     ivec2 extent = textureSize(motionField, 0);
     uint total = uint(extent.x * extent.y);
     vec4 accum = vec4(0.0);
-    for (uint i = lane; i < total; i += 256u) {
+    for (uint i = lane; i < total; i += 128u) {
         ivec2 p = ivec2(int(i % uint(extent.x)), int(i / uint(extent.x)));
         vec4 flow = texelFetch(motionField, p, 0);
         float consistency = clamp(texelFetch(consistencyField, p, 0).r, 0.0, 1.0);
@@ -25,7 +25,7 @@ void main() {
     }
     partial[lane] = accum;
     barrier();
-    for (uint stride = 128u; stride > 0u; stride >>= 1u) {
+    for (uint stride = 64u; stride > 0u; stride >>= 1u) {
         if (lane < stride) partial[lane] += partial[lane + stride];
         barrier();
     }
