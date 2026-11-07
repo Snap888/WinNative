@@ -13,6 +13,8 @@ void snap_frame_vk_abandon(SnapFrameVk *engine);
 int snap_frame_vk_prepare(SnapFrameVk *engine, uint32_t width, uint32_t height, VkFormat format, uint32_t flow_scale_percent);
 int snap_frame_vk_has_history(const SnapFrameVk *engine);
 void snap_frame_vk_reset_history(SnapFrameVk *engine);
+/* Experimental A/B switch: 0 uses the original midpoint warp, 1 uses four-candidate reconstruction. */
+void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk *engine, uint32_t enabled);
 /* Non-blocking timestamps from the last completed query slot; values are milliseconds. */
 int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[5], float *total_ms);
 /* Last completed GPU-reduced metrics: motion, complexity, FB-weighted confidence,
