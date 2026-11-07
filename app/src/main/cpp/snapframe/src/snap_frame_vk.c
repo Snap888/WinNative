@@ -257,9 +257,11 @@ void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->life
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
     uint64_t values[20];memset(values,0,sizeof(values));
-    VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*10u,10u,sizeof(values),values,
-        sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+    VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*10u,10u,sizeof(values),values,        sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
     e->query_pending[slot]=0;
+    /* Retire this slot's metrics on every path, including unavailable timestamps. */
+    uint8_t metrics_ready=e->metrics_pending[slot];
+    e->metrics_pending[slot]=0;
     if(r!=VK_SUCCESS)return;
     float total=0.0f,stage_values[5]={0};
     for(uint32_t i=0;i<5;i++){
@@ -272,7 +274,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     int telemetry_valid=total>0.0f;
     pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->stage_gpu_ms,stage_values,sizeof(stage_values));
     e->last_gpu_ms=total;e->telemetry_valid=telemetry_valid;pthread_mutex_unlock(&e->telemetry_mutex);
-    if(telemetry_valid&&e->ai&&e->metrics_enabled&&e->metrics_pending[slot]){
+    if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
         float flow_metrics[4]={0};void*mapped=NULL;
         if(g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
             memcpy(flow_metrics,mapped,sizeof(flow_metrics));g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
@@ -291,7 +293,6 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
             }
         }
     }
-    e->metrics_pending[slot]=0;
 }
 static void write_timestamp(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t query){
     g_vk.CmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,e->query_pool,e->query_slot*10u+query);
