@@ -19,7 +19,9 @@ int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[5], f
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk *engine, float metrics[4]);
 int snap_frame_vk_process(SnapFrameVk *engine, VkCommandBuffer command_buffer, VkImage source, VkImageView source_view, uint32_t generation_count);
 void snap_frame_vk_generate(SnapFrameVk *engine, VkCommandBuffer command_buffer, uint32_t phase_index, uint32_t phase_count, VkImage output, VkImageView output_view);
-/* Render the engine's own bidirectional flow + consistency mask into an RGBA8 debug target. */
+/* Select debug visualization: 0=motion, 1=matcher confidence, 2=FB consistency. */
+void snap_frame_vk_set_debug_mode(SnapFrameVk *engine, uint32_t mode);
+/* Render the engine's own flow/confidence/consistency into an RGBA8 debug target. */
 void snap_frame_vk_debug_into(SnapFrameVk *engine, VkCommandBuffer command_buffer,
                               VkImage output, VkImageView output_view,
                               uint32_t width, uint32_t height);
