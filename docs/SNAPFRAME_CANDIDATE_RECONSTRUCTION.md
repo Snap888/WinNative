@@ -46,7 +46,7 @@ The native control is exposed as
 
 | Mode | Value | Behaviour |
 |---|---:|---|
-| AI automatic | 0 | Enable only when Snap AI selects `SNAP_AI_MODE_QUALITY` |
+| AI automatic | 0 | Enable when Snap AI selects `SNAP_AI_MODE_QUALITY` and GPU pressure is below 0.75; disable above 0.90 |
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
