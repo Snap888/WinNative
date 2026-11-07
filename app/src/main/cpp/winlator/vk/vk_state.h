@@ -32,8 +32,8 @@
 #define VK_MAX_RECORD_IMAGES 32
 #define VK_MAX_EFFECTS 8
 #define VK_MAX_COMPOSITE_TARGETS 10
-#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 3000000ULL
-#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 12000000ULL
+#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL
+#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL
 #define VK_MAX_RENDERABLE_WINDOWS 64
 // Number of in-flight upload slots. Each slot owns a persistently-mapped staging buffer,
 // fence, and command pool. An upload only blocks when this many uploads are still pending
