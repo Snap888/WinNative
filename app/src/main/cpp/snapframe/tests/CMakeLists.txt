@@ -16,4 +16,6 @@ add_test(NAME snapframe_candidate_reconstruction_contract
         -DSOURCE_DIR=${CMAKE_CURRENT_LIST_DIR}/..
         -DHOST_FILE=${CMAKE_CURRENT_LIST_DIR}/../src/snap_frame_vk.c
         -DRENDERER_FILE=${CMAKE_CURRENT_LIST_DIR}/../../winlator/vk/vk_renderer.c
+        -DAI_FILE=${CMAKE_CURRENT_LIST_DIR}/../../snapai/src/snap_ai.cpp
+        -DFLOW_SHADER_FILE=${CMAKE_CURRENT_LIST_DIR}/../shaders/block_match_flow.comp
         -P ${CMAKE_CURRENT_LIST_DIR}/check_candidate_reconstruction.cmake)
