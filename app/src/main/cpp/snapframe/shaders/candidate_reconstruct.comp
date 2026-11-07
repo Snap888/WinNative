@@ -35,10 +35,10 @@ void main() {
 
     vec4 result;
     if (sumWeights > 1.0e-4) {
-        vec4 ca = texture(previousColor, a.xy);
-        vec4 cb = texture(currentColor, b.xy);
-        vec4 cc = texture(previousColor, c.xy);
-        vec4 cd = texture(currentColor, d.xy);
+        vec4 ca = texture(previousColor, uv + a.xy);
+        vec4 cb = texture(currentColor, uv + b.xy);
+        vec4 cc = texture(previousColor, uv + c.xy);
+        vec4 cd = texture(currentColor, uv + d.xy);
         result = (ca * w.x + cb * w.y + cc * w.z + cd * w.w) / sumWeights;
     } else {
         // Safe sharp fallback for fully occluded or invalid flow regions.
