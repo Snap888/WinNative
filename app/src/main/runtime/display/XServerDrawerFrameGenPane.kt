@@ -220,6 +220,7 @@ internal fun FrameGenEngineSection(
                 debugFlow = disDebugFlow,
                 debugMode = snapDebugMode,
                 candidateMode = state.snapFrameCandidateMode,
+                candidateAvailable = state.snapFrameCandidateAvailable,
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
@@ -507,6 +508,7 @@ private fun SnapFrameOptions(
     debugFlow: Boolean,
     debugMode: Int,
     candidateMode: Int,
+    candidateAvailable: Boolean,
     paneScale: Float,
     onMultiplierSelected: (Int) -> Unit,
     onFlowScaleChanged: (Int) -> Unit,
@@ -556,25 +558,29 @@ private fun SnapFrameOptions(
             }
         }
         FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
-        FrameGenFieldLabel(stringResource(R.string.session_drawer_snapframe_candidate_mode), paneScale)
-        ChipFlow {
-            listOf(
-                0 to R.string.session_drawer_snapframe_candidate_auto,
-                1 to R.string.session_drawer_snapframe_candidate_off,
-                2 to R.string.session_drawer_snapframe_candidate_on,
-            ).forEach { (mode, labelRes) ->
-                HUDToggleChip(
-                    label = stringResource(labelRes),
-                    checked = candidateMode == mode,
-                    onClick = { onCandidateModeChanged(mode) },
-                    modifier = Modifier.paneNavItem(
-                        cornerRadius = (16f * paneScale).dp,
-                        onActivate = { onCandidateModeChanged(mode) },
-                    ),
-                )
+        if (candidateAvailable) {
+            FrameGenFieldLabel(stringResource(R.string.session_drawer_snapframe_candidate_mode), paneScale)
+            ChipFlow {
+                listOf(
+                    0 to R.string.session_drawer_snapframe_candidate_auto,
+                    1 to R.string.session_drawer_snapframe_candidate_off,
+                    2 to R.string.session_drawer_snapframe_candidate_on,
+                ).forEach { (mode, labelRes) ->
+                    HUDToggleChip(
+                        label = stringResource(labelRes),
+                        checked = candidateMode == mode,
+                        onClick = { onCandidateModeChanged(mode) },
+                        modifier = Modifier.paneNavItem(
+                            cornerRadius = (16f * paneScale).dp,
+                            onActivate = { onCandidateModeChanged(mode) },
+                        ),
+                    )
+                }
             }
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_note), paneScale)
+        } else {
+            FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_wayland_only), paneScale)
         }
-        FrameGenNote(stringResource(R.string.session_drawer_snapframe_candidate_note), paneScale)
         FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
 }
