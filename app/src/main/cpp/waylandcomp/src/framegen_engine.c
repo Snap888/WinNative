@@ -325,8 +325,8 @@ const char *fge_engine_name(int kind) {
 
 void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); }
 
-void fge_set_candidate_reconstruction(int enabled) {
-    if (g_snap) snap_frame_vk_set_candidate_reconstruction(g_snap, enabled ? 1u : 0u);
+void fge_set_candidate_reconstruction(int mode) {
+    if (g_snap) snap_frame_vk_set_candidate_reconstruction(g_snap, (uint32_t)mode);
 }
 
 void fge_device_lost(void) {
