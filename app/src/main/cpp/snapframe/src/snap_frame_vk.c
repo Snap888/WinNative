@@ -233,7 +233,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !alloc_sets(e,&e->candidate_score,SF_PHASES)||!alloc_sets(e,&e->candidate_reconstruct8,SF_PHASES)||
        !alloc_sets(e,&e->candidate_reconstruct16,SF_PHASES))goto fail;
     if(g_vk.CreateBuffer&&g_vk.GetBufferMemoryRequirements&&g_vk.BindBufferMemory&&g_vk.DestroyBuffer&&g_vk.CmdCopyImageToBuffer&&g_vk.MapMemory&&g_vk.UnmapMemory&&
-       pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,3,3,0)&&alloc_sets(e,&e->metrics,1)){
+       pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,5,15,0)&&alloc_sets(e,&e->metrics,1)){
         e->metrics_pipeline_ready=1;
         for(uint32_t i=0;i<4;i++)if(!buffer_create_readback(e,&e->metrics_readback[i])){
             for(uint32_t j=0;j<4;j++)buffer_destroy(e,&e->metrics_readback[j]);
@@ -456,8 +456,8 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     write_timestamp(e,cmd,6);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     if(e->metrics_enabled){
-        VkImageView metric_views[3]={e->fused_forward.view,e->mask.view,e->metrics_output.view};
-        update_set(e,&e->metrics,0,3,3,metric_views);
+        VkImageView metric_views[5]={e->fused_forward.view,e->mask.view,e->forward.view,e->local_forward.view,e->metrics_output.view};
+        update_set(e,&e->metrics,0,5,15,metric_views);
         g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->metrics.pipeline);
         g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->metrics.layout,0,1,&e->metrics.sets[0],0,NULL);
         g_vk.CmdDispatch(cmd,1,1,1);
