@@ -144,6 +144,14 @@ static void barrier_compute(VkCommandBuffer cmd){
       .dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT};
     g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&b,0,NULL,0,NULL);
 }
+static void barrier_compute_reuse(VkCommandBuffer cmd){
+    /* Candidate maps are read by reconstruction and overwritten on the next source frame. */
+    VkMemoryBarrier b={.sType=VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+      .srcAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT,
+      .dstAccessMask=VK_ACCESS_SHADER_WRITE_BIT};
+    g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&b,0,NULL,0,NULL);
+}
 static void transition_fresh(SnapFrameVk*e,VkCommandBuffer cmd){
     VkImageMemoryBarrier b[32];uint32_t n=0;
 #define FRESH(i) do{if((i).fresh){b[n++]=(VkImageMemoryBarrier){.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,.srcAccessMask=0,\
@@ -423,6 +431,7 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
             e->candidates[phase][0].view,e->candidates[phase][1].view,
             e->candidates[phase][2].view,e->candidates[phase][3].view};
         update_set(e,&e->candidate_warp,phase,7,7,warpViews);
+        barrier_compute_reuse(cmd);
         struct {float phase,flow_to_pixels;uint32_t flow_w,flow_h,full_w,full_h;} warpPc={
             snap_frame_vk_phase_time(phase,count),8.0f,e->active_flow_w,e->active_flow_h,e->width,e->height};
         g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->candidate_warp.pipeline);
