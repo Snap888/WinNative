@@ -120,7 +120,7 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
     reuse = easy > 0.70f; mode = SNAP_AI_MODE_CONSERVATIVE;
   }
   if (hard > 0.42f) {
-    scale += 0.12f * hard; radius += 0.22f * hard;
+    scale += 0.12f * hard; radius += 0.45f * hard;
     if (passes < h->cfg.max_refinement_passes) ++passes;
     artifact = uncertainty > 0.30f || risk > 0.25f; mode = SNAP_AI_MODE_QUALITY;
   }
