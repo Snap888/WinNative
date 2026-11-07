@@ -85,6 +85,7 @@ internal fun FrameGenPaneContent(
                     disScale = state.disFrameGenScale,
                     disTargetFps = state.disFrameGenTargetFps,
                     disDebugFlow = state.disFrameGenDebugFlow,
+                    snapDebugMode = state.snapFrameDebugMode,
                     maxRefreshRate = state.maxRefreshRate,
                     paneScale = paneScale,
                     onEngineSelected = listener::onFrameGenEngineSelected,
@@ -94,6 +95,7 @@ internal fun FrameGenPaneContent(
                     onDisScaleChanged = listener::onDisFrameGenScaleChanged,
                     onDisTargetFpsSelected = listener::onDisFrameGenTargetFpsSelected,
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
+                    onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
                 )
 
                 ThinDivider()
@@ -146,6 +148,7 @@ internal fun FrameGenEngineSection(
     disScale: Int,
     disTargetFps: Int,
     disDebugFlow: Boolean,
+    snapDebugMode: Int,
     maxRefreshRate: Int,
     paneScale: Float,
     onEngineSelected: (FrameGenEngine) -> Unit,
@@ -155,6 +158,7 @@ internal fun FrameGenEngineSection(
     onDisScaleChanged: (Int) -> Unit,
     onDisTargetFpsSelected: (Int) -> Unit,
     onDisDebugFlowChanged: (Boolean) -> Unit,
+    onSnapDebugModeChanged: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         PaneSectionLabel(stringResource(R.string.session_drawer_frame_generation))
@@ -214,10 +218,12 @@ internal fun FrameGenEngineSection(
                 multiplier = multiplier,
                 flowScale = flowScale,
                 debugFlow = disDebugFlow,
+                debugMode = snapDebugMode,
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
                 onDebugFlowChanged = onDisDebugFlowChanged,
+                onDebugModeChanged = onSnapDebugModeChanged,
             )
         }
 
@@ -497,10 +503,12 @@ private fun SnapFrameOptions(
     multiplier: Int,
     flowScale: Int,
     debugFlow: Boolean,
+    debugMode: Int,
     paneScale: Float,
     onMultiplierSelected: (Int) -> Unit,
     onFlowScaleChanged: (Int) -> Unit,
     onDebugFlowChanged: (Boolean) -> Unit,
+    onDebugModeChanged: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         FrameGenFieldLabel(stringResource(R.string.session_drawer_frame_generation_multiplier), paneScale)
@@ -527,6 +535,22 @@ private fun SnapFrameOptions(
             checked = debugFlow,
             onCheckedChange = onDebugFlowChanged,
         )
+        if (debugFlow) {
+            FrameGenFieldLabel("Flow Viewer", paneScale)
+            ChipFlow {
+                listOf("Motion", "Confidence", "Consistency").forEachIndexed { index, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = debugMode == index,
+                        onClick = { onDebugModeChanged(index) },
+                        modifier = Modifier.paneNavItem(
+                            cornerRadius = (16f * paneScale).dp,
+                            onActivate = { onDebugModeChanged(index) },
+                        ),
+                    )
+                }
+            }
+        }
         FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
         FrameGenNote(stringResource(R.string.session_drawer_snapframe_ai_note), paneScale)
     }
