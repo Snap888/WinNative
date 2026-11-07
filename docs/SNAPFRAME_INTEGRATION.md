@@ -60,3 +60,8 @@ Physical Turnip/Adreno runtime validation is still required, including checking 
 ## Generic Winlator ports
 
 This branch's embedded X11 and Wayland support must not be generalized to every Winlator-derived APK. Other ports need an adapter for their exact renderer/compositor and DXVK fork/version. DXVK integration is a separate host adapter; the legacy DXVK migration/reference code in Snap_AI_Engine is not a production-ready universal Winlator backend.
+
+
+### Metrics portability and slot retirement
+
+The flow-metrics reduction uses a 128-invocation workgroup, matching Vulkan's guaranteed minimum compute workgroup invocation count. The asynchronous four-slot readback now retires its metrics-pending flag as soon as the corresponding timestamp slot is collected, including unavailable/invalid timestamp paths. This prevents a recycled query slot from carrying stale metrics state into a later frame. Metrics remain optional: missing readback entry points or unsupported allocations disable telemetry without disabling interpolation.
