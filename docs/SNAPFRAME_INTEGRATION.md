@@ -92,3 +92,5 @@ best/second-best SAD separation stored in flow.z), and forward/backward consiste
 The mode is a push constant in the same compute dispatch; no extra flow pass,
 image allocation, CPU readback, or synchronous GPU wait is introduced. The X11
 frame-generation drawer exposes the three modes while Debug Flow is enabled.
+
+The Flow Viewer mode IDs are covered by the SnapFrame contract test: motion=0, confidence=1, consistency=2; invalid IDs fall back to motion. The same test suite checks the mode normalization helper so UI/JNI inputs cannot select an undefined shader branch.
