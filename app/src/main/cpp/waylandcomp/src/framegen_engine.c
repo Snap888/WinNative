@@ -31,6 +31,7 @@ static pthread_mutex_t g_snap_lock = PTHREAD_MUTEX_INITIALIZER;
 static int g_kind = -1;
 static int g_chain_ok;
 static int g_chain_failed;
+static unsigned g_snap_process_errors;
 
 static VkImage g_source;
 static uint64_t g_last_plan_ns;
@@ -268,7 +269,14 @@ uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_vie
         input.native_frame=(uintptr_t)&native;
         SnapFrameFrameOutput output={0};output.struct_size=sizeof(output);
         SnapFrameStatus status=snap_frame_process(g_snap_core,&input,&output);
-        return status==SNAP_FRAME_OK?output.generated_frames:0u;
+        if (status != SNAP_FRAME_OK) {
+            if (g_snap_process_errors++ % 120u == 0u)
+                WNC_LOG("framegen", "SnapFrame process failed: status=%d frame=%llu extent=%ux%u outputs=%u",
+                        (int)status, (unsigned long long)native.frame_id, w, h, native.output_capacity);
+            return 0u;
+        }
+        g_snap_process_errors = 0;
+        return output.generated_frames;
     }
     if (g_lsfg) {
         vkr_lsfg_process(g_lsfg, cmd, source, w, h, gens);
