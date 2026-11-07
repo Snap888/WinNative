@@ -5559,7 +5559,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 disFrameGenTargetFps,
                 disFrameGenDebugFlow,
                 snapFrameDebugMode,
-                snapFrameCandidateMode);
+                snapFrameCandidateMode,
+                waylandMode);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
