@@ -75,6 +75,7 @@ endforeach()
 file(READ "${AI_FILE}" ai_source)
 file(READ "${FLOW_SHADER_FILE}" flow_shader)
 file(READ "${SOURCE_DIR}/shaders/flow_consistency.comp" consistency_shader)
+file(READ "${SOURCE_DIR}/shaders/flow_metrics.comp" metrics_shader)
 foreach(token IN ITEMS
         "raw_q < 0.18f"
         "risk > 0.20f"
@@ -109,4 +110,14 @@ foreach(token IN ITEMS
         message(FATAL_ERROR "SnapFrame temporal visibility confidence is missing: ${token}")
     endif()
 endforeach()
-message(STATUS "SnapFrame candidate, temporal visibility, AI quality gate and stable flow viewer contracts are present")
+foreach(token IN ITEMS
+        "globalMotion"
+        "localMotion"
+        "divergence"
+        "max(forwardConfidence * (1.0 - consistency), divergence)")
+    string(FIND "${metrics_shader}" "${token}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "Snap AI global/local divergence telemetry is missing: ${token}")
+    endif()
+endforeach()
+message(STATUS "SnapFrame candidate, temporal visibility, divergence telemetry, AI quality gate and stable flow viewer contracts are present")
