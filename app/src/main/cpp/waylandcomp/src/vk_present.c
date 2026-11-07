@@ -1553,7 +1553,9 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
 
     uint32_t img = 0;
     VkResult ar;
+    const int64_t initial_acquire_begin_ns = perf_now();
     if (acquire_image(0, 1, &img, &ar) != 0) return -1;
+    const int64_t initial_acquire_ns = perf_now() - initial_acquire_begin_ns;
     update_map(scene_w, scene_h);
     /* A new HDR10 swapchain, or a new image description on it: hand the game's metadata over. */
     if (g_swap_is_hdr && hf && hf->color && hf->color->identity != g_swap_md_identity) {
@@ -1754,15 +1756,35 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * presentation engine shows them on consecutive vblanks: that IS the pacing, no sleeps. */
     const int presents = 1 + ngen;
     int fence_submitted = 0, presented_gen = 0;
+    int generated_acquired = ngen > 0 ? 1 : 0;
+    int generated_present_failures = 0, generated_submit_calls = 0, generated_present_calls = 0;
+    uint64_t generated_acquire_ns = ngen > 0 ? (uint64_t)initial_acquire_ns : 0u;
+    uint64_t generated_submit_ns = 0, generated_present_ns = 0;
+    float generated_acquire_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    float generated_submit_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    float generated_present_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    if (ngen > 0) generated_acquire_slot_ms[0] = (float)initial_acquire_ns / 1.0e6f;
     VkResult pr = VK_SUCCESS;
     g_vk.ResetFences(g_dev, 1, &g_fence);
     for (int k = 0; k < presents; k++) {
         if (k > 0) {
             VkResult ark;
+            const int64_t acquire_begin_ns = perf_now();
             if (acquire_image(k, 0, &img, &ark) != 0) {
                 wnc_log("framegen", "present %d/%d: no swapchain image; the frame ends early", k + 1, presents);
+                const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
+                if (k < ngen) {
+                    generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
+                    generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
+                }
                 pr = VK_ERROR_OUT_OF_DATE_KHR;
                 break;
+            }
+            const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
+            if (k < ngen) {
+                generated_acquired++;
+                generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
+                generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
             }
             if (ark == VK_SUBOPTIMAL_KHR) ar = ark;
             VkCommandBuffer ck = g_cmds[k];
@@ -1776,11 +1798,28 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .waitSemaphoreCount = 1,
                            .pWaitSemaphores = &g_acqs[k], .pWaitDstStageMask = &wait, .commandBufferCount = 1,
                            .pCommandBuffers = &g_cmds[k], .signalSemaphoreCount = 1, .pSignalSemaphores = &g_rnds[k]};
+        const int64_t submit_begin_ns = perf_now();
         VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? g_fence : VK_NULL_HANDLE);
+        const int64_t submit_elapsed_ns = perf_now() - submit_begin_ns;
+        if (k < ngen) {
+            generated_submit_calls++;
+            generated_submit_ns += (uint64_t)submit_elapsed_ns;
+            generated_submit_slot_ms[k] = (float)submit_elapsed_ns / 1.0e6f;
+        }
         if (qr != VK_SUCCESS) {
             if (qr == VK_ERROR_DEVICE_LOST) device_lost("submit");
             else LOGE("present: submit %d/%d failed (%d)", k + 1, presents, (int)qr);
-            /* Preserve earlier generated presents that succeeded before this slot's submit failed. */
+            /* Feed the actual partial WSI result back to Snap AI before leaving this frame. */
+            const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
+            const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
+            const float present_pressure = generated_present_calls
+                ? (float)generated_present_failures / (float)generated_present_calls : 0.0f;
+            const float submit_pressure = k < ngen ? 1.0f :
+                (generated_submit_calls && frame_period_ms > 0.0f
+                    ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f);
+            fge_set_wsi_feedback(vkp_framegen_requested_multiplier(), vkp_framegen_effective_multiplier(),
+                ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f,
+                acquire_pressure, submit_pressure, present_pressure);
             vkp_framegen_presented(presented_gen, 0);
             /* The acquired image is never presented; the swapchain would be stuck with it. */
             if (g_dev_state != -2) destroy_swapchain();
@@ -1792,10 +1831,17 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                                .pSwapchains = &g_swapchain, .pImageIndices = &img};
         const int64_t t_pres = perf_now();
         pr = g_vk.QueuePresentKHR(g_queue, &pi);
-        perf_add(&g_perf.present_ns, &g_perf.present_max_ns, &g_perf.presents, perf_now() - t_pres);
+        const int64_t present_elapsed_ns = perf_now() - t_pres;
+        perf_add(&g_perf.present_ns, &g_perf.present_max_ns, &g_perf.presents, present_elapsed_ns);
+        if (k < ngen) {
+            generated_present_calls++;
+            generated_present_ns += (uint64_t)present_elapsed_ns;
+            generated_present_slot_ms[k] = (float)present_elapsed_ns / 1.0e6f;
+        }
         if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
             if (k < ngen) presented_gen++;
         } else if (k < ngen) {
+            generated_present_failures++;
             wnc_log("framegen", "generated present %d/%d failed (%s %d)",
                     k + 1, ngen, vk_result_name(pr), (int)pr);
         }
@@ -1811,6 +1857,26 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
     const int source_presented = (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
+    const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
+    const float delivery_ratio = ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f;
+    const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
+    const float submit_pressure = generated_submit_calls && frame_period_ms > 0.0f
+        ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f;
+    const float present_pressure = generated_present_calls
+        ? (float)generated_present_failures / (float)generated_present_calls : 0.0f;
+    fge_set_wsi_feedback(vkp_framegen_requested_multiplier(), vkp_framegen_effective_multiplier(),
+        delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
+    static uint64_t fg_wsi_log_frames;
+    if (++fg_wsi_log_frames % 120u == 0u && ngen > 0) {
+        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
+            ngen, generated_acquired, presented_gen,
+            (double)generated_acquire_ns / 1.0e6, (double)generated_submit_ns / 1.0e6,
+            (double)generated_present_ns / 1.0e6,
+            generated_acquire_slot_ms[0], generated_acquire_slot_ms[1], generated_acquire_slot_ms[2],
+            generated_submit_slot_ms[0], generated_submit_slot_ms[1], generated_submit_slot_ms[2],
+            generated_present_slot_ms[0], generated_present_slot_ms[1], generated_present_slot_ms[2],
+            delivery_ratio);
+    }
     vkp_framegen_presented(presented_gen, source_presented);
     if (fr == VK_ERROR_DEVICE_LOST || pr == VK_ERROR_DEVICE_LOST) { device_lost("present"); return -1; }
     if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR) {

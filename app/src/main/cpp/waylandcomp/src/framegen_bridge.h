@@ -80,6 +80,8 @@ int vkp_framegen_active(void);
 /* Extra swapchain images wanted so every present of one scene frame is queued without waiting
  * for a vblank: multiplier - 1 while armed, 0 otherwise. A change means "rebuild the swapchain". */
 int vkp_framegen_extra_images(void);
+uint32_t vkp_framegen_requested_multiplier(void);
+uint32_t vkp_framegen_effective_multiplier(void);
 /* THE hook. Called once per composed scene frame, after the effects hook, with the scene image
  * (GENERAL, w x h, fmt, TRANSFER_SRC|SAMPLED). Records the engine's chain into `cmd` and
  * returns how many generated frames (0..VKP_FG_MAX_GENERATIONS) it produced, their images in

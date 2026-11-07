@@ -50,6 +50,10 @@ void fge_stop(void);
 int fge_unavailable(void);
 void fge_configure(uint32_t multiplier, float flow_scale, float refresh_hz, int flow_min_side,
                    int target_fps);   /* flow_min_side is DIS-only; target_fps paces both */
+uint32_t fge_effective_multiplier(void);
+void fge_set_wsi_feedback(uint32_t requested_multiplier, uint32_t current_multiplier,
+                          float delivery_ratio, float acquire_pressure,
+                          float submit_pressure, float present_pressure);
 /* Build/rebuild the chain for this extent; the guest extent for the flow pyramid is the same
  * (the Wayland scene is the game's own size in fullscreen). 1 = chain valid. */
 int fge_prepare(uint32_t w, uint32_t h, VkFormat fmt);

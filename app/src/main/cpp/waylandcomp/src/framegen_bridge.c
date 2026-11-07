@@ -348,7 +348,10 @@ int vkp_framegen_active(void) {
 /* DIS fills the gap to the refresh rate itself; LSFG takes the multiplier's share, or with a
  * target rate lets its pacer pick the count. Either way, up to the engine's most. */
 static uint32_t generation_slots(void) {
-    if (atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME) { uint32_t m=(uint32_t)atomic_load(&g_mult); return m>1?m-1:0; }
+    if (atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME) {
+        uint32_t m = fge_effective_multiplier();
+        return m > 1u ? m - 1u : 0u;
+    }
     if (atomic_load(&g_kind) == VKP_FG_ENGINE_DIS) return VKP_FG_MAX_GENERATIONS;
     if (atomic_load(&g_target_fps) > 0) return VKP_FG_LSFG_MAX_GENERATIONS;
     uint32_t m = (uint32_t)atomic_load(&g_mult);
@@ -359,6 +362,8 @@ int vkp_framegen_extra_images(void) {
     if (!vkp_framegen_active()) return 0;
     return (int)generation_slots();
 }
+uint32_t vkp_framegen_requested_multiplier(void) { return (uint32_t)atomic_load(&g_mult); }
+uint32_t vkp_framegen_effective_multiplier(void) { return fge_effective_multiplier(); }
 
 static int ensure_engine(int kind) {
     /* LSFG restarts when its cache changes (a new Lossless.dll), the other engine has none. */

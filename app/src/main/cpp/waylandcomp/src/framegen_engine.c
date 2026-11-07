@@ -144,10 +144,10 @@ static SnapFrameStatus snap_backend_process(void *user,const SnapFrameFrameInput
     for(uint32_t i=0;i<f->output_capacity;i++)if(!f->outputs[i].image||!f->outputs[i].view)return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
     int ready=snap_frame_vk_process(h->vk,f->command_buffer,f->source_image,f->source_view,f->output_capacity);
     output->generated_frames=ready?f->output_capacity:0;
-    float stages[5],total=0.0f;
+    float stages[6],total=0.0f;
     if(snap_frame_vk_get_telemetry(h->vk,stages,&total)){
         output->preprocess_gpu_ms=stages[0]+stages[1];output->flow_gpu_ms=stages[2];
-        output->consistency_gpu_ms=stages[3];output->warp_gpu_ms=stages[4];
+        output->consistency_gpu_ms=stages[3];output->warp_gpu_ms=stages[4]+stages[5];
     }
     return SNAP_FRAME_OK;
 }
@@ -242,6 +242,26 @@ int fge_prepare(uint32_t w, uint32_t h, VkFormat fmt) {
     return g_chain_ok;
 }
 
+uint32_t fge_effective_multiplier(void) {
+    uint32_t effective = g_multiplier;
+    pthread_mutex_lock(&g_snap_lock);
+    if (g_snap) {
+        uint32_t ai = snap_frame_vk_get_recommended_multiplier(g_snap);
+        if (ai >= 2u && ai < effective) effective = ai;
+    }
+    pthread_mutex_unlock(&g_snap_lock);
+    return effective;
+}
+
+void fge_set_wsi_feedback(uint32_t requested_multiplier, uint32_t current_multiplier,
+                          float delivery_ratio, float acquire_pressure,
+                          float submit_pressure, float present_pressure) {
+    pthread_mutex_lock(&g_snap_lock);
+    if (g_snap) snap_frame_vk_set_wsi_feedback(g_snap, requested_multiplier, current_multiplier,
+        delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
+    pthread_mutex_unlock(&g_snap_lock);
+}
+
 uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rate) {
     (void)presented_rate;
     if (!g_chain_ok) return 0;
@@ -249,7 +269,7 @@ uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rat
         vkr_lsfg_set_refresh_rate(g_lsfg, g_refresh_hz);
         return vkr_lsfg_plan(g_lsfg, capacity, source_frames);
     }
-    if (g_snap) { uint32_t n=g_multiplier>1?g_multiplier-1:0; return snap_frame_vk_has_history(g_snap) ? (n<capacity?n:capacity) : 0; }
+    if (g_snap) { uint32_t m=fge_effective_multiplier();uint32_t n=m>1?m-1:0; return snap_frame_vk_has_history(g_snap) ? (n<capacity?n:capacity) : 0; }
     if (g_dis) return vkr_dis_plan(g_dis, capacity, source_frames);
     return 0;
 }
@@ -317,7 +337,7 @@ void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
     *accepted = 0.0f; *source_rate = 0.0f; *thermal = -1.0f;
     pthread_mutex_lock(&g_snap_lock);
     SnapFrameVk *snap = g_snap;
-    if (snap) { float stages[5], total=0.0f; if (snap_frame_vk_get_telemetry(snap,stages,&total)) { *accepted=total; *source_rate=stages[2]; } }
+    if (snap) { float stages[6], total=0.0f; if (snap_frame_vk_get_telemetry(snap,stages,&total)) { *accepted=total; *source_rate=stages[2]; } }
     pthread_mutex_unlock(&g_snap_lock);
 }
 
