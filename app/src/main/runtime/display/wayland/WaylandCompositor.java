@@ -196,8 +196,11 @@ public final class WaylandCompositor {
     public static native void nativeHdrNoteHeadroomRequest(float ratio);
 
     // Screen effects run by the compositor between the composed scene and the output blit.
-    /** Enable experimental four-candidate SnapFrame reconstruction; false keeps the original midpoint warp. */
-    public static native void nativeSetSnapFrameCandidateReconstruction(boolean enabled);
+    /** SnapFrame candidate reconstruction: 0=AI automatic, 1=forced off, 2=forced on. */
+    public static final int SNAPFRAME_RECONSTRUCTION_AUTO = 0;
+    public static final int SNAPFRAME_RECONSTRUCTION_OFF = 1;
+    public static final int SNAPFRAME_RECONSTRUCTION_ON = 2;
+    public static native void nativeSetSnapFrameCandidateReconstruction(int mode);
 
     public static native void nativeSetUpscaler(int mode);
     public static native void nativeSetUpscaleSharpness(int sharpness);
