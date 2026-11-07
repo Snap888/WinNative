@@ -950,7 +950,7 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="session_drawer_snapframe_candidate_off">Off</string>
     <string name="session_drawer_snapframe_candidate_on">On</string>
     <string name="session_drawer_snapframe_candidate_note">AI Auto enables four-candidate reconstruction for demanding scenes when GPU headroom allows it. Use Off / On to compare both paths on the same scene.</string>
-    <string name="session_drawer_snapframe_candidate_wayland_only">Candidate reconstruction controls are available on the Wayland SnapFrame backend.</string>
+    <string name="session_drawer_snapframe_candidate_wayland_only">Candidate reconstruction controls are available when the SnapFrame Vulkan backend is supported.</string>
     <string name="session_drawer_snapframe_ai_note">Snap AI adapts optical-flow quality to measured GPU cost. Generated phases are distinct for ×2, ×3 and ×4.</string>
     <string name="session_drawer_dis_frame_generation_note">Interpolates between rendered frames with Dense Inverse Search. Built into the app; no external shaders required.</string>
     <string name="session_drawer_dis_resolution_scale">Resolution Scale</string>
