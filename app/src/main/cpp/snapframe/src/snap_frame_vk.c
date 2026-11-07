@@ -276,9 +276,10 @@ int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
     if(!e)return;
     /* 0=AI automatic, 1=forced off, 2=forced on. */
-    if(mode>2u)mode=0u;
+    mode=snap_frame_vk_candidate_mode(mode);
     e->candidate_reconstruction_mode=mode;
-    e->candidate_reconstruction_enabled=(mode==2u)||(mode==0u&&e->ai_quality_mode);
+    e->candidate_reconstruction_enabled=(mode==SNAP_FRAME_CANDIDATE_FORCE_ON)||
+        (mode==SNAP_FRAME_CANDIDATE_AI_AUTO&&e->ai_quality_mode);
 }
 void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->lifecycle.history_valid=0;snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);}}
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
