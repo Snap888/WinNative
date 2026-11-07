@@ -329,6 +329,7 @@ public class VulkanRenderer
                     nativeSetSnapFrameGenerationEnabled(nativeHandle, true);
                 }
                 nativeSetSnapFrameDebugFlow(nativeHandle, snapFrameDebugFlow);
+                nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
                 destroyed.set(false);
                 xServer.windowManager.addOnWindowModificationListener(this);
                 xServer.pointer.addOnPointerMotionListener(this);
@@ -1068,6 +1069,7 @@ public class VulkanRenderer
 
     private boolean snapFrameGenerationRequested = false;
     private boolean snapFrameDebugFlow = false;
+    private int snapFrameDebugMode = 0;
 
     public void setSnapFrameGenerationEnabled(boolean enabled) {
         snapFrameGenerationRequested = enabled;
@@ -1081,6 +1083,12 @@ public class VulkanRenderer
     public void setSnapFrameDebugFlow(boolean enabled) {
         snapFrameDebugFlow = enabled;
         if (nativeHandle != 0) nativeSetSnapFrameDebugFlow(nativeHandle, enabled);
+    }
+
+    /** 0=motion, 1=matcher confidence, 2=forward/backward consistency. */
+    public void setSnapFrameDebugMode(int mode) {
+        snapFrameDebugMode = Math.max(0, Math.min(2, mode));
+        if (nativeHandle != 0) nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
     }
 
     private boolean disFrameGenerationRequested = false;
@@ -1193,6 +1201,7 @@ public class VulkanRenderer
     private static native boolean nativeIsSnapFrameGenerationAvailable(long handle);
     private static native void nativeSetSnapFrameGenerationEnabled(long handle, boolean enabled);
     private static native void nativeSetSnapFrameDebugFlow(long handle, boolean enabled);
+    private static native void nativeSetSnapFrameDebugMode(long handle, int mode);
     private static native void nativeSetDisFrameGenerationEnabled(long handle, boolean enabled);
     private static native void nativeSetDisFrameGenerationScale(long handle, int scalePercent);
     private static native void nativeSetDisFrameGenerationTargetFps(long handle, int targetFps);
