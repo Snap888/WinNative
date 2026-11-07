@@ -1,0 +1,85 @@
+#version 450
+
+// Build four candidate sample coordinates from the current bidirectional flow.
+// Candidates 0/1 use the center estimates; candidates 2/3 use the best
+// edge-compatible neighbour estimate. Each output stores uv.xy, confidence.z,
+// and in-bounds validity.w. No learned weights or FP16 arithmetic extensions.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(push_constant) uniform PC {
+    float phase;
+    float flowToFullPixels;
+    uint flowWidth;
+    uint flowHeight;
+    uint fullWidth;
+    uint fullHeight;
+} pc;
+
+layout(set = 0, binding = 0) uniform sampler2D forwardFlow;
+layout(set = 0, binding = 1) uniform sampler2D backwardFlow;
+layout(set = 0, binding = 2) uniform sampler2D consistencyMask;
+layout(set = 0, binding = 3, rgba16f) writeonly uniform image2D candidate0;
+layout(set = 0, binding = 4, rgba16f) writeonly uniform image2D candidate1;
+layout(set = 0, binding = 5, rgba16f) writeonly uniform image2D candidate2;
+layout(set = 0, binding = 6, rgba16f) writeonly uniform image2D candidate3;
+
+float flowConfidence(vec4 f, float consistency) {
+    float photometric = 1.0 - smoothstep(0.035, 0.10, f.w);
+    return clamp(f.z, 0.0, 1.0) * clamp(consistency, 0.0, 1.0) * photometric;
+}
+
+vec4 bestNeighbour(sampler2D field, sampler2D consistency, ivec2 p,
+                   ivec2 extent, vec4 center) {
+    const ivec2 offsets[5] = ivec2[5](
+        ivec2(0, 0), ivec2(-1, 0), ivec2(1, 0), ivec2(0, -1), ivec2(0, 1));
+    vec4 best = center;
+    float centerConsistency = texelFetch(consistency, p, 0).r;
+    float bestScore = flowConfidence(center, centerConsistency);
+    for (int i = 1; i < 5; ++i) {
+        ivec2 q = clamp(p + offsets[i], ivec2(0), extent - ivec2(1));
+        vec4 candidate = texelFetch(field, q, 0);
+        float consistencyValue = texelFetch(consistency, q, 0).r;
+        float delta = length(candidate.xy - center.xy);
+        if (delta > 3.5) continue; // do not borrow motion across a strong edge
+        float score = flowConfidence(candidate, consistencyValue)
+                    * exp(-0.20 * delta);
+        if (score > bestScore) {
+            best = candidate;
+            bestScore = score;
+        }
+    }
+    best.z = bestScore;
+    return best;
+}
+
+vec4 makeCandidate(vec2 uv, vec2 flow, float timeScale, float confidence,
+                   vec2 pixelToUv) {
+    vec2 sampleUv = uv + flow * timeScale * pixelToUv;
+    float valid = (all(greaterThanEqual(sampleUv, vec2(0.0))) &&
+                   all(lessThanEqual(sampleUv, vec2(1.0)))) ? 1.0 : 0.0;
+    return vec4(sampleUv, confidence * valid, valid);
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = ivec2(pc.flowWidth, pc.flowHeight);
+    if (any(greaterThanEqual(p, extent))) return;
+
+    vec4 fwd = texelFetch(forwardFlow, p, 0);
+    vec4 bwd = texelFetch(backwardFlow, p, 0);
+    float consistency = texelFetch(consistencyMask, p, 0).r;
+    vec4 altFwd = bestNeighbour(forwardFlow, consistencyMask, p, extent, fwd);
+    vec4 altBwd = bestNeighbour(backwardFlow, consistencyMask, p, extent, bwd);
+
+    vec2 uv = (vec2(p) + vec2(0.5)) / vec2(extent);
+    vec2 pixelToUv = pc.flowToFullPixels / vec2(pc.fullWidth, pc.fullHeight);
+    float t = clamp(pc.phase, 0.0, 1.0);
+
+    imageStore(candidate0, p, makeCandidate(uv, fwd.xy, 1.0 - t,
+        flowConfidence(fwd, consistency), pixelToUv));
+    imageStore(candidate1, p, makeCandidate(uv, bwd.xy, t,
+        flowConfidence(bwd, consistency), pixelToUv));
+    imageStore(candidate2, p, makeCandidate(uv, altFwd.xy, 1.0 - t,
+        altFwd.z, pixelToUv));
+    imageStore(candidate3, p, makeCandidate(uv, altBwd.xy, t,
+        altBwd.z, pixelToUv));
+}
