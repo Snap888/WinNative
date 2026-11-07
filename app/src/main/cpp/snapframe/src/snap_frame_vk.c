@@ -211,7 +211,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
       .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,.addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.maxLod=0};
     if(g_vk.CreateSampler(d,&si,NULL,&e->sampler)!=VK_SUCCESS)goto fail;
-    VkDescriptorPoolSize sizes[2]={{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,128},{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,64}};
+    VkDescriptorPoolSize sizes[2]={{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,192},{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,64}};
     VkDescriptorPoolCreateInfo pi={.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,.flags=VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,.maxSets=40,.poolSizeCount=2,.pPoolSizes=sizes};
     if(g_vk.CreateDescriptorPool(d,&pi,NULL,&e->pool)!=VK_SUCCESS)goto fail;
     if(!pipeline_create(e,&e->luma,snap_luma_downsample_comp,snap_luma_downsample_comp_size,2,1,0)||
@@ -219,7 +219,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !pipeline_create(e,&e->flow,snap_block_match_flow_comp,snap_block_match_flow_comp_size,3,3,12)||
        !pipeline_create(e,&e->local_flow,snap_local_match_flow_comp,snap_local_match_flow_comp_size,3,3,12)||
        !pipeline_create(e,&e->motion_fusion,snap_motion_fusion_comp,snap_motion_fusion_comp_size,3,3,0)||
-       !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
+       !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,5,27,8)||
        !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
        !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
        !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,24)||
@@ -448,8 +448,8 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->motion_fusion.layout,0,1,&e->motion_fusion.sets[1],0,NULL);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     write_timestamp(e,cmd,5);
-    v[0]=e->fused_forward.view;v[1]=e->fused_backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;
-    update_set(e,&e->consistency,0,4,11,v);
+    v[0]=e->fused_forward.view;v[1]=e->fused_backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;v[4]=e->prev[2].view;
+    update_set(e,&e->consistency,0,5,27,v);
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
     g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
