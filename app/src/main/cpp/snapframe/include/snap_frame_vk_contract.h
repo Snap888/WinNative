@@ -9,6 +9,17 @@ enum { VK_FORMAT_R8G8B8A8_UNORM = 37, VK_FORMAT_B8G8R8A8_UNORM = 44, VK_FORMAT_R
 #endif
 
 enum {
+    SNAP_FRAME_DEBUG_MOTION = 0u,
+    SNAP_FRAME_DEBUG_CONFIDENCE = 1u,
+    SNAP_FRAME_DEBUG_CONSISTENCY = 2u,
+    SNAP_FRAME_DEBUG_MODE_COUNT = 3u
+};
+
+static inline uint32_t snap_frame_vk_debug_mode(uint32_t mode) {
+    return mode < SNAP_FRAME_DEBUG_MODE_COUNT ? mode : SNAP_FRAME_DEBUG_MOTION;
+}
+
+enum {
     SNAP_FRAME_RESET_INITIAL = 1u << 0,
     SNAP_FRAME_RESET_RESIZE = 1u << 1,
     SNAP_FRAME_RESET_FORMAT = 1u << 2,
