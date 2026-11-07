@@ -1393,7 +1393,7 @@ static int acquire_image(int k, int first, uint32_t *img, VkResult *ar_out) {
         /* A bounded wait: a surface that went away without telling us must not park the
          * compositor thread forever (clients are paced from this thread). */
         const int64_t t_acq = perf_now();
-        VkResult ar = g_vk.AcquireNextImageKHR(g_dev, g_swapchain, vkp_framegen_acquire_timeout_ns(), g_acqs[k], VK_NULL_HANDLE, img);
+        VkResult ar = g_vk.AcquireNextImageKHR(g_dev, g_swapchain, vkp_framegen_acquire_timeout_ns(k), g_acqs[k], VK_NULL_HANDLE, img);
         perf_add(&g_perf.acquire_ns, &g_perf.acquire_max_ns, &g_perf.acquires, perf_now() - t_acq);
         if (ar == VK_SUCCESS || ar == VK_SUBOPTIMAL_KHR) { *ar_out = ar; return 0; }
         if (ar == VK_ERROR_DEVICE_LOST) { device_lost("acquire"); return -1; }
