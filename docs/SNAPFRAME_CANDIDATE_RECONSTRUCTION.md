@@ -51,7 +51,7 @@ The native control is exposed on both display paths:
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
-AI automatic is the default. The GPU budget used by the policy is 7 ms; the 0.98/1.15 enable/disable thresholds provide hysteresis so a brief candidate-stage cost increase does not immediately switch the path off. Motion, complexity, confidence and artifact-risk gates prevent enabling candidate reconstruction on static, uncertain or heavily occluded frames. The session drawer exposes AI Auto, Off, and On whenever the SnapFrame Vulkan backend is available, on both X11 and Wayland.
+AI automatic is the default. The GPU budget used by the policy is 7 ms; the 0.98/1.15 enable/disable thresholds provide hysteresis so a brief candidate-stage cost increase does not immediately switch the path off. Motion, complexity, confidence and artifact-risk gates prevent enabling candidate reconstruction on static, uncertain or heavily occluded frames. Snap AI also controls the block matcher search window: the default ±8 coarse-luma-texel search can expand up to ±12 (plus the local refinement window) when motion uncertainty rises, helping fast camera turns avoid search-boundary vectors. The session drawer exposes AI Auto, Off, and On whenever the SnapFrame Vulkan backend is available, on both X11 and Wayland.
 
 ## Validation requirements
 
