@@ -1311,6 +1311,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             java.io.File probe = new java.io.File(directory, ".snapframe-write-test");
             try (java.io.FileOutputStream ignored = new java.io.FileOutputStream(probe, false)) {
                 ignored.write(0);
+            } finally {
+                probe.delete();
             }
             // Do not clear the device log buffer: capture only our tags from this point onward.
             snapFrameLogcatProcess = new ProcessBuilder(
