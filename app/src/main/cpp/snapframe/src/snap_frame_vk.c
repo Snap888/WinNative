@@ -274,8 +274,8 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
         !image_create(e,&e->curr[i],lw[i],lh[i],VK_FORMAT_R16_SFLOAT))goto fail;
     if(!image_create(e,&e->forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
-       !image_create(e,&e->local_forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
-       !image_create(e,&e->local_backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
+       !image_create(e,&e->local_forward,fw>1?(fw+1)/2:1,fh>1?(fh+1)/2:1,VK_FORMAT_R16G16B16A16_SFLOAT)||
+       !image_create(e,&e->local_backward,fw>1?(fw+1)/2:1,fh>1?(fh+1)/2:1,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->fused_forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->fused_backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->mask,fw,fh,VK_FORMAT_R16_SFLOAT))goto fail;
@@ -429,13 +429,14 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     /* Independent local matcher: tighter search lattice, separate vectors and confidence. */
     v[0]=e->prev[2].view;v[1]=e->curr[2].view;v[2]=e->local_forward.view;update_set(e,&e->local_flow,0,3,3,v);
     v[0]=e->curr[2].view;v[1]=e->prev[2].view;v[2]=e->local_backward.view;update_set(e,&e->local_flow,1,3,3,v);
+    struct {uint32_t width,height;float search_radius_scale;} local_flow_pc={e->local_forward.w,e->local_forward.h,e->search_radius_scale};
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->local_flow.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->local_flow.layout,0,1,&e->local_flow.sets[0],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->local_flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
-    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);
+    g_vk.CmdPushConstants(cmd,e->local_flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(local_flow_pc),&local_flow_pc);
+    g_vk.CmdDispatch(cmd,div_up(e->local_forward.w,8),div_up(e->local_forward.h,8),1);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->local_flow.layout,0,1,&e->local_flow.sets[1],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->local_flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
-    g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
+    g_vk.CmdPushConstants(cmd,e->local_flow.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(local_flow_pc),&local_flow_pc);
+    g_vk.CmdDispatch(cmd,div_up(e->local_forward.w,8),div_up(e->local_forward.h,8),1);barrier_compute(cmd);
     /* Fuse independent global/local hypotheses per flow cell before FB validation. */
     VkImageView fusionViews[3]={e->forward.view,e->local_forward.view,e->fused_forward.view};
     update_set(e,&e->motion_fusion,0,3,3,fusionViews);
