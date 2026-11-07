@@ -31,7 +31,10 @@ foreach(token IN ITEMS
         "barrier_compute(cmd)"
         "SF_LOGI"
         "SNAP_AI_MODE_BYPASS"
-        "manual_flow_percent")
+        "manual_flow_percent"
+        "n == UINT32_MAX"
+        "if(debug_only)copy_history"
+        "snap_process_count = UINT32_MAX")
     string(FIND "${host}" "${token}" found)
     if(found EQUAL -1)
         message(FATAL_ERROR "SnapFrame host is missing candidate integration token: ${token}")
