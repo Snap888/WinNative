@@ -1959,6 +1959,7 @@ static void destroy_snap(VkRenderer* r) {
 static void create_snap(VkRenderer* r) {
     if (r->snap || !r->device || !r->physical_device) return;
     r->snap = snap_frame_vk_create(r->device, r->physical_device);
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, r->snap_debug_mode);
     if (!r->snap) {
         VK_LOGW("SnapFrame Vulkan backend unavailable on this X11 device");
         return;
@@ -4028,6 +4029,18 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugFlow)(JNIEnv* env, jclass c
     if (!r) return;
     pthread_mutex_lock(&r->render_mutex);
     r->snap_debug_flow = enabled == JNI_TRUE;
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugMode)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_mode = selected;
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, selected);
     pthread_mutex_unlock(&r->render_mutex);
 }
 
