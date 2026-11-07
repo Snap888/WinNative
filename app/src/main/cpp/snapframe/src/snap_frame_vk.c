@@ -412,6 +412,6 @@ int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[5],float*tot
 
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk*e,float metrics[4]){if(!e||!metrics)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->flow_metrics_valid;if(valid)memcpy(metrics,m->flow_metrics,sizeof(m->flow_metrics));pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
 
-void snap_frame_vk_set_debug_mode(SnapFrameVk*e,uint32_t mode){if(e)e->debug_mode=mode>2u?0u:mode;}
+void snap_frame_vk_set_debug_mode(SnapFrameVk*e,uint32_t mode){if(e)e->debug_mode=snap_frame_vk_debug_mode(mode);}
 
 void snap_frame_vk_abandon(SnapFrameVk*e){if(!e)return;if(e->ai)snap_ai_destroy(e->ai);if(e->telemetry_mutex_ready)pthread_mutex_destroy(&e->telemetry_mutex);free(e);}
