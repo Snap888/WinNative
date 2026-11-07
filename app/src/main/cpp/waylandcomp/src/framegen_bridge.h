@@ -39,6 +39,8 @@ void vkp_framegen_set_armed(int armed, int multiplier);
 void vkp_framegen_set_lsfg_cache_path(const char *path);
 /* Flow scale 0.25..1.0 and the panel's real refresh rate (the pacer never generates above it). */
 void vkp_framegen_set_tuning(float flow_scale, float refresh_hz);
+/* Bounded acquire budget: one display refresh, clamped to 4..16 ms. */
+uint64_t vkp_framegen_acquire_timeout_ns(void);
 /* Flow resolution in pixels of the frame's short side (DIS only) and the target output rate
  * both engines pace to (0 = follow the panel). */
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
