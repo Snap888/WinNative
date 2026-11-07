@@ -257,8 +257,8 @@ void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->life
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
     uint64_t values[20];memset(values,0,sizeof(values));
-    VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*10u,10u,sizeof(values),values,        sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
-    e->query_pending[slot]=0;
+    VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*10u,10u,sizeof(values),values,
+        sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);    e->query_pending[slot]=0;
     /* Retire this slot's metrics on every path, including unavailable timestamps. */
     uint8_t metrics_ready=e->metrics_pending[slot];
     e->metrics_pending[slot]=0;
