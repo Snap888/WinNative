@@ -50,8 +50,7 @@ The native control is exposed as
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
-AI automatic is the default. The control is available through JNI; a user-facing settings
-control has not yet been added. The feature is therefore not silently enabled for existing users.
+AI automatic is the default. The Wayland SnapFrame settings pane exposes AI Auto, Off, and On for repeatable A/B testing. The feature is therefore not silently enabled for existing users.
 
 ## Validation requirements
 
