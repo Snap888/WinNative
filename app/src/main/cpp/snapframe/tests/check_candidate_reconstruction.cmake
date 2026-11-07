@@ -1,5 +1,5 @@
-if(NOT DEFINED SOURCE_DIR OR NOT DEFINED HOST_FILE OR NOT DEFINED RENDERER_FILE)
-    message(FATAL_ERROR "SOURCE_DIR, HOST_FILE and RENDERER_FILE are required")
+if(NOT DEFINED SOURCE_DIR OR NOT DEFINED HOST_FILE OR NOT DEFINED RENDERER_FILE OR NOT DEFINED AI_FILE OR NOT DEFINED FLOW_SHADER_FILE)
+    message(FATAL_ERROR "SOURCE_DIR, HOST_FILE, RENDERER_FILE, AI_FILE and FLOW_SHADER_FILE are required")
 endif()
 
 set(required_shaders
@@ -63,6 +63,19 @@ foreach(token IN ITEMS
     string(FIND "${host}" "${token}" found)
     if(found EQUAL -1)
         message(FATAL_ERROR "Snap AI motion-aware quality gate is missing: ${token}")
+    endif()
+endforeach()
+file(READ "${AI_FILE}" ai_source)
+file(READ "${FLOW_SHADER_FILE}" flow_shader)
+foreach(token IN ITEMS
+        "search_radius_scale=fmaxf"
+        "flow,snap_block_match_flow_comp_size,3,3,12"
+        "searchRadiusScale"
+        "coarseRadius = clamp"
+        "radius += 0.45f * hard")
+    string(FIND "${host}${flow_shader}${ai_source}" "${token}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "Adaptive flow search contract is missing: ${token}")
     endif()
 endforeach()
 message(STATUS "SnapFrame candidate, AI quality gate and stable flow viewer contracts are present")
