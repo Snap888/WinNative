@@ -2798,7 +2798,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
     uint32_t gen_image_index[VK_FRAMEGEN_MAX_GENERATIONS] = {0};
     for (uint32_t g = 0; g < framegen_planned; g++) {
         uint32_t idx = 0;
-        VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, gen_acquire_timeout,
+        const uint64_t slot_timeout = g == 0 ? gen_acquire_timeout : 1000000ULL;
+        VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, slot_timeout,
                                             f->image_available_gen[g], VK_NULL_HANDLE, &idx);
         if (ga != VK_SUCCESS && ga != VK_SUBOPTIMAL_KHR) {
             if (r->framegen_acquire_misses++ % 120 == 0) {
