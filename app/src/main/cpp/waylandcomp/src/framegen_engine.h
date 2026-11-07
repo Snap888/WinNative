@@ -37,7 +37,7 @@ const char *fge_caps_reason(void);
 const char *fge_caps_reason_for(int kind);
 void fge_device_lost(void);
 void fge_reset_history(void);
-void fge_set_candidate_reconstruction(int enabled);
+void fge_set_candidate_reconstruction(int mode);
 /* 1 when the engines can generate in `fmt` on this device (storage + linear sampling), beyond the
  * ring format probed at fge_probe - the FP16 scene of HDR frames (vk_present.c). */
 int fge_format_ok(VkFormat fmt);
