@@ -35,9 +35,9 @@ Flow Scale adjusts the active flow grid through push constants while maximum-siz
 
 Timestamp queries measure five GPU stage groups: luma, pyramid, flow, consistency and warp. Completed query slots are collected non-blockingly several frames later. Snap AI compares measured GPU time against a 5 ms budget and returns a bounded ratio multiplied by the user's Flow Scale baseline.
 
-The X11 Vulkan backend now reduces the already-computed forward flow and consistency mask in one 256-lane compute workgroup. It writes four normalized values to a 1x1 RGBA32F image: mean motion magnitude, motion-magnitude deviation, confidence weighted by forward/backward consistency, and complementary artifact risk. The image is copied to a 16-byte host-visible/coherent staging buffer in a four-slot ring. CPU mapping happens only when the corresponding timestamp-query slot is already available several frames later; no queue/device wait and no full-resolution image readback are used.
+The X11 Vulkan backend now reduces the already-computed forward flow and consistency mask in one 128-lane compute workgroup. It writes four normalized values to a 1x1 RGBA32F image: mean motion magnitude, motion-magnitude deviation, confidence weighted by forward/backward consistency, and a forward-confidence inconsistency proxy (not a calibrated artifact probability). The image is copied to a 16-byte host-visible/coherent staging buffer in a four-slot ring. CPU mapping happens only when the corresponding timestamp-query slot is already available several frames later; no queue/device wait and no full-resolution image readback are used.
 
-Snap AI now receives these measured values together with GPU time. Motion magnitude contributes to the controller's smoothed scene-complexity input, so large uniform motion is not treated as a trivially static scene. Metrics are capability-gated: if buffer readback entry points, coherent host memory, or the RGBA32F storage image are unavailable, SnapFrame interpolation remains enabled and content metrics are simply skipped. The Wayland adapter still needs its own telemetry handoff before it can expose the same content-aware AI behavior.
+Snap AI now receives these measured values together with GPU time. Motion magnitude contributes to the controller's smoothed scene-complexity input, so large uniform motion is not treated as a trivially static scene. The X11 backend applies the decision's `flow_scale`; `BYPASS` explicitly restores the manual Flow Scale baseline. The 120-frame log reports the last successful AI mode, manual baseline and applied percentage. Search-radius scaling, refinement-pass selection, bidirectional-flow toggling and artifact-check toggling are not yet consumed by this Vulkan backend. Metrics are capability-gated: if buffer readback entry points, coherent host memory, or the RGBA32F storage image are unavailable, SnapFrame interpolation remains enabled and content metrics are simply skipped. The Wayland adapter still needs its own telemetry handoff before it can expose the same content-aware AI behavior.
 
 ## Vulkan and WSI ownership
 
@@ -72,7 +72,7 @@ The flow-metrics reduction uses a 128-invocation workgroup, matching Vulkan's gu
 The Vulkan backend exposes the latest completed four-channel GPU reduction through
 `snap_frame_vk_get_flow_metrics()`: normalized motion magnitude, magnitude deviation
 (scene complexity proxy), confidence weighted by forward/backward consistency, and
-complementary artifact risk. The X11 renderer logs these values in its existing 120-frame
+forward-confidence inconsistency proxy. The X11 renderer logs these values in its existing 120-frame
 telemetry interval alongside per-stage GPU timings. The Wayland frame-generation adapter
 exposes the same completed sample through `fge_flow_metrics()` and logs it every 120 source
 frames. The readback remains delayed by the existing four-slot asynchronous ring; these

@@ -9,6 +9,24 @@ enum { VK_FORMAT_R8G8B8A8_UNORM = 37, VK_FORMAT_B8G8R8A8_UNORM = 44, VK_FORMAT_R
 #endif
 
 enum {
+    SNAP_FRAME_AI_MODE_BYPASS = 0u
+};
+
+static inline uint32_t snap_frame_vk_ai_flow_percent(uint32_t manual_percent,
+                                                       uint32_t mode,
+                                                       float flow_scale) {
+    if (manual_percent < 25u) manual_percent = 25u;
+    if (manual_percent > 100u) manual_percent = 100u;
+    if (mode == SNAP_FRAME_AI_MODE_BYPASS) return manual_percent;
+    if (!(flow_scale >= 0.0f)) flow_scale = 1.0f;
+    if (flow_scale > 1.0f) flow_scale = 1.0f;
+    uint32_t result = (uint32_t)((float)manual_percent * flow_scale + 0.5f);
+    if (result < 25u) result = 25u;
+    if (result > 100u) result = 100u;
+    return result;
+}
+
+enum {
     SNAP_FRAME_DEBUG_MOTION = 0u,
     SNAP_FRAME_DEBUG_CONFIDENCE = 1u,
     SNAP_FRAME_DEBUG_CONSISTENCY = 2u,

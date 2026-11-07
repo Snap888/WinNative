@@ -3030,6 +3030,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                 snap_stages[0], snap_stages[1], snap_stages[2],
                                 snap_stages[3], snap_stages[4], snap_total);
                     }
+                    uint32_t ai_mode=0, ai_manual=0, ai_applied=0;
+                    if (snap_frame_vk_get_ai_state(r->snap, &ai_mode, &ai_manual, &ai_applied)) {
+                        const char* ai_mode_name = ai_mode == 0u ? "bypass" :
+                                                   ai_mode == 1u ? "conservative" :
+                                                   ai_mode == 2u ? "adaptive" :
+                                                   ai_mode == 3u ? "quality" : "unknown";
+                        VK_LOGI("SnapFrame AI decision: mode=%s(%u) flow_manual=%u%% flow_applied=%u%%",
+                                ai_mode_name, ai_mode, ai_manual, ai_applied);
+                    }
                     float snap_metrics[4];
                     if (snap_frame_vk_get_flow_metrics(r->snap, snap_metrics)) {
                         VK_LOGI("SnapFrame latest completed flow metrics: motion=%.3f complexity=%.3f confidence=%.3f confident_inconsistency=%.3f (normalized)",

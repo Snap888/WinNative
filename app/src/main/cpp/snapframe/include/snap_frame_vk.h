@@ -18,6 +18,10 @@ int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[5], f
 /* Last completed GPU-reduced metrics: motion, complexity, FB-weighted confidence,
  * and forward-confidence inconsistency risk (a diagnostic proxy, not ground truth). */
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk *engine, float metrics[4]);
+/* Latest successful Snap AI decision: numeric mode, manual baseline and applied Flow Scale. */
+int snap_frame_vk_get_ai_state(const SnapFrameVk *engine, uint32_t *mode,
+                               uint32_t *manual_flow_percent,
+                               uint32_t *applied_flow_percent);
 int snap_frame_vk_process(SnapFrameVk *engine, VkCommandBuffer command_buffer, VkImage source, VkImageView source_view, uint32_t generation_count);
 void snap_frame_vk_generate(SnapFrameVk *engine, VkCommandBuffer command_buffer, uint32_t phase_index, uint32_t phase_count, VkImage output, VkImageView output_view);
 /* Select debug visualization: 0=motion, 1=matcher confidence, 2=FB consistency. */

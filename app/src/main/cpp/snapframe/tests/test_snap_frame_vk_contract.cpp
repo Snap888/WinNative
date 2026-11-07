@@ -15,6 +15,11 @@ int main() {
     assert(snap_frame_vk_format_supported(VK_FORMAT_R8G8B8A8_UNORM));
     assert(snap_frame_vk_format_supported(VK_FORMAT_R16G16B16A16_SFLOAT));
     assert(!snap_frame_vk_format_supported(VK_FORMAT_B8G8R8A8_UNORM));
+    assert(snap_frame_vk_ai_flow_percent(75, SNAP_FRAME_AI_MODE_BYPASS, 0.25f) == 75);
+    assert(snap_frame_vk_ai_flow_percent(75, 2u, 0.50f) == 38);
+    assert(snap_frame_vk_ai_flow_percent(20, SNAP_FRAME_AI_MODE_BYPASS, 0.25f) == 25);
+    assert(snap_frame_vk_ai_flow_percent(150, 2u, 1.50f) == 100);
+    assert(snap_frame_vk_ai_flow_percent(80, 2u, -1.0f) == 80);
     assert(snap_frame_vk_debug_mode(0) == SNAP_FRAME_DEBUG_MOTION);
     assert(snap_frame_vk_debug_mode(1) == SNAP_FRAME_DEBUG_CONFIDENCE);
     assert(snap_frame_vk_debug_mode(2) == SNAP_FRAME_DEBUG_CONSISTENCY);
