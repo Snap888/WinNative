@@ -3050,7 +3050,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             }
         }
 
-        if (use_snap && r->snap_debug_flow && gen_count > 0) {
+        // Keep the flow viewer latched to the latest completed flow field. Generated-frame
+        // acquisition is opportunistic; tying diagnostics to gen_count made the view blink
+        // whenever the swapchain could not supply an extra image.
+        if (use_snap && r->snap_debug_flow) {
             vkr_image_barrier(f->cmd, composite->image,
                               VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
                               VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
