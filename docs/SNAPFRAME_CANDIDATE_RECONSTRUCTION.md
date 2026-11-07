@@ -47,11 +47,11 @@ The native control is exposed on both display paths:
 
 | Mode | Value | Behaviour |
 |---|---:|---|
-| AI automatic | 0 | Enable when Snap AI selects `SNAP_AI_MODE_QUALITY` and GPU pressure is below 0.75; disable above 0.90 |
+| AI automatic | 0 | Enable only when Snap AI selects `SNAP_AI_MODE_QUALITY`, motion and flow confidence exceed conservative minimums, artifact risk is below 0.20, and normalized GPU pressure is below 0.98; disable above 1.15 |
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
-AI automatic is the default. The session drawer exposes AI Auto, Off, and On whenever the SnapFrame Vulkan backend is available, on both X11 and Wayland. The feature is therefore not silently enabled for existing users.
+AI automatic is the default. The GPU budget used by the policy is 7 ms; the 0.98/1.15 enable/disable thresholds provide hysteresis so a brief candidate-stage cost increase does not immediately switch the path off. Motion, complexity, confidence and artifact-risk gates prevent enabling candidate reconstruction on static, uncertain or heavily occluded frames. The session drawer exposes AI Auto, Off, and On whenever the SnapFrame Vulkan backend is available, on both X11 and Wayland.
 
 ## Validation requirements
 
@@ -76,3 +76,7 @@ AI automatic is the default. The session drawer exposes AI Auto, Off, and On whe
   reconstruction cost, and thermal/GPU budget together.
 
 The original midpoint warp remains the safe rollback path at all times.
+
+## Flow Viewer stability
+
+On X11, the diagnostic shader writes across the full composite target, which is then blitted to the full swapchain extent. Its display is deliberately independent of whether an extra generated swapchain image was acquired: acquisition can time out under FIFO pacing even though the latest completed flow field remains valid. The viewer therefore stays latched to the most recent flow field instead of blinking with `gen_count`.
