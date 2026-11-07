@@ -1307,12 +1307,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 return;
             }
             snapFrameLogFile = new java.io.File(directory, "snapframe.log");
-            snapFrameLogcatProcess = new ProcessBuilder(
-                    "logcat", "-c").redirectErrorStream(true).start();
-            snapFrameLogcatProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+            /* Verify scoped-storage / all-files access before starting logcat. */
+            java.io.File probe = new java.io.File(directory, ".snapframe-write-test");
+            try (java.io.FileOutputStream ignored = new java.io.FileOutputStream(probe, false)) {
+                ignored.write(0);
+            }
+            // Do not clear the device log buffer: capture only our tags from this point onward.
             snapFrameLogcatProcess = new ProcessBuilder(
                     "logcat", "-v", "threadtime", "-f", snapFrameLogFile.getAbsolutePath(),
-                    "SnapFrame:I", "VkRenderer:I", "SnapAI:I", "*:S")
+                    "SnapFrame:I", "VkRenderer:I", "SnapFrameLog:I", "*:S")
                     .redirectErrorStream(true).start();
             Log.i("SnapFrameLog", "Diagnostic log enabled: " + snapFrameLogFile.getAbsolutePath());
         } catch (Exception e) {
