@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.os.Environment;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -533,6 +534,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private boolean disFrameGenDebugFlow = false;
     private int snapFrameDebugMode = 0;
     private int snapFrameCandidateMode = WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO;
+    private boolean snapFrameLogEnabled = false;
+    private Process snapFrameLogcatProcess;
+    private java.io.File snapFrameLogFile;
     private boolean sgsrEnabled = false;
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
@@ -897,6 +901,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         frameGenFlowScale = clampFrameGenFlowScale(
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
         snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
+        snapFrameLogEnabled = "1".equals(getFrameGenSetting("snapFrameLog", container != null ? container.getExtra("snapFrameLog", "0") : "0"));
         snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
                 Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON,
                         parseSettingInt(getFrameGenSetting("snapFrameCandidateMode", containerCandidateMode), 0)));
@@ -1289,6 +1294,44 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
     }
 
+    private void startSnapFrameDiagnosticLog() {
+        if (snapFrameLogcatProcess != null && snapFrameLogcatProcess.isAlive()) return;
+        try {
+            java.io.File directory = new java.io.File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "winnative");
+            if (!directory.exists() && !directory.mkdirs()) {
+                Log.e("SnapFrameLog", "Cannot create log directory: " + directory);
+                snapFrameLogEnabled = false;
+                return;
+            }
+            snapFrameLogFile = new java.io.File(directory, "snapframe.log");
+            snapFrameLogcatProcess = new ProcessBuilder(
+                    "logcat", "-c").redirectErrorStream(true).start();
+            snapFrameLogcatProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+            snapFrameLogcatProcess = new ProcessBuilder(
+                    "logcat", "-v", "threadtime", "-f", snapFrameLogFile.getAbsolutePath(),
+                    "SnapFrame:I", "VkRenderer:I", "SnapAI:I", "*:S")
+                    .redirectErrorStream(true).start();
+            Log.i("SnapFrameLog", "Diagnostic log enabled: " + snapFrameLogFile.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e("SnapFrameLog", "Cannot start logcat capture", e);
+            snapFrameLogEnabled = false;
+            snapFrameLogcatProcess = null;
+        }
+    }
+
+    private void stopSnapFrameDiagnosticLog() {
+        Process process = snapFrameLogcatProcess;
+        snapFrameLogcatProcess = null;
+        if (process != null) {
+            process.destroy();
+            try { process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+        Log.i("SnapFrameLog", "Diagnostic log disabled");
+    }
+
     private void saveFrameGenerationSettings() {
         if (shortcut != null) {
             boolean overridden = saveFrameGenOverride("frameGen", frameGenEnabled ? "1" : "0", "0");
@@ -1302,6 +1345,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     String.valueOf(frameGenFlowScale), "70");
             overridden |= saveFrameGenOverride("snapFrameCandidateMode",
                     String.valueOf(snapFrameCandidateMode), "0");
+            overridden |= saveFrameGenOverride("snapFrameLog", snapFrameLogEnabled ? "1" : "0", "0");
             if (overridden) shortcut.putExtra("use_container_defaults", "0");
             shortcut.saveData();
         } else if (container != null) {
@@ -1312,6 +1356,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));
             container.putExtra("snapFrameCandidateMode", String.valueOf(snapFrameCandidateMode));
+            container.putExtra("snapFrameLog", snapFrameLogEnabled ? "1" : "0");
             container.saveData();
         }
     }
@@ -5564,7 +5609,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 waylandMode
                         ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
                         : xServerView != null && xServerView.getRenderer() != null
-                                && xServerView.getRenderer().isSnapFrameGenerationAvailable());
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
+                snapFrameLogEnabled);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -6017,6 +6063,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         } else if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
                         }
+                        saveFrameGenerationSettings();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameLogChanged(boolean enabled) {
+                        snapFrameLogEnabled = enabled;
+                        if (enabled) startSnapFrameDiagnosticLog();
+                        else stopSnapFrameDiagnosticLog();
                         saveFrameGenerationSettings();
                         renderDrawerMenu();
                     }
