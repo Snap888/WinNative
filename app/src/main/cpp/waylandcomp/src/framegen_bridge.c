@@ -266,7 +266,13 @@ static int ensure_ring(uint32_t w, uint32_t h, VkFormat fmt, uint32_t n) {
             .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
-        if (vk.CreateImage(g_dev, &ici, NULL, &r->img) != VK_SUCCESS) { destroy_ring(); return 0; }
+        if (vk.CreateImage(g_dev, &ici, NULL, &r->img) != VK_SUCCESS) {
+            FGLOG("generation ring image creation failed at slot %u (%ux%u)", i, w, h);
+            destroy_ring();
+            return 0;
+        }
+        /* Count the slot immediately so every partial allocation is reclaimed on failure. */
+        g_ring_n = i + 1;
         VkMemoryRequirements req;
         vk.GetImageMemoryRequirements(g_dev, r->img, &req);
         int idx = memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -289,7 +295,6 @@ static int ensure_ring(uint32_t w, uint32_t h, VkFormat fmt, uint32_t n) {
             .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
         if (vk.CreateImageView(g_dev, &vci, NULL, &r->view) != VK_SUCCESS) { destroy_ring(); return 0; }
         r->fresh = 1;
-        g_ring_n = i + 1;
     }
     g_ring_w = w; g_ring_h = h; g_ring_fmt = fmt;
     LOGD("framegen: generation ring %ux%u x%u", w, h, n);
