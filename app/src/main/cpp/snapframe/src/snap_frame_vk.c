@@ -208,7 +208,7 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
        !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,24)||
        !pipeline_create(e,&e->candidate_warp,snap_candidate_warp_comp,snap_candidate_warp_comp_size,7,7,24)||
-       !pipeline_create(e,&e->candidate_score,snap_candidate_score_comp,snap_candidate_score_comp_size,7,63,0)||
+       !pipeline_create(e,&e->candidate_score,snap_candidate_score_comp,snap_candidate_score_comp_size,7,63,8)||
        !pipeline_create(e,&e->candidate_reconstruct8,snap_candidate_reconstruct_rgba8_comp,snap_candidate_reconstruct_rgba8_comp_size,8,127,16)||
        !pipeline_create(e,&e->candidate_reconstruct16,snap_candidate_reconstruct_comp,snap_candidate_reconstruct_comp_size,8,127,16))goto fail;
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
@@ -437,7 +437,13 @@ void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uin
             e->candidates[phase][2].view,e->candidates[phase][3].view,
             e->candidate_weights[phase].view};
         update_set(e,&e->candidate_score,phase,7,63,scoreViews);
-        dispatch(cmd,&e->candidate_score,phase,e->active_flow_w,e->active_flow_h);
+        struct {uint32_t flow_w,flow_h;} scorePc={e->active_flow_w,e->active_flow_h};
+        g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->candidate_score.pipeline);
+        g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->candidate_score.layout,0,1,
+                                   &e->candidate_score.sets[phase],0,NULL);
+        g_vk.CmdPushConstants(cmd,e->candidate_score.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,
+                              sizeof(scorePc),&scorePc);
+        g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);
         barrier_compute(cmd);
 
         VkImageView reconstructViews[8]={e->history.view,e->pending_source_view,
