@@ -26,6 +26,7 @@ foreach(token IN ITEMS
         "candidate_warp"
         "local_flow"
         "motion_fusion"
+        ".maxSets=40"
         "fused_forward"
         "fused_backward"
         "candidate_score"
