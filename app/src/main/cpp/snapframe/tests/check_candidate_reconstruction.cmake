@@ -1,5 +1,5 @@
-if(NOT DEFINED SOURCE_DIR OR NOT DEFINED HOST_FILE)
-    message(FATAL_ERROR "SOURCE_DIR and HOST_FILE are required")
+if(NOT DEFINED SOURCE_DIR OR NOT DEFINED HOST_FILE OR NOT DEFINED RENDERER_FILE)
+    message(FATAL_ERROR "SOURCE_DIR, HOST_FILE and RENDERER_FILE are required")
 endif()
 
 set(required_shaders
@@ -37,4 +37,26 @@ foreach(token IN ITEMS
         message(FATAL_ERROR "SnapFrame host is missing candidate integration token: ${token}")
     endif()
 endforeach()
-message(STATUS "SnapFrame candidate shader and host contract is present")
+file(READ "${RENDERER_FILE}" renderer)
+if(NOT renderer MATCHES "if \\(use_snap && r->snap_debug_flow\\)")
+    message(FATAL_ERROR "SnapFrame flow viewer must not depend on generated-frame acquire success")
+endif()
+if(renderer MATCHES "if \\(use_snap && r->snap_debug_flow && gen_count > 0\\)")
+    message(FATAL_ERROR "SnapFrame flow viewer is incorrectly gated by gen_count")
+endif()
+
+foreach(token IN ITEMS
+        "target_gpu_budget_ms=7.0f"
+        "metrics.gpu_pressure=total/7.0f"
+        "metrics.motion_magnitude >= 0.12f"
+        "metrics.motion_complexity >= 0.18f"
+        "metrics.flow_confidence >= 0.12f"
+        "metrics.artifact_risk <= 0.20f"
+        "metrics.gpu_pressure>1.15f"
+        "metrics.gpu_pressure<0.98f")
+    string(FIND "${host}" "${token}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "Snap AI motion-aware quality gate is missing: ${token}")
+    endif()
+endforeach()
+message(STATUS "SnapFrame candidate, AI quality gate and stable flow viewer contracts are present")
