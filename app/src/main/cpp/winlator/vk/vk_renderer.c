@@ -2737,6 +2737,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t framegen_planned = 0;
+    uint32_t snap_effective_multiplier = r->framegen_multiplier;
+    if (r->snap) {
+        const uint32_t ai_multiplier = snap_frame_vk_get_recommended_multiplier(r->snap);
+        if (ai_multiplier >= 2u && ai_multiplier < snap_effective_multiplier)
+            snap_effective_multiplier = ai_multiplier;
+    }
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
         r->framegen_refresh_rate = pending_mhz > 0 ? (float)pending_mhz / 1000.0f : 0.0f;
@@ -2752,8 +2758,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                                             __ATOMIC_RELAXED));
         } else if (r->snap) {
             framegen_planned = snap_frame_vk_has_history(r->snap)
-                                   ? (r->framegen_multiplier > 1
-                                          ? r->framegen_multiplier - 1 : 0) : 0;
+                                   ? (snap_effective_multiplier > 1
+                                          ? snap_effective_multiplier - 1 : 0) : 0;
             if (framegen_planned > 3u) framegen_planned = 3u;
             if (framegen_planned > framegen_capacity) framegen_planned = framegen_capacity;
         }
@@ -2795,6 +2801,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t gen_count = 0;
+    uint32_t gen_presented_count = 0, gen_present_fail_count = 0;
     uint32_t gen_image_index[VK_FRAMEGEN_MAX_GENERATIONS] = {0};
     r->framegen_planned_total += framegen_planned;
     for (uint32_t g = 0; g < framegen_planned; g++) {
@@ -3218,6 +3225,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
     if (submit_end_ns >= submit_begin_ns) r->framegen_submit_ns += submit_end_ns - submit_begin_ns;
     if (sr != VK_SUCCESS) {
         VK_LOGE("vkQueueSubmit -> %d", sr);
+        if (use_snap) {
+            const float acquire_pressure = framegen_planned
+                ? (float)(framegen_planned - gen_count) / (float)framegen_planned : 0.0f;
+            snap_frame_vk_set_wsi_feedback(r->snap, r->framegen_multiplier,
+                                           snap_effective_multiplier, 0.0f,
+                                           acquire_pressure, 1.0f, 0.0f);
+        }
         // The frame fence was reset before submit. If submit fails, nothing will ever signal
         // it, so restore a signaled fence before returning or the next frame can block forever.
         vkDestroyFence(r->device, f->in_flight, NULL);
@@ -3272,12 +3286,14 @@ static bool record_and_submit_frame(VkRenderer* r) {
         if (present_end_ns >= present_begin_ns) r->framegen_present_ns += present_end_ns - present_begin_ns;
         r->framegen_present_calls++;
         if (gpr != VK_SUCCESS && gpr != VK_SUBOPTIMAL_KHR) {
+            gen_present_fail_count++;
             if (gpr == VK_ERROR_OUT_OF_DATE_KHR) gen_present_out_of_date = true;
             if (r->framegen_present_failures++ % 120 == 0) {
                 VK_LOGW("generated frame present failed (%d, failures=%llu)", gpr,
                         (unsigned long long)r->framegen_present_failures);
             }
         } else {
+            gen_presented_count++;
             r->framegen_made_frames++;
             __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
         }
@@ -3302,6 +3318,22 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
     pthread_mutex_unlock(&r->queue_mutex);
+
+    if (use_snap) {
+        const float delivery_ratio = framegen_planned
+            ? (float)gen_presented_count / (float)framegen_planned : 1.0f;
+        const float acquire_pressure = framegen_planned
+            ? (float)(framegen_planned - gen_count) / (float)framegen_planned : 0.0f;
+        const float present_pressure = gen_count
+            ? (float)gen_present_fail_count / (float)gen_count : 0.0f;
+        const float frame_period_ms = r->framegen_refresh_rate > 1.0f
+            ? 1000.0f / r->framegen_refresh_rate : 16.667f;
+        const float submit_pressure = frame_period_ms > 0.0f
+            ? (float)(submit_end_ns - submit_begin_ns) / 1000000.0f / frame_period_ms : 0.0f;
+        snap_frame_vk_set_wsi_feedback(r->snap, r->framegen_multiplier,
+                                       snap_effective_multiplier, delivery_ratio,
+                                       acquire_pressure, submit_pressure, present_pressure);
+    }
 
     bool present_suboptimal = (pr == VK_SUBOPTIMAL_KHR) && !r->ignore_suboptimal;
     if (recreate_after_present || pr == VK_ERROR_OUT_OF_DATE_KHR || present_suboptimal

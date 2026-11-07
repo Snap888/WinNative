@@ -12,6 +12,7 @@ struct SnapAIHandle {
   float complexity = 0.0f, confidence = 1.0f, pressure = 0.0f;
   float previous_scale = 1.0f;
   uint64_t last_frame_id = 0;
+  uint32_t stable_delivery_frames = 0;
   bool have_frame = false;
 };
 
@@ -32,6 +33,7 @@ void bypass(const SnapAIHandle* h, uint64_t id, uint32_t reason, SnapAIDecision*
   d->run_artifact_check = 0; d->estimated_compute_saving = 0.0f; d->frame_id = id;
   d->bypass_reason = reason; d->conservative_reason = SNAP_AI_CONSERVATIVE_NONE;
   d->gpu_pressure_input = 0.0f; d->gpu_pressure_effective = 0.0f; d->pressure_ema = h ? h->pressure : 0.0f;
+  d->recommended_multiplier = 0;
 }
 }
 
@@ -75,7 +77,13 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
     finite(m->motion_magnitude) && finite(m->motion_complexity) &&
     finite(m->flow_confidence) && finite(m->gpu_pressure) && finite(m->artifact_risk) &&
     m->gpu_time_ms >= 0 && m->motion_magnitude >= 0 && m->motion_complexity >= 0 &&
-    m->flow_confidence >= 0 && m->gpu_pressure >= 0 && m->artifact_risk >= 0;
+    m->flow_confidence >= 0 && m->gpu_pressure >= 0 && m->artifact_risk >= 0 &&
+    (!m->wsi_metrics_valid || (finite(m->generated_delivery_ratio) &&
+      finite(m->acquire_pressure) && finite(m->submit_pressure) && finite(m->present_pressure) &&
+      m->requested_multiplier >= 2 && m->requested_multiplier <= 4 &&
+      m->current_multiplier >= 2 && m->current_multiplier <= m->requested_multiplier &&
+      m->generated_delivery_ratio >= 0 && m->acquire_pressure >= 0 &&
+      m->submit_pressure >= 0 && m->present_pressure >= 0));
   ++h->stats.frames_seen;
   if (!h->cfg.enabled || !ok || m->scene_cut || (h->have_frame && id <= h->last_frame_id)) {
     const uint32_t reason = !h->cfg.enabled ? SNAP_AI_BYPASS_DISABLED :
@@ -93,8 +101,12 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   const float raw_motion = clamp01(m->motion_magnitude);
   const float raw_c = clamp01(m->motion_complexity * 0.75f + raw_motion * 0.25f);
   const float raw_q = clamp01(m->flow_confidence);
-  const float raw_p = clamp01(std::max(m->gpu_pressure,
-    m->gpu_time_ms / std::max(0.1f, h->cfg.target_gpu_budget_ms)));
+  float raw_p = std::max(m->gpu_pressure,
+    m->gpu_time_ms / std::max(0.1f, h->cfg.target_gpu_budget_ms));
+  if (m->wsi_metrics_valid)
+    raw_p = std::max(raw_p, std::max(m->acquire_pressure,
+      std::max(m->submit_pressure, m->present_pressure)));
+  raw_p = clamp01(raw_p);
   const float risk = clamp01(m->artifact_risk);
   constexpr float a = 0.25f;
   h->complexity += a * (raw_c - h->complexity);
@@ -179,6 +191,24 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   d->gpu_pressure_input = m->gpu_pressure;
   d->gpu_pressure_effective = raw_p;
   d->pressure_ema = h->pressure;
+  uint32_t requested_multiplier = m->wsi_metrics_valid ? m->requested_multiplier : 2u;
+  uint32_t recommended_multiplier = m->wsi_metrics_valid ? m->current_multiplier : 2u;
+  if (m->wsi_metrics_valid) {
+    const bool delivery_pressure = m->generated_delivery_ratio < 0.88f ||
+      m->acquire_pressure > 0.15f || m->present_pressure > 0.05f || m->submit_pressure > 0.85f;
+    if (delivery_pressure || unreliable_flow) {
+      if (recommended_multiplier > 2u) --recommended_multiplier;
+      h->stable_delivery_frames = 0;
+    } else if (m->generated_delivery_ratio > 0.97f && raw_p < 0.75f && raw_q > 0.35f && risk < 0.12f) {
+      if (++h->stable_delivery_frames >= 24u) {
+        if (recommended_multiplier < requested_multiplier) ++recommended_multiplier;
+        h->stable_delivery_frames = 0;
+      }
+    } else {
+      h->stable_delivery_frames = 0;
+    }
+  }
+  d->recommended_multiplier = recommended_multiplier;
 
   h->previous_scale = scale; h->last_frame_id = id; h->have_frame = true;
   ++h->stats.adaptive_frames;

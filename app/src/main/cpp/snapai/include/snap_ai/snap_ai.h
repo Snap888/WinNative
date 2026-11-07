@@ -16,7 +16,7 @@
 extern "C" {
 #endif
 
-#define SNAP_AI_API_VERSION 2u
+#define SNAP_AI_API_VERSION 3u
 typedef struct SnapAIHandle SnapAIHandle;
 
 typedef enum SnapAIProfile {
@@ -80,6 +80,13 @@ typedef struct SnapAIFrameMetrics {
   float artifact_risk;
   uint32_t scene_cut;
   uint32_t telemetry_valid;
+  uint32_t wsi_metrics_valid;
+  uint32_t requested_multiplier;
+  uint32_t current_multiplier;
+  float generated_delivery_ratio;
+  float acquire_pressure;
+  float submit_pressure;
+  float present_pressure;
 } SnapAIFrameMetrics;
 
 typedef struct SnapAIDecision {
@@ -100,6 +107,7 @@ typedef struct SnapAIDecision {
   float gpu_pressure_input;
   float gpu_pressure_effective;
   float pressure_ema;
+  uint32_t recommended_multiplier;
 } SnapAIDecision;
 
 typedef struct SnapAIStats {

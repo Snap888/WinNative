@@ -17,6 +17,13 @@ void snap_frame_vk_reset_history(SnapFrameVk *engine);
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk *engine, uint32_t mode);
 /* Non-blocking timestamps from the last completed query slot; values are milliseconds. */
 int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[6], float *total_ms);
+/* Feed the previous frame's actual WSI delivery to Snap AI; pressure values are normalized 0..1. */
+void snap_frame_vk_set_wsi_feedback(SnapFrameVk *engine, uint32_t requested_multiplier,
+                                    uint32_t current_multiplier, float delivery_ratio,
+                                    float acquire_pressure, float submit_pressure,
+                                    float present_pressure);
+/* 0 until AI has a recommendation; otherwise the effective multiplier (2..4). */
+uint32_t snap_frame_vk_get_recommended_multiplier(const SnapFrameVk *engine);
 /* Last completed GPU-reduced metrics: motion, complexity, FB-weighted confidence,
  * and forward-confidence inconsistency risk (a diagnostic proxy, not ground truth). */
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk *engine, float metrics[4]);

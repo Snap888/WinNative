@@ -42,6 +42,8 @@ struct SnapFrameVk {
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,local_forward,local_backward,fused_forward,fused_backward,mask;
     struct sf_image candidates[SF_PHASES][4],candidate_weights[SF_PHASES];
     uint32_t candidate_reconstruction_mode; int candidate_reconstruction_enabled,ai_quality_mode;
+    uint32_t ai_recommended_multiplier,wsi_requested_multiplier,wsi_current_multiplier; int wsi_metrics_valid;
+    float wsi_delivery_ratio,wsi_acquire_pressure,wsi_submit_pressure,wsi_present_pressure;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; float search_radius_scale; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
@@ -358,8 +360,17 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 metrics.motion_magnitude=flow_metrics[0];metrics.motion_complexity=flow_metrics[1];
                 metrics.flow_confidence=flow_metrics[2];metrics.gpu_pressure=total/7.0f;
                 metrics.artifact_risk=flow_metrics[3];metrics.telemetry_valid=1;
+                metrics.wsi_metrics_valid=(uint32_t)e->wsi_metrics_valid;
+                metrics.requested_multiplier=e->wsi_requested_multiplier>=2u&&e->wsi_requested_multiplier<=4u?e->wsi_requested_multiplier:2u;
+                metrics.current_multiplier=e->wsi_current_multiplier>=2u&&e->wsi_current_multiplier<=4u?e->wsi_current_multiplier:2u;
+                metrics.generated_delivery_ratio=e->wsi_delivery_ratio;
+                metrics.acquire_pressure=e->wsi_acquire_pressure;
+                metrics.submit_pressure=e->wsi_submit_pressure;
+                metrics.present_pressure=e->wsi_present_pressure;
                 SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
                 if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK){
+                    if(decision.recommended_multiplier>=2u&&decision.recommended_multiplier<=4u)
+                        e->ai_recommended_multiplier=decision.recommended_multiplier;
                     if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO){
                         /* Hysteresis prevents candidate compute from oscillating near the GPU budget. */
                         const int candidate_scene = metrics.motion_magnitude >= 0.12f &&
@@ -387,12 +398,16 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu mode=%u flow_scale=%.3f gpu_pressure=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f flow_guard=%d search_radius=%.2f candidate=%d",
+                        SF_LOGI("ai frame=%llu mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
                             (unsigned long long)e->query_frame_id[slot], (unsigned)decision.mode,
-                            decision.flow_scale, metrics.gpu_pressure, metrics.motion_magnitude,
-                            metrics.motion_complexity, metrics.flow_confidence, metrics.artifact_risk,
-                            (metrics.flow_confidence < 0.18f || metrics.artifact_risk > 0.20f),
-                            e->search_radius_scale, e->candidate_reconstruction_enabled);
+                            decision.bypass_reason, decision.conservative_reason, decision.flow_scale,
+                            (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
+                            decision.gpu_pressure_input, decision.gpu_pressure_effective, decision.pressure_ema,
+                            metrics.motion_magnitude, metrics.motion_complexity, metrics.flow_confidence,
+                            metrics.artifact_risk, e->search_radius_scale,
+                            e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled,
+                            decision.recommended_multiplier, e->wsi_delivery_ratio,
+                            e->wsi_acquire_pressure, e->wsi_submit_pressure, e->wsi_present_pressure);
                     }
                 }
             }
@@ -585,6 +600,26 @@ void snap_frame_vk_debug_into(SnapFrameVk*e,VkCommandBuffer cmd,VkImage out,
 
 
 int snap_frame_vk_get_telemetry(const SnapFrameVk*e,float stages_ms[6],float*total_ms){if(!e||!stages_ms||!total_ms)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->telemetry_valid;if(valid){memcpy(stages_ms,m->stage_gpu_ms,sizeof(m->stage_gpu_ms));*total_ms=m->last_gpu_ms;}pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
+
+void snap_frame_vk_set_wsi_feedback(SnapFrameVk*e,uint32_t requested_multiplier,
+                                  uint32_t current_multiplier,float delivery_ratio,
+                                  float acquire_pressure,float submit_pressure,float present_pressure){
+    if(!e)return;
+    if(requested_multiplier<2u)requested_multiplier=2u;
+    if(requested_multiplier>4u)requested_multiplier=4u;
+    if(current_multiplier<2u)current_multiplier=2u;
+    if(current_multiplier>requested_multiplier)current_multiplier=requested_multiplier;
+    e->wsi_requested_multiplier=requested_multiplier;
+    e->wsi_current_multiplier=current_multiplier;
+    e->wsi_delivery_ratio=fmaxf(0.0f,fminf(1.0f,delivery_ratio));
+    e->wsi_acquire_pressure=fmaxf(0.0f,fminf(1.0f,acquire_pressure));
+    e->wsi_submit_pressure=fmaxf(0.0f,fminf(1.0f,submit_pressure));
+    e->wsi_present_pressure=fmaxf(0.0f,fminf(1.0f,present_pressure));
+    e->wsi_metrics_valid=1;
+}
+uint32_t snap_frame_vk_get_recommended_multiplier(const SnapFrameVk*e){
+    return e?e->ai_recommended_multiplier:0u;
+}
 
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk*e,float metrics[4]){if(!e||!metrics)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->flow_metrics_valid;if(valid)memcpy(metrics,m->flow_metrics,sizeof(m->flow_metrics));pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
 
