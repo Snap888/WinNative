@@ -1,7 +1,7 @@
 #version 450
 // One-workgroup reduction over SnapFrame's existing flow + FB consistency.
 // Output channels: mean normalized motion, motion-magnitude deviation,
-// confidence weighted by FB consistency, and complementary artifact risk.
+// confidence weighted by FB consistency, and forward-confidence inconsistency risk.
 layout(local_size_x = 128, local_size_y = 1, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D motionField;
 layout(set = 0, binding = 1) uniform sampler2D consistencyField;
@@ -17,11 +17,14 @@ void main() {
         vec4 flow = texelFetch(motionField, p, 0);
         float consistency = clamp(texelFetch(consistencyField, p, 0).r, 0.0, 1.0);
         float magnitude = clamp(length(flow.xy) / 12.0, 0.0, 1.0);
-        float confidence = clamp(flow.z, 0.0, 1.0) * consistency;
+        float forwardConfidence = clamp(flow.z, 0.0, 1.0);
+        float confidence = forwardConfidence * consistency;
+        // Highlight blocks whose forward matcher is confident but whose
+        // combined FB/local-confidence mask does not support that vector.
         accum.x += magnitude;
         accum.y += magnitude * magnitude;
         accum.z += confidence;
-        accum.w += 1.0 - confidence;
+        accum.w += forwardConfidence * (1.0 - consistency);
     }
     partial[lane] = accum;
     barrier();

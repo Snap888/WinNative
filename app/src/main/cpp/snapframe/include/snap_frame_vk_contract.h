@@ -15,6 +15,14 @@ enum {
     SNAP_FRAME_DEBUG_MODE_COUNT = 3u
 };
 
+static inline float snap_frame_vk_confident_inconsistency(float confidence, float consistency) {
+    if (confidence < 0.0f) confidence = 0.0f;
+    if (confidence > 1.0f) confidence = 1.0f;
+    if (consistency < 0.0f) consistency = 0.0f;
+    if (consistency > 1.0f) consistency = 1.0f;
+    return confidence * (1.0f - consistency);
+}
+
 static inline uint32_t snap_frame_vk_debug_mode(uint32_t mode) {
     return mode < SNAP_FRAME_DEBUG_MODE_COUNT ? mode : SNAP_FRAME_DEBUG_MOTION;
 }

@@ -20,6 +20,11 @@ int main() {
     assert(snap_frame_vk_debug_mode(2) == SNAP_FRAME_DEBUG_CONSISTENCY);
     assert(snap_frame_vk_debug_mode(3) == SNAP_FRAME_DEBUG_MOTION);
     assert(snap_frame_vk_debug_mode(UINT32_MAX) == SNAP_FRAME_DEBUG_MOTION);
+    assert(std::fabs(snap_frame_vk_confident_inconsistency(0.9f, 0.2f) - 0.72f) < 0.0001f);
+    assert(std::fabs(snap_frame_vk_confident_inconsistency(0.4f, 0.4f) - 0.24f) < 0.0001f);
+    assert(snap_frame_vk_confident_inconsistency(-1.0f, 0.0f) == 0.0f);
+    assert(snap_frame_vk_confident_inconsistency(2.0f, 0.0f) == 1.0f);
+    assert(snap_frame_vk_confident_inconsistency(1.0f, 2.0f) == 0.0f);
 
     SnapFrameVkLifecycle state{};
     uint32_t reset=snap_frame_vk_lifecycle_update(&state,1,1920,1080,VK_FORMAT_R8G8B8A8_UNORM,1,0);
