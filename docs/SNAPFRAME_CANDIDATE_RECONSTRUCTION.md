@@ -41,8 +41,9 @@ surfaces are allocated.
 
 ## AI and manual control
 
-The native control is exposed as
-`WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(mode)`:
+The native control is exposed on both display paths:
+- Wayland: `WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(mode)`
+- X11: `VulkanRenderer.setSnapFrameCandidateReconstruction(mode)` → JNI → `snap_frame_vk_set_candidate_reconstruction()`:
 
 | Mode | Value | Behaviour |
 |---|---:|---|
@@ -50,7 +51,7 @@ The native control is exposed as
 | Forced off | 1 | Always use the original midpoint warp |
 | Forced on | 2 | Always use four-candidate reconstruction |
 
-AI automatic is the default. The Wayland SnapFrame settings pane exposes AI Auto, Off, and On for repeatable A/B testing. The feature is therefore not silently enabled for existing users.
+AI automatic is the default. The session drawer exposes AI Auto, Off, and On whenever the SnapFrame Vulkan backend is available, on both X11 and Wayland. The feature is therefore not silently enabled for existing users.
 
 ## Validation requirements
 
