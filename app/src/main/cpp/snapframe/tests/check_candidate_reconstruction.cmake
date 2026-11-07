@@ -121,3 +121,40 @@ foreach(token IN ITEMS
     endif()
 endforeach()
 message(STATUS "SnapFrame candidate, temporal visibility, divergence telemetry, AI quality gate and stable flow viewer contracts are present")
+
+# Both presentation backends must route SnapFrame to the same Vulkan implementation.
+if(DEFINED WAYLAND_BRIDGE_FILE AND DEFINED WAYLAND_ENGINE_FILE AND DEFINED X11_RENDERER_FILE)
+    file(READ "${WAYLAND_BRIDGE_FILE}" wayland_bridge)
+    file(READ "${WAYLAND_ENGINE_FILE}" wayland_engine)
+    file(READ "${X11_RENDERER_FILE}" x11_renderer)
+    foreach(token IN ITEMS
+            "vk.GetImageMemoryRequirements && vk.AllocateMemory"
+            "vk.BindImageMemory && vk.CmdPipelineBarrier && vk.DeviceWaitIdle"
+            "bind_result != VK_SUCCESS"
+            "g_ring_n = i + 1")
+        string(FIND "${wayland_bridge}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "Wayland Vulkan ring safety contract is missing: ${token}")
+        endif()
+    endforeach()
+    foreach(token IN ITEMS
+            "snap_frame_vk_process(h->vk"
+            "snap_frame_process(g_snap_core"
+            "fge_set_candidate_reconstruction"
+            "SnapFrame process failed")
+        string(FIND "${wayland_engine}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "Wayland SnapFrame engine integration is missing: ${token}")
+        endif()
+    endforeach()
+    foreach(token IN ITEMS
+            "snap_frame_vk_process(r->snap"
+            "snap_frame_vk_generate(r->snap"
+            "nativeSetSnapFrameCandidateReconstruction"
+            "snap_frame_vk_prepare(r->snap")
+        string(FIND "${x11_renderer}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "X11 SnapFrame integration is missing: ${token}")
+        endif()
+    endforeach()
+endif()
