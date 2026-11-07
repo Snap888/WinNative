@@ -129,14 +129,31 @@ if(DEFINED WAYLAND_BRIDGE_FILE AND DEFINED WAYLAND_ENGINE_FILE AND DEFINED X11_R
     file(READ "${X11_RENDERER_FILE}" x11_renderer)
     file(READ "${WAYLAND_PRESENT_FILE}" wayland_present)
     file(READ "${X11_STATE_FILE}" x11_state)
-    if(NOT wayland_bridge MATCHES "vkp_framegen_acquire_timeout_ns" OR NOT wayland_present MATCHES "vkp_framegen_acquire_timeout_ns\\(k\\)")
-        message(FATAL_ERROR "Wayland framegen acquire must use the bounded refresh-aware timeout")
+    foreach(token IN ITEMS
+            "vkp_framegen_acquire_timeout_ns"
+            "generated_slot > 0) return 1000000ULL"
+            "16000000ULL"
+            "4000000ULL")
+        string(FIND "${wayland_bridge}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "Wayland bounded framegen acquire policy is missing: ${token}")
+        endif()
+    endforeach()
+    string(FIND "${wayland_present}" "vkp_framegen_acquire_timeout_ns(k)" wayland_call)
+    if(wayland_call EQUAL -1)
+        message(FATAL_ERROR "Wayland present path does not use the slot-aware acquire budget")
     endif()
-    if(NOT wayland_bridge MATCHES "16000000ULL" OR NOT wayland_bridge MATCHES "4000000ULL" OR NOT wayland_bridge MATCHES "generated_slot > 0\\) return 1000000ULL")
-        message(FATAL_ERROR "Wayland framegen acquire timeout must be clamped to 4..16 ms")
-    endif()
-    if(NOT x11_state MATCHES "VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL" OR NOT x11_state MATCHES "VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL" OR NOT x11_renderer MATCHES "slot_timeout = g == 0 \? gen_acquire_timeout : 1000000ULL")
-        message(FATAL_ERROR "X11 framegen acquire budget must be bounded at 8..16 ms")
+    foreach(token IN ITEMS
+            "VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL"
+            "VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL")
+        string(FIND "${x11_state}" "${token}" found)
+        if(found EQUAL -1)
+            message(FATAL_ERROR "X11 framegen acquire budget is missing: ${token}")
+        endif()
+    endforeach()
+    string(FIND "${x11_renderer}" "slot_timeout = g == 0 ? gen_acquire_timeout : 1000000ULL" x11_slot_policy)
+    if(x11_slot_policy EQUAL -1)
+        message(FATAL_ERROR "X11 additional generated frames must use a short opportunistic acquire")
     endif()
     foreach(token IN ITEMS
             "vk.GetImageMemoryRequirements && vk.AllocateMemory"
