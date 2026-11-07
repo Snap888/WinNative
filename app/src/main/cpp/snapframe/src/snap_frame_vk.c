@@ -10,6 +10,10 @@
 #include "snap_midpoint_warp_comp.spv.h"
 #include "snap_flow_debug_comp.spv.h"
 #include "snap_flow_metrics_comp.spv.h"
+#include "snap_candidate_warp_comp.spv.h"
+#include "snap_candidate_score_comp.spv.h"
+#include "snap_candidate_reconstruct_rgba8_comp.spv.h"
+#include "snap_candidate_reconstruct_comp.spv.h"
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
@@ -17,7 +21,7 @@
 
 #define SF_LEVELS 3u
 #define SF_PHASES 3u
-#define SF_BINDINGS 6u
+#define SF_BINDINGS 8u
 
 struct sf_image { VkImage image; VkDeviceMemory memory; VkImageView view; uint32_t w,h; int fresh; };
 struct sf_pipeline { VkDescriptorSetLayout set_layout; VkPipelineLayout layout; VkPipeline pipeline; VkDescriptorSet sets[4]; };
@@ -26,9 +30,12 @@ struct SnapFrameVk {
     VkDevice device; VkPhysicalDevice physical; VkPhysicalDeviceMemoryProperties memprops;
     VkSampler sampler; VkDescriptorPool pool;
     struct sf_pipeline luma,pyramid,flow,consistency,warp8,warp16,debug,metrics;
+    struct sf_pipeline candidate_warp,candidate_score,candidate_reconstruct8,candidate_reconstruct16;
     struct sf_buffer metrics_readback[4]; struct sf_image metrics_output;
     int metrics_pipeline_ready,metrics_enabled; uint8_t metrics_pending[4];
     struct sf_image history,prev[SF_LEVELS],curr[SF_LEVELS],forward,backward,mask;
+    struct sf_image candidates[SF_PHASES][4],candidate_weights[SF_PHASES];
+    int candidate_reconstruction_enabled;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
@@ -138,13 +145,14 @@ static void barrier_compute(VkCommandBuffer cmd){
     g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,1,&b,0,NULL,0,NULL);
 }
 static void transition_fresh(SnapFrameVk*e,VkCommandBuffer cmd){
-    VkImageMemoryBarrier b[12];uint32_t n=0;
+    VkImageMemoryBarrier b[32];uint32_t n=0;
 #define FRESH(i) do{if((i).fresh){b[n++]=(VkImageMemoryBarrier){.sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,.srcAccessMask=0,\
  .dstAccessMask=VK_ACCESS_SHADER_READ_BIT|VK_ACCESS_SHADER_WRITE_BIT,.oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,.newLayout=VK_IMAGE_LAYOUT_GENERAL,\
  .srcQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.dstQueueFamilyIndex=VK_QUEUE_FAMILY_IGNORED,.image=(i).image,\
  .subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};(i).fresh=0;}}while(0)
     FRESH(e->history);for(uint32_t i=0;i<SF_LEVELS;i++){FRESH(e->prev[i]);FRESH(e->curr[i]);}
     FRESH(e->forward);FRESH(e->backward);FRESH(e->mask);FRESH(e->metrics_output);
+    for(uint32_t phase=0;phase<SF_PHASES;phase++){for(uint32_t c=0;c<4;c++)FRESH(e->candidates[phase][c]);FRESH(e->candidate_weights[phase]);}
 #undef FRESH
     if(n)g_vk.CmdPipelineBarrier(cmd,VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,0,0,NULL,0,NULL,n,b);
 }
@@ -166,6 +174,7 @@ static void copy_history(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src){
 static void resources_destroy(SnapFrameVk*e){
     image_destroy(e,&e->history);for(uint32_t i=0;i<SF_LEVELS;i++){image_destroy(e,&e->prev[i]);image_destroy(e,&e->curr[i]);}
     image_destroy(e,&e->forward);image_destroy(e,&e->backward);image_destroy(e,&e->mask);image_destroy(e,&e->metrics_output);e->metrics_enabled=0;
+    for(uint32_t phase=0;phase<SF_PHASES;phase++){for(uint32_t c=0;c<4;c++)image_destroy(e,&e->candidates[phase][c]);image_destroy(e,&e->candidate_weights[phase]);}
     e->width=e->height=0;e->prepared=0;e->history_valid=0;e->pending_source=VK_NULL_HANDLE;e->pending_source_view=VK_NULL_HANDLE;
 }
 SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
@@ -188,8 +197,8 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
       .mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST,.addressModeU=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,.maxLod=0};
     if(g_vk.CreateSampler(d,&si,NULL,&e->sampler)!=VK_SUCCESS)goto fail;
-    VkDescriptorPoolSize sizes[2]={{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,64},{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,32}};
-    VkDescriptorPoolCreateInfo pi={.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,.flags=VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,.maxSets=20,.poolSizeCount=2,.pPoolSizes=sizes};
+    VkDescriptorPoolSize sizes[2]={{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,128},{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,64}};
+    VkDescriptorPoolCreateInfo pi={.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,.flags=VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,.maxSets=32,.poolSizeCount=2,.pPoolSizes=sizes};
     if(g_vk.CreateDescriptorPool(d,&pi,NULL,&e->pool)!=VK_SUCCESS)goto fail;
     if(!pipeline_create(e,&e->luma,snap_luma_downsample_comp,snap_luma_downsample_comp_size,2,1,0)||
        !pipeline_create(e,&e->pyramid,snap_pyramid_downsample_comp,snap_pyramid_downsample_comp_size,2,1,0)||
@@ -197,10 +206,16 @@ SnapFrameVk*snap_frame_vk_create(VkDevice d,VkPhysicalDevice pd){
        !pipeline_create(e,&e->consistency,snap_flow_consistency_comp,snap_flow_consistency_comp_size,4,11,8)||
        !pipeline_create(e,&e->warp8,snap_midpoint_warp_rgba8_comp,snap_midpoint_warp_rgba8_comp_size,6,31,16)||
        !pipeline_create(e,&e->warp16,snap_midpoint_warp_comp,snap_midpoint_warp_comp_size,6,31,16)||
-       !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,24))goto fail;
+       !pipeline_create(e,&e->debug,snap_flow_debug_comp,snap_flow_debug_comp_size,3,3,24)||
+       !pipeline_create(e,&e->candidate_warp,snap_candidate_warp_comp,snap_candidate_warp_comp_size,7,7,24)||
+       !pipeline_create(e,&e->candidate_score,snap_candidate_score_comp,snap_candidate_score_comp_size,7,63,0)||
+       !pipeline_create(e,&e->candidate_reconstruct8,snap_candidate_reconstruct_rgba8_comp,snap_candidate_reconstruct_rgba8_comp_size,8,127,16)||
+       !pipeline_create(e,&e->candidate_reconstruct16,snap_candidate_reconstruct_comp,snap_candidate_reconstruct_comp_size,8,127,16))goto fail;
     if(!alloc_sets(e,&e->luma,2)||!alloc_sets(e,&e->pyramid,4)||!alloc_sets(e,&e->flow,2)||
        !alloc_sets(e,&e->consistency,1)||!alloc_sets(e,&e->warp8,3)||!alloc_sets(e,&e->warp16,3)||
-       !alloc_sets(e,&e->debug,1))goto fail;
+       !alloc_sets(e,&e->debug,1)||!alloc_sets(e,&e->candidate_warp,SF_PHASES)||
+       !alloc_sets(e,&e->candidate_score,SF_PHASES)||!alloc_sets(e,&e->candidate_reconstruct8,SF_PHASES)||
+       !alloc_sets(e,&e->candidate_reconstruct16,SF_PHASES))goto fail;
     if(g_vk.CreateBuffer&&g_vk.GetBufferMemoryRequirements&&g_vk.BindBufferMemory&&g_vk.DestroyBuffer&&g_vk.CmdCopyImageToBuffer&&g_vk.MapMemory&&g_vk.UnmapMemory&&
        pipeline_create(e,&e->metrics,snap_flow_metrics_comp,snap_flow_metrics_comp_size,3,3,0)&&alloc_sets(e,&e->metrics,1)){
         e->metrics_pipeline_ready=1;
@@ -215,6 +230,7 @@ fail:snap_frame_vk_destroy(e);return NULL;
 void snap_frame_vk_destroy(SnapFrameVk*e){
     if(!e)return;resources_destroy(e);pipeline_destroy(e,&e->luma);pipeline_destroy(e,&e->pyramid);
     pipeline_destroy(e,&e->flow);pipeline_destroy(e,&e->consistency);pipeline_destroy(e,&e->warp8);pipeline_destroy(e,&e->warp16);pipeline_destroy(e,&e->debug);
+    pipeline_destroy(e,&e->candidate_warp);pipeline_destroy(e,&e->candidate_score);pipeline_destroy(e,&e->candidate_reconstruct8);pipeline_destroy(e,&e->candidate_reconstruct16);
     if(e->query_pool)g_vk.DestroyQueryPool(e->device,e->query_pool,NULL);
     if(e->pool)g_vk.DestroyDescriptorPool(e->device,e->pool,NULL);
     if(e->sampler)g_vk.DestroySampler(e->device,e->sampler,NULL);
@@ -243,6 +259,10 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     if(!image_create(e,&e->forward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->backward,fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT)||
        !image_create(e,&e->mask,fw,fh,VK_FORMAT_R16_SFLOAT))goto fail;
+    for(uint32_t phase=0;phase<SF_PHASES;phase++){
+        for(uint32_t c=0;c<4;c++)if(!image_create(e,&e->candidates[phase][c],fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT))goto fail;
+        if(!image_create(e,&e->candidate_weights[phase],fw,fh,VK_FORMAT_R16G16B16A16_SFLOAT))goto fail;
+    }
     if(e->metrics_pipeline_ready&&image_create(e,&e->metrics_output,1,1,VK_FORMAT_R32G32B32A32_SFLOAT))e->metrics_enabled=1;
     e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
@@ -253,6 +273,9 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
 fail:resources_destroy(e);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
+void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t enabled){
+    if(e)e->candidate_reconstruction_enabled=enabled?1:0;
+}
 void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->lifecycle.history_valid=0;snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);}}
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
@@ -377,15 +400,54 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
 }
 void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uint32_t count,VkImage out,VkImageView out_view){
     if(!e||!e->prepared||!e->history_valid||!e->pending_source||!e->pending_source_view||!out||!out_view||!count||count>SF_PHASES||phase>=count)return;
-    struct sf_pipeline*p=e->format==VK_FORMAT_R8G8B8A8_UNORM?&e->warp8:&e->warp16;
-    VkImageView v[6]={e->history.view,e->pending_source_view,e->forward.view,e->backward.view,e->mask.view,out_view};
-    update_set(e,p,phase,6,31,v);
-    struct {float phase,flow_to_pixels;uint32_t flow_w,flow_h;} pc={snap_frame_vk_phase_time(phase,count),8.0f,e->active_flow_w,e->active_flow_h};
     if(phase==0)write_timestamp(e,cmd,8);
-    g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->pipeline);
-    g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->layout,0,1,&p->sets[phase],0,NULL);
-    g_vk.CmdPushConstants(cmd,p->layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),&pc);
-    g_vk.CmdDispatch(cmd,div_up(e->width,8),div_up(e->height,8),1);
+    if(e->candidate_reconstruction_enabled){
+        struct sf_pipeline *reconstruct=e->format==VK_FORMAT_R8G8B8A8_UNORM?
+            &e->candidate_reconstruct8:&e->candidate_reconstruct16;
+        VkImageView warpViews[7]={e->forward.view,e->backward.view,e->mask.view,
+            e->candidates[phase][0].view,e->candidates[phase][1].view,
+            e->candidates[phase][2].view,e->candidates[phase][3].view};
+        update_set(e,&e->candidate_warp,phase,7,7,warpViews);
+        struct {float phase,flow_to_pixels;uint32_t flow_w,flow_h,full_w,full_h;} warpPc={
+            snap_frame_vk_phase_time(phase,count),8.0f,e->active_flow_w,e->active_flow_h,e->width,e->height};
+        g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->candidate_warp.pipeline);
+        g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->candidate_warp.layout,0,1,
+                                   &e->candidate_warp.sets[phase],0,NULL);
+        g_vk.CmdPushConstants(cmd,e->candidate_warp.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(warpPc),&warpPc);
+        g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);
+        barrier_compute(cmd);
+
+        VkImageView scoreViews[7]={e->history.view,e->pending_source_view,
+            e->candidates[phase][0].view,e->candidates[phase][1].view,
+            e->candidates[phase][2].view,e->candidates[phase][3].view,
+            e->candidate_weights[phase].view};
+        update_set(e,&e->candidate_score,phase,7,63,scoreViews);
+        dispatch(cmd,&e->candidate_score,phase,e->active_flow_w,e->active_flow_h);
+        barrier_compute(cmd);
+
+        VkImageView reconstructViews[8]={e->history.view,e->pending_source_view,
+            e->candidates[phase][0].view,e->candidates[phase][1].view,
+            e->candidates[phase][2].view,e->candidates[phase][3].view,
+            e->candidate_weights[phase].view,out_view};
+        update_set(e,reconstruct,phase,8,127,reconstructViews);
+        struct {uint32_t flow_w,flow_h,full_w,full_h;} reconstructPc={
+            e->active_flow_w,e->active_flow_h,e->width,e->height};
+        g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,reconstruct->pipeline);
+        g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,reconstruct->layout,0,1,
+                                   &reconstruct->sets[phase],0,NULL);
+        g_vk.CmdPushConstants(cmd,reconstruct->layout,VK_SHADER_STAGE_COMPUTE_BIT,0,
+                              sizeof(reconstructPc),&reconstructPc);
+        g_vk.CmdDispatch(cmd,div_up(e->width,8),div_up(e->height,8),1);
+    }else{
+        struct sf_pipeline*p=e->format==VK_FORMAT_R8G8B8A8_UNORM?&e->warp8:&e->warp16;
+        VkImageView v[6]={e->history.view,e->pending_source_view,e->forward.view,e->backward.view,e->mask.view,out_view};
+        update_set(e,p,phase,6,31,v);
+        struct {float phase,flow_to_pixels;uint32_t flow_w,flow_h;} pc={snap_frame_vk_phase_time(phase,count),8.0f,e->active_flow_w,e->active_flow_h};
+        g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->pipeline);
+        g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,p->layout,0,1,&p->sets[phase],0,NULL);
+        g_vk.CmdPushConstants(cmd,p->layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(pc),&pc);
+        g_vk.CmdDispatch(cmd,div_up(e->width,8),div_up(e->height,8),1);
+    }
     if(phase+1u==count){write_timestamp(e,cmd,9);copy_history(e,cmd,e->pending_source);}
 }
 
