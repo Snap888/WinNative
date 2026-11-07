@@ -27,6 +27,8 @@ foreach(token IN ITEMS
         "local_flow"
         "motion_fusion"
         ".maxSets=40"
+        "COMBINED_IMAGE_SAMPLER,192"
+        "snap_flow_consistency_comp_size,5,27,8"
         "fused_forward"
         "fused_backward"
         "candidate_score"
@@ -72,6 +74,7 @@ foreach(token IN ITEMS
 endforeach()
 file(READ "${AI_FILE}" ai_source)
 file(READ "${FLOW_SHADER_FILE}" flow_shader)
+file(READ "${SOURCE_DIR}/shaders/flow_consistency.comp" consistency_shader)
 foreach(token IN ITEMS
         "raw_q < 0.18f"
         "risk > 0.20f"
@@ -95,4 +98,15 @@ foreach(token IN ITEMS
         message(FATAL_ERROR "Adaptive flow search contract is missing: ${token}")
     endif()
 endforeach()
-message(STATUS "SnapFrame candidate, AI quality gate and stable flow viewer contracts are present")
+foreach(token IN ITEMS
+        "photometricVisibility"
+        "photometricError"
+        "previousLuma"
+        "currentLuma"
+        "smoothstep(0.08, 0.28")
+    string(FIND "${consistency_shader}" "${token}" found)
+    if(found EQUAL -1)
+        message(FATAL_ERROR "SnapFrame temporal visibility confidence is missing: ${token}")
+    endif()
+endforeach()
+message(STATUS "SnapFrame candidate, temporal visibility, AI quality gate and stable flow viewer contracts are present")
