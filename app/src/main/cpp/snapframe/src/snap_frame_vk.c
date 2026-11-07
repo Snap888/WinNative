@@ -384,6 +384,7 @@ static void write_timestamp(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t query){
 int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageView src_view,uint32_t n){
     if(!e||!e->prepared||!cmd||!src||!src_view)return 0;e->pending_source=src;e->pending_source_view=src_view;transition_fresh(e,cmd);
     if(!e->history_valid){copy_history(e,cmd,src);return 0;}
+    const int debug_only = n == UINT32_MAX;
     if(n==0){copy_history(e,cmd,src);return 0;}
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;pthread_mutex_unlock(&e->telemetry_mutex);
     e->query_slot=(uint32_t)(e->frame_serial%4u);collect_query_slot(e,e->query_slot);
@@ -455,6 +456,8 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
         e->metrics_pending[e->query_slot]=1;
     }
     write_timestamp(e,cmd,7);
+    /* Debug-only processing still advances history after calculating the latest flow field. */
+    if(debug_only)copy_history(e,cmd,src);
     return 1;
 }
 void snap_frame_vk_generate(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t phase,uint32_t count,VkImage out,VkImageView out_view){
