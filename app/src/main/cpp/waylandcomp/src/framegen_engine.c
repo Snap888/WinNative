@@ -310,6 +310,11 @@ void fge_telemetry(float *accepted, float *source_rate, float *thermal) {
     pthread_mutex_unlock(&g_snap_lock);
 }
 
+int fge_flow_metrics(float metrics[4]) {
+    if (!metrics || !g_snap) return 0;
+    return snap_frame_vk_get_flow_metrics(g_snap, metrics);
+}
+
 const char *fge_engine_name(int kind) {
     if (kind == VKP_FG_ENGINE_SNAPFRAME) return "SnapFrame Vulkan";
     return kind == VKP_FG_ENGINE_DIS ? "WFG Native" : "LSFG Native";
