@@ -14,6 +14,8 @@
 #include <pthread.h>
 #include <time.h>
 
+void wnc_log(const char *tag, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+
 #define DIS_FLOW_MIN_SIDE_DEFAULT 180u
 
 static VkPhysicalDevice g_pd;
@@ -271,7 +273,7 @@ uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_vie
         SnapFrameStatus status=snap_frame_process(g_snap_core,&input,&output);
         if (status != SNAP_FRAME_OK) {
             if (g_snap_process_errors++ % 120u == 0u)
-                WNC_LOG("framegen", "SnapFrame process failed: status=%d frame=%llu extent=%ux%u outputs=%u",
+                wnc_log("framegen", "SnapFrame process failed: status=%d frame=%llu extent=%ux%u outputs=%u",
                         (int)status, (unsigned long long)native.frame_id, w, h, native.output_capacity);
             return 0u;
         }
