@@ -529,13 +529,15 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
     return (int)n_gen;
 }
 
-void vkp_framegen_presented(int generated) {
+void vkp_framegen_presented(int generated, int source_presented) {
     if (generated < 0) generated = 0;
+    if (source_presented != 0) source_presented = 1;
+    if (generated == 0 && !source_presented) return;
     int64_t now = now_ns();
     if (!g_window_start_ns) { g_window_start_ns = now; g_present_accum = 0; g_source_accum = 0; }
-    g_present_accum += (uint32_t)generated + 1u;
-    g_source_accum += 1u;
-    atomic_fetch_add(&g_total_presented, (uint64_t)generated + 1u);
+    g_present_accum += (uint32_t)generated + (uint32_t)source_presented;
+    g_source_accum += (uint32_t)source_presented;
+    atomic_fetch_add(&g_total_presented, (uint64_t)generated + (uint64_t)source_presented);
     if (generated) {
         atomic_fetch_add(&g_stat_generated, (unsigned)generated);
         atomic_fetch_add(&g_total_generated, (uint64_t)generated);

@@ -1791,7 +1791,12 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         const int64_t t_pres = perf_now();
         pr = g_vk.QueuePresentKHR(g_queue, &pi);
         perf_add(&g_perf.present_ns, &g_perf.present_max_ns, &g_perf.presents, perf_now() - t_pres);
-        if (k < ngen) presented_gen++;
+        if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
+            if (k < ngen) presented_gen++;
+        } else if (k < ngen) {
+            wnc_log("framegen", "generated present %d/%d failed (%s %d)",
+                    k + 1, ngen, vk_result_name(pr), (int)pr);
+        }
         if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR || pr == VK_ERROR_DEVICE_LOST) break;
     }
     if (!fence_submitted) {
@@ -1803,7 +1808,8 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     VkResult fr = timed_wait(g_fence, UINT64_MAX);
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
-    vkp_framegen_presented(presented_gen);
+    const int source_presented = (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
+    vkp_framegen_presented(presented_gen, source_presented);
     if (fr == VK_ERROR_DEVICE_LOST || pr == VK_ERROR_DEVICE_LOST) { device_lost("present"); return -1; }
     if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR) {
         /* The surface changed or went away under this frame: rebuild before the next one. */
