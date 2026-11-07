@@ -98,7 +98,7 @@ internal fun FrameGenPaneContent(
                     onDisTargetFpsSelected = listener::onDisFrameGenTargetFpsSelected,
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
                     onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
-                    onCandidateModeChanged = onCandidateModeChanged,
+                    onCandidateModeChanged = listener::onSnapFrameCandidateModeChanged,
                 )
 
                 ThinDivider()
@@ -232,7 +232,7 @@ internal fun FrameGenEngineSection(
                 onFlowScaleChanged = onFlowScaleChanged,
                 onDebugFlowChanged = onDisDebugFlowChanged,
                 onDebugModeChanged = onSnapDebugModeChanged,
-                onCandidateModeChanged = listener::onSnapFrameCandidateModeChanged,
+                onCandidateModeChanged = onCandidateModeChanged,
             )
         }
 
