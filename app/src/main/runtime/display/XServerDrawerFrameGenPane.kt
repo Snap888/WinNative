@@ -86,6 +86,8 @@ internal fun FrameGenPaneContent(
                     disTargetFps = state.disFrameGenTargetFps,
                     disDebugFlow = state.disFrameGenDebugFlow,
                     snapDebugMode = state.snapFrameDebugMode,
+                    candidateMode = state.snapFrameCandidateMode,
+                    candidateAvailable = state.snapFrameCandidateAvailable,
                     maxRefreshRate = state.maxRefreshRate,
                     paneScale = paneScale,
                     onEngineSelected = listener::onFrameGenEngineSelected,
@@ -96,6 +98,7 @@ internal fun FrameGenPaneContent(
                     onDisTargetFpsSelected = listener::onDisFrameGenTargetFpsSelected,
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
                     onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
+                    onCandidateModeChanged = onCandidateModeChanged,
                 )
 
                 ThinDivider()
@@ -149,6 +152,8 @@ internal fun FrameGenEngineSection(
     disTargetFps: Int,
     disDebugFlow: Boolean,
     snapDebugMode: Int,
+    candidateMode: Int,
+    candidateAvailable: Boolean,
     maxRefreshRate: Int,
     paneScale: Float,
     onEngineSelected: (FrameGenEngine) -> Unit,
@@ -159,6 +164,7 @@ internal fun FrameGenEngineSection(
     onDisTargetFpsSelected: (Int) -> Unit,
     onDisDebugFlowChanged: (Boolean) -> Unit,
     onSnapDebugModeChanged: (Int) -> Unit,
+    onCandidateModeChanged: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
         PaneSectionLabel(stringResource(R.string.session_drawer_frame_generation))
@@ -219,8 +225,8 @@ internal fun FrameGenEngineSection(
                 flowScale = flowScale,
                 debugFlow = disDebugFlow,
                 debugMode = snapDebugMode,
-                candidateMode = state.snapFrameCandidateMode,
-                candidateAvailable = state.snapFrameCandidateAvailable,
+                candidateMode = candidateMode,
+                candidateAvailable = candidateAvailable,
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
