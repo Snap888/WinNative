@@ -65,3 +65,19 @@ This branch's embedded X11 and Wayland support must not be generalized to every 
 ### Metrics portability and slot retirement
 
 The flow-metrics reduction uses a 128-invocation workgroup, matching Vulkan's guaranteed minimum compute workgroup invocation count. The asynchronous four-slot readback now retires its metrics-pending flag as soon as the corresponding timestamp slot is collected, including unavailable/invalid timestamp paths. This prevents a recycled query slot from carrying stale metrics state into a later frame. Metrics remain optional: missing readback entry points or unsupported allocations disable telemetry without disabling interpolation.
+
+
+### Flow metrics telemetry handoff
+
+The Vulkan backend exposes the latest completed four-channel GPU reduction through
+`snap_frame_vk_get_flow_metrics()`: normalized motion magnitude, magnitude deviation
+(scene complexity proxy), confidence weighted by forward/backward consistency, and
+complementary artifact risk. The X11 renderer logs these values in its existing 120-frame
+telemetry interval alongside per-stage GPU timings. The Wayland frame-generation adapter
+exposes the same completed sample through `fge_flow_metrics()` and logs it every 120 source
+frames. The readback remains delayed by the existing four-slot asynchronous ring; these
+logs report completed samples, never trigger a synchronous GPU wait.
+
+The existing X11 Flow Viewer remains the visual flow/consistency view. The numeric metrics
+are currently available in logs; selectable confidence/occlusion/photometric-residual viewer
+layers remain future work and are not claimed as implemented.
