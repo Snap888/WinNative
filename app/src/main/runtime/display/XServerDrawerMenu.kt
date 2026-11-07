@@ -633,6 +633,7 @@ data class XServerDrawerState(
     val disFrameGenTargetFps: Int = 0,
     val disFrameGenDebugFlow: Boolean = false,
     val snapFrameDebugMode: Int = 0,
+    val snapFrameCandidateMode: Int = 0,
     val screenEffectsCardExpanded: Boolean = false,
     val sgsrEnabled: Boolean = false,
     val sgsrSharpness: Int = 100,
@@ -1053,6 +1054,7 @@ interface XServerDrawerActionListener {
     fun onDisDebugFlowChanged(enabled: Boolean)
 
     fun onSnapFrameDebugModeChanged(mode: Int)
+    fun onSnapFrameCandidateModeChanged(mode: Int)
 
     fun onScreenEffectsCardExpandedChanged(expanded: Boolean)
 
@@ -1541,6 +1543,7 @@ fun withDisFrameGenState(
     targetFps: Int,
     debugFlow: Boolean,
     snapDebugMode: Int = state.snapFrameDebugMode,
+    candidateMode: Int = state.snapFrameCandidateMode,
 ): XServerDrawerState =
     state.copy(
         disFrameGenEnabled = enabled,
@@ -1550,6 +1553,7 @@ fun withDisFrameGenState(
         disFrameGenTargetFps = targetFps.coerceAtLeast(0),
         disFrameGenDebugFlow = debugFlow,
         snapFrameDebugMode = snapDebugMode.coerceIn(0, 2),
+        snapFrameCandidateMode = candidateMode.coerceIn(0, 2),
         items =
             state.items.map { item ->
                 if (item.itemId == R.id.main_menu_frame_generation) {
