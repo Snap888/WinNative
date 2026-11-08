@@ -15,6 +15,8 @@ int snap_frame_vk_has_history(const SnapFrameVk *engine);
 void snap_frame_vk_reset_history(SnapFrameVk *engine);
 /* Candidate reconstruction mode: 0=AI automatic, 1=forced off, 2=forced on. */
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk *engine, uint32_t mode);
+/* Snap AI policy: 0=Auto (adaptive multiplier), 1=Off, 2=On (AI active, manual multiplier). */
+void snap_frame_vk_set_ai_mode(SnapFrameVk *engine, uint32_t mode);
 /* Non-blocking timestamps from the last completed query slot; values are milliseconds. */
 int snap_frame_vk_get_telemetry(const SnapFrameVk *engine, float stages_ms[6], float *total_ms);
 /* Feed the previous frame's actual WSI delivery to Snap AI; pressure values are normalized 0..1. */
