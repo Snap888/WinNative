@@ -3093,12 +3093,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         (unsigned long long)r->framegen_acquire_timeouts,
                         (unsigned long long)r->framegen_acquire_errors,
                         acquire_ms, submit_ms, present_avg_ms,
-                        (double)r->framegen_acquire_slot_ns[0] / 1.0e6,
-                        (double)r->framegen_acquire_slot_ns[1] / 1.0e6,
-                        (double)r->framegen_acquire_slot_ns[2] / 1.0e6,
-                        (double)r->framegen_present_slot_ns[0] / 1.0e6,
-                        (double)r->framegen_present_slot_ns[1] / 1.0e6,
-                        (double)r->framegen_present_slot_ns[2] / 1.0e6,
+                        r->framegen_acquire_slot_calls[0] ? (double)r->framegen_acquire_slot_ns[0] / (double)r->framegen_acquire_slot_calls[0] / 1.0e6 : 0.0,
+                        r->framegen_acquire_slot_calls[1] ? (double)r->framegen_acquire_slot_ns[1] / (double)r->framegen_acquire_slot_calls[1] / 1.0e6 : 0.0,
+                        r->framegen_acquire_slot_calls[2] ? (double)r->framegen_acquire_slot_ns[2] / (double)r->framegen_acquire_slot_calls[2] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[0] ? (double)r->framegen_present_slot_ns[0] / (double)r->framegen_present_slot_calls[0] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[1] ? (double)r->framegen_present_slot_ns[1] / (double)r->framegen_present_slot_calls[1] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[2] ? (double)r->framegen_present_slot_ns[2] / (double)r->framegen_present_slot_calls[2] / 1.0e6 : 0.0,
                         (unsigned long long)r->framegen_present_failures, draw_ms, gap_ms);
                 r->framegen_acquire_ns = 0;
                 memset(r->framegen_acquire_slot_ns, 0, sizeof(r->framegen_acquire_slot_ns));
