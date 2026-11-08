@@ -364,6 +364,11 @@ int vkp_framegen_extra_images(void) {
 }
 uint32_t vkp_framegen_requested_multiplier(void) { return (uint32_t)atomic_load(&g_mult); }
 uint32_t vkp_framegen_effective_multiplier(void) { return fge_effective_multiplier(); }
+void vkp_framegen_set_wsi_feedback(float delivery_ratio,float acquire_pressure,
+                                   float submit_pressure,float present_pressure) {
+    fge_set_wsi_feedback((uint32_t)atomic_load(&g_mult),fge_effective_multiplier(),
+                         delivery_ratio,acquire_pressure,submit_pressure,present_pressure);
+}
 
 static int ensure_engine(int kind) {
     /* LSFG restarts when its cache changes (a new Lossless.dll), the other engine has none. */

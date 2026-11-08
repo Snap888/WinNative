@@ -82,6 +82,8 @@ int vkp_framegen_active(void);
 int vkp_framegen_extra_images(void);
 uint32_t vkp_framegen_requested_multiplier(void);
 uint32_t vkp_framegen_effective_multiplier(void);
+void vkp_framegen_set_wsi_feedback(float delivery_ratio,float acquire_pressure,
+                                   float submit_pressure,float present_pressure);
 /* THE hook. Called once per composed scene frame, after the effects hook, with the scene image
  * (GENERAL, w x h, fmt, TRANSFER_SRC|SAMPLED). Records the engine's chain into `cmd` and
  * returns how many generated frames (0..VKP_FG_MAX_GENERATIONS) it produced, their images in

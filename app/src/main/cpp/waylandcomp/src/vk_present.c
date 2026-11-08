@@ -1817,7 +1817,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             const float submit_pressure = k < ngen ? 1.0f :
                 (generated_submit_calls && frame_period_ms > 0.0f
                     ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f);
-            fge_set_wsi_feedback(vkp_framegen_requested_multiplier(), vkp_framegen_effective_multiplier(),
+            vkp_framegen_set_wsi_feedback(
                 ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f,
                 acquire_pressure, submit_pressure, present_pressure);
             vkp_framegen_presented(presented_gen, 0);
@@ -1864,7 +1864,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f;
     const float present_pressure = generated_present_calls
         ? (float)generated_present_failures / (float)generated_present_calls : 0.0f;
-    fge_set_wsi_feedback(vkp_framegen_requested_multiplier(), vkp_framegen_effective_multiplier(),
+    vkp_framegen_set_wsi_feedback(
         delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
     static uint64_t fg_wsi_log_frames;
     if (++fg_wsi_log_frames % 120u == 0u && ngen > 0) {
