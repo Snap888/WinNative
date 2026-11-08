@@ -2737,12 +2737,16 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t framegen_planned = 0;
+    /*
+     * The multiplier selected in the X11 drawer is an explicit user request.
+     * Snap AI may recommend a lower multiplier for its Auto policy, but it must
+     * never silently override the manual x2/x3/x4 selection. AI multiplier
+     * control is applied only by the explicit Auto policy (wired separately);
+     * until that policy is selected, preserve the requested multiplier.
+     */
     uint32_t snap_effective_multiplier = r->framegen_multiplier;
-    if (r->snap) {
-        const uint32_t ai_multiplier = snap_frame_vk_get_recommended_multiplier(r->snap);
-        if (ai_multiplier >= 2u && ai_multiplier < snap_effective_multiplier)
-            snap_effective_multiplier = ai_multiplier;
-    }
+    const uint32_t snap_ai_recommended_multiplier = r->snap
+        ? snap_frame_vk_get_recommended_multiplier(r->snap) : 0u;
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
         r->framegen_refresh_rate = pending_mhz > 0 ? (float)pending_mhz / 1000.0f : 0.0f;
