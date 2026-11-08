@@ -2538,7 +2538,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
 
-    vkWaitForFences(r->device, 1, &f->in_flight, VK_TRUE, UINT64_MAX);
+    VkResult frame_wait_result = vkWaitForFences(r->device, 1, &f->in_flight, VK_TRUE, UINT64_MAX);
+    if (frame_wait_result == VK_SUCCESS && f->framegen_compute_pending) {
+        r->framegen_compute_completed_total += f->framegen_compute_pending;
+        f->framegen_compute_pending = 0;
+    } else if (frame_wait_result != VK_SUCCESS) {
+        VK_LOGW("frame fence wait failed (%d); pending compute is not counted as completed",
+                (int)frame_wait_result);
+        f->framegen_compute_pending = 0;
+    }
 
     // Snapshot the scene under scene_mutex (cheap memcpy of a few KB), then release it so
     // scene producers (texture destroys, X server window updates) don't stall behind the
@@ -3077,7 +3085,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 const double present_avg_ms = r->framegen_present_calls
                     ? (double)r->framegen_present_ns / (double)r->framegen_present_calls / 1.0e6 : 0.0;
                 VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned_now=%u planned_total=%llu "
-                        "acquired_now=%u acquired_total=%llu compute_recorded=%llu submitted=%llu "
+                        "acquired_now=%u acquired_total=%llu compute_recorded=%llu compute_completed=%llu submitted=%llu "
                         "acquire_miss=%llu timeout=%llu acquire_err=%llu "
                         "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
                         "acquire_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms "
@@ -3088,6 +3096,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         framegen_planned, (unsigned long long)r->framegen_planned_total,
                         gen_count, (unsigned long long)r->framegen_acquired_total,
                         (unsigned long long)r->framegen_compute_total,
+                        (unsigned long long)r->framegen_compute_completed_total,
                         (unsigned long long)r->framegen_submitted_total,
                         (unsigned long long)r->framegen_acquire_misses,
                         (unsigned long long)r->framegen_acquire_timeouts,
@@ -3256,6 +3265,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
     const uint64_t submit_end_ns = vkr_monotonic_ns();
     if (submit_end_ns >= submit_begin_ns) r->framegen_submit_ns += submit_end_ns - submit_begin_ns;
     if (sr != VK_SUCCESS) {
+        f->framegen_compute_pending = 0;
         VK_LOGE("vkQueueSubmit -> %d", sr);
         if (use_snap) {
             const float acquire_pressure = framegen_planned
@@ -3295,6 +3305,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     r->framegen_submitted_total += gen_count;
+    f->framegen_compute_pending = gen_count;
     VkPresentInfoKHR pi = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     pi.waitSemaphoreCount = 1;
     pi.pWaitSemaphores = &render_finished;
