@@ -336,7 +336,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(r!=VK_SUCCESS){
         e->telemetry_query_drops++;
         if((e->telemetry_query_drops%60u)==1u)
-            SF_LOGW("GPU timestamp sample dropped frame=%llu result=%d drops=%llu; AI update waits for a completed GPU sample",
+            SF_LOGI("GPU timestamp sample dropped frame=%llu result=%d drops=%llu; AI update waits for a completed GPU sample",
                 (unsigned long long)e->query_frame_id[slot],(int)r,(unsigned long long)e->telemetry_query_drops);
         return;
     }
