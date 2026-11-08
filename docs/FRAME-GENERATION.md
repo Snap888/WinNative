@@ -56,6 +56,7 @@ presentation path:
 - **acquired** — swapchain images successfully acquired;
 - **compute_recorded** — generated-image compute/blit commands recorded;
 - **submitted** — generated work accepted by vkQueueSubmit;
+- **compute_completed** — generated compute work whose frame fence has signaled;
 - **made / presented** — generated vkQueuePresentKHR calls that returned success or suboptimal;
 - **present_fail**, **source_present_fail**, **acquire_timeout**, **acquire_error** — separate failure classes.
 
@@ -71,7 +72,7 @@ BYPASS/CONSERVATIVE reason, effective pressure, applied Flow Scale, candidate st
 timestamp samples. Candidate reconstruction has its own GPU timestamp interval.
 
 For a test run, compare planned, acquired, compute_recorded, submitted, and made rather than
-treating any single count as FPS. A healthy run should show made <= submitted <= acquired <= planned,
+treating any single count as FPS. A healthy run should show made <= submitted <= acquired <= planned and compute_completed <= submitted,
 with failures and per-slot WSI times explaining the gaps.
 
 The branch is experimental: a successful APK build and physical Turnip/Adreno stress test are
