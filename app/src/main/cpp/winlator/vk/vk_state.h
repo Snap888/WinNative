@@ -459,6 +459,8 @@ typedef struct VkRenderer {
     uint64_t          framegen_submit_ns;
     uint64_t          framegen_present_ns;
     uint64_t          framegen_present_calls;
+    uint64_t          framegen_present_slot_ns[7];
+    uint64_t          framegen_present_slot_calls[7];
     uint64_t          framegen_draw_ns;
     uint64_t          framegen_gap_ns;
     uint64_t          framegen_last_end_ns;

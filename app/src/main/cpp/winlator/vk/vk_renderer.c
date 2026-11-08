@@ -3060,7 +3060,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 const double present_avg_ms = r->framegen_present_calls
                     ? (double)r->framegen_present_ns / (double)r->framegen_present_calls / 1.0e6 : 0.0;
                 VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned_now=%u planned_total=%llu "
-                        "acquired_now=%u acquired_total=%llu computed=%llu submitted=%llu "
+                        "acquired_now=%u acquired_total=%llu compute_recorded=%llu submitted=%llu "
                         "acquire_miss=%llu timeout=%llu acquire_err=%llu "
                         "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
                         "present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
