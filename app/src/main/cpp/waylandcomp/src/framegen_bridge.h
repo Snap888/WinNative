@@ -46,6 +46,11 @@ uint64_t vkp_framegen_acquire_timeout_ns(int generated_slot);
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
 /* SnapFrame candidate reconstruction: 0=AI automatic, 1=off, 2=on. */
 void vkp_framegen_set_candidate_reconstruction(int mode);
+/* Snap AI policy: 0=Auto, 1=Off, 2=On. */
+void vkp_framegen_set_ai_mode(int mode);
+/* SnapFrame flow viewer controls; mode 0=Motion, 1=Confidence, 2=Consistency. */
+void vkp_framegen_set_debug_flow(int enabled);
+void vkp_framegen_set_debug_mode(int mode);
 /* Same codes as VulkanRenderer.getFrameGenProblem(): -1 not known yet (device not up), 0 fine,
  * 1 the driver lacks what the selected engine needs (vkp_framegen_caps_reason says what),
  * 2 the engine failed to start / build its chain. */
