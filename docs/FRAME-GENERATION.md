@@ -34,8 +34,9 @@ that ship with the APK — so it works on a fresh install with no Steam account 
 
 ## SnapFrame — native Vulkan *(experimental branch)*
 
-SnapFrame is a separate frame-generation engine built into the Wayland compositor. It uses the
-compositor's existing Vulkan device and FIFO present loop; it does not depend on LSFG, DIS or WFG.
+SnapFrame is a separate frame-generation engine integrated into both the X11 Vulkan renderer and
+the Wayland compositor. Each path uses its own Vulkan device and FIFO present loop with the shared
+SnapFrame Vulkan compute backend; it does not depend on LSFG, DIS or WFG.
 The runtime selector enables it only when the current Vulkan device supports the required storage
 formats and compute timestamp queries.
 
@@ -45,6 +46,34 @@ inconsistent flow with an occlusion mask, and reconstructs distinct temporal pha
 down when the GPU exceeds its budget.
 
 SnapFrame settings are available in **per-game Game Settings** and the in-game **FG** overlay.
+
+### SnapFrame telemetry and AI feedback
+
+X11 and Wayland report the same lifecycle stages, but keep their WSI measurements local to each
+presentation path:
+
+- **planned** — generated images requested for this source frame;
+- **acquired** — swapchain images successfully acquired;
+- **compute_recorded** — generated-image compute/blit commands recorded;
+- **submitted** — generated work accepted by vkQueueSubmit;
+- **made / presented** — generated vkQueuePresentKHR calls that returned success or suboptimal;
+- **present_fail**, **acquire_timeout**, **acquire_error** — separate failure classes.
+
+The delivery ratio is successful generated presents divided by planned generated images. It is
+not inferred from the number of compute dispatches. Acquire, submit and each generated present
+have separate timing measurements; renderer frame gaps are reported separately from WSI time.
+
+Snap AI consumes completed GPU timestamp samples and the latest WSI delivery feedback. If the
+optional flow-metrics readback is unavailable, it still receives GPU/WSI pressure with a
+conservative motion profile: stale flow reuse and automatic candidate reconstruction are disabled,
+but adaptive output-multiplier control remains active. Logs identify the metrics source, AI
+BYPASS/CONSERVATIVE reason, effective pressure, applied Flow Scale, candidate state, and dropped
+timestamp samples. Candidate reconstruction has its own GPU timestamp interval.
+
+For a test run, compare planned, acquired, compute_recorded, submitted, and made rather than
+treating any single count as FPS. A healthy run should show made <= submitted <= acquired <= planned,
+with failures and per-slot WSI times explaining the gaps.
+
 The branch is experimental: a successful APK build and physical Turnip/Adreno stress test are
 still required before calling it hardware-validated. Current scene-cut resets are event/frame-gap
 based rather than pixel-content detection.
