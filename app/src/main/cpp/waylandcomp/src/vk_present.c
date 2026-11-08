@@ -101,6 +101,11 @@ static VkSemaphore g_wait_sem;
 
 /* The 10 s perf line's counters (vkp_perf_take). Compositor thread only. */
 static struct vkp_perf g_perf;
+/* Frame-generation lifecycle totals. Compositor-thread only; each stage is counted separately. */
+static uint64_t g_fg_planned_total, g_fg_acquired_total, g_fg_compute_recorded_total;
+static uint64_t g_fg_submit_success_total, g_fg_submit_failure_total;
+static uint64_t g_fg_present_success_total, g_fg_present_failure_total;
+static uint64_t g_fg_acquire_timeout_total, g_fg_acquire_error_total;
 static int64_t perf_now(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1768,6 +1773,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         record_screen_blit(cmd, ngen ? gens[0] : result, rw, rh, scene_w, scene_h, img, blit_filter);
     }
     g_vk.EndCommandBuffer(cmd);
+    g_fg_compute_recorded_total += (uint64_t)ngen;
 
     /* One submit + present per slot: generated frames first, the real frame last. The frame
      * fence rides on the last submit (a fence signal is ordered after everything submitted
@@ -1776,7 +1782,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     const int presents = 1 + ngen;
     int fence_submitted = 0, presented_gen = 0;
     int generated_acquired = ngen > 0 ? 1 : 0;
+    g_fg_planned_total += (uint64_t)ngen;
+    g_fg_acquired_total += (uint64_t)generated_acquired;
     int generated_present_failures = 0, generated_submit_calls = 0, generated_present_calls = 0;
+    int generated_acquire_timeouts = 0, generated_acquire_errors = 0;
+    int generated_submit_failures = 0;
     uint64_t generated_acquire_ns = ngen > 0 ? (uint64_t)initial_acquire_ns : 0u;
     uint64_t generated_submit_ns = 0, generated_present_ns = 0;
     float generated_acquire_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
@@ -1796,12 +1806,20 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                     generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
                     generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
                 }
+                if (k < ngen) {
+                    if (ark == VK_TIMEOUT || ark == VK_NOT_READY) {
+                        generated_acquire_timeouts++; g_fg_acquire_timeout_total++;
+                    } else {
+                        generated_acquire_errors++; g_fg_acquire_error_total++;
+                    }
+                }
                 pr = VK_ERROR_OUT_OF_DATE_KHR;
                 break;
             }
             const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
             if (k < ngen) {
                 generated_acquired++;
+                g_fg_acquired_total++;
                 generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
                 generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
             }
@@ -1826,6 +1844,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             generated_submit_slot_ms[k] = (float)submit_elapsed_ns / 1.0e6f;
         }
         if (qr != VK_SUCCESS) {
+            if (k < ngen) { generated_submit_failures++; g_fg_submit_failure_total++; }
             if (qr == VK_ERROR_DEVICE_LOST) device_lost("submit");
             else LOGE("present: submit %d/%d failed (%d)", k + 1, presents, (int)qr);
             /* Feed the actual partial WSI result back to Snap AI before leaving this frame. */
@@ -1844,6 +1863,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             if (g_dev_state != -2) destroy_swapchain();
             return -1;
         }
+        if (k < ngen) g_fg_submit_success_total++;
         fence_submitted = last;
         VkPresentInfoKHR pi = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .waitSemaphoreCount = 1,
                                .pWaitSemaphores = &g_rnds[k], .swapchainCount = 1,
@@ -1858,9 +1878,9 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             generated_present_slot_ms[k] = (float)present_elapsed_ns / 1.0e6f;
         }
         if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
-            if (k < ngen) presented_gen++;
+            if (k < ngen) { presented_gen++; g_fg_present_success_total++; }
         } else if (k < ngen) {
-            generated_present_failures++;
+            generated_present_failures++; g_fg_present_failure_total++;
             wnc_log("framegen", "generated present %d/%d failed (%s %d)",
                     k + 1, ngen, vk_result_name(pr), (int)pr);
         }
@@ -1887,8 +1907,15 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
     static uint64_t fg_wsi_log_frames;
     if (++fg_wsi_log_frames % 120u == 0u && ngen > 0) {
-        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
+        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_timeout=%d acquire_error=%d submit_fail=%d present_fail=%d totals[plan=%llu acquire=%llu compute_recorded=%llu submit_ok=%llu submit_fail=%llu present_ok=%llu present_fail=%llu acquire_timeout=%llu acquire_error=%llu] acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
             ngen, generated_acquired, presented_gen,
+            generated_acquire_timeouts, generated_acquire_errors, generated_submit_failures,
+            generated_present_failures,
+            (unsigned long long)g_fg_planned_total, (unsigned long long)g_fg_acquired_total,
+            (unsigned long long)g_fg_compute_recorded_total,
+            (unsigned long long)g_fg_submit_success_total, (unsigned long long)g_fg_submit_failure_total,
+            (unsigned long long)g_fg_present_success_total, (unsigned long long)g_fg_present_failure_total,
+            (unsigned long long)g_fg_acquire_timeout_total, (unsigned long long)g_fg_acquire_error_total,
             (double)generated_acquire_ns / 1.0e6, (double)generated_submit_ns / 1.0e6,
             (double)generated_present_ns / 1.0e6,
             generated_acquire_slot_ms[0], generated_acquire_slot_ms[1], generated_acquire_slot_ms[2],
