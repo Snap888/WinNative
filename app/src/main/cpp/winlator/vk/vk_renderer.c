@@ -2745,8 +2745,6 @@ static bool record_and_submit_frame(VkRenderer* r) {
      * until that policy is selected, preserve the requested multiplier.
      */
     uint32_t snap_effective_multiplier = r->framegen_multiplier;
-    const uint32_t snap_ai_recommended_multiplier = r->snap
-        ? snap_frame_vk_get_recommended_multiplier(r->snap) : 0u;
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
         r->framegen_refresh_rate = pending_mhz > 0 ? (float)pending_mhz / 1000.0f : 0.0f;
