@@ -2821,7 +2821,14 @@ static bool record_and_submit_frame(VkRenderer* r) {
         VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, slot_timeout,
                                             f->image_available_gen[g], VK_NULL_HANDLE, &idx);
         const uint64_t acquire_end_ns = vkr_monotonic_ns();
-        if (acquire_end_ns >= acquire_begin_ns) r->framegen_acquire_ns += acquire_end_ns - acquire_begin_ns;
+        if (acquire_end_ns >= acquire_begin_ns) {
+            const uint64_t acquire_elapsed_ns = acquire_end_ns - acquire_begin_ns;
+            r->framegen_acquire_ns += acquire_elapsed_ns;
+            if (g < 7u) {
+                r->framegen_acquire_slot_ns[g] += acquire_elapsed_ns;
+                r->framegen_acquire_slot_calls[g]++;
+            }
+        }
         if (ga != VK_SUCCESS && ga != VK_SUBOPTIMAL_KHR) {
             r->framegen_acquire_misses++;
             if (ga == VK_TIMEOUT || ga == VK_NOT_READY) r->framegen_acquire_timeouts++;
@@ -3073,6 +3080,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         "acquired_now=%u acquired_total=%llu compute_recorded=%llu submitted=%llu "
                         "acquire_miss=%llu timeout=%llu acquire_err=%llu "
                         "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
+                        "acquire_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms "
                         "present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
                         (unsigned long long)r->framegen_made_frames,
@@ -3085,8 +3093,18 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         (unsigned long long)r->framegen_acquire_timeouts,
                         (unsigned long long)r->framegen_acquire_errors,
                         acquire_ms, submit_ms, present_avg_ms,
+                        (double)r->framegen_acquire_slot_ns[0] / 1.0e6,
+                        (double)r->framegen_acquire_slot_ns[1] / 1.0e6,
+                        (double)r->framegen_acquire_slot_ns[2] / 1.0e6,
+                        (double)r->framegen_present_slot_ns[0] / 1.0e6,
+                        (double)r->framegen_present_slot_ns[1] / 1.0e6,
+                        (double)r->framegen_present_slot_ns[2] / 1.0e6,
                         (unsigned long long)r->framegen_present_failures, draw_ms, gap_ms);
                 r->framegen_acquire_ns = 0;
+                memset(r->framegen_acquire_slot_ns, 0, sizeof(r->framegen_acquire_slot_ns));
+                memset(r->framegen_acquire_slot_calls, 0, sizeof(r->framegen_acquire_slot_calls));
+                memset(r->framegen_present_slot_ns, 0, sizeof(r->framegen_present_slot_ns));
+                memset(r->framegen_present_slot_calls, 0, sizeof(r->framegen_present_slot_calls));
                 r->framegen_submit_ns = 0;
                 r->framegen_present_ns = 0;
                 r->framegen_present_calls = 0;
@@ -3187,6 +3205,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     vkEndCommandBuffer(f->cmd);
+    /* Count generated images whose compute/blit commands were recorded. Submission and
+     * successful presentation are accounted independently below. */
+    r->framegen_compute_total += gen_count;
 
     #define VK_MAX_FRAME_SEMAPHORES (2 + VK_FRAMEGEN_MAX_GENERATIONS)
     VkSemaphore wait_sems[VK_MAX_FRAME_SEMAPHORES];
@@ -3272,7 +3293,6 @@ static bool record_and_submit_frame(VkRenderer* r) {
         return false;
     }
 
-    r->framegen_compute_total += gen_count; /* command buffer submitted successfully */
     r->framegen_submitted_total += gen_count;
     VkPresentInfoKHR pi = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     pi.waitSemaphoreCount = 1;
@@ -3293,7 +3313,14 @@ static bool record_and_submit_frame(VkRenderer* r) {
         const uint64_t present_begin_ns = vkr_monotonic_ns();
         VkResult gpr = vkQueuePresentKHR(r->graphics_queue, &gpi);
         const uint64_t present_end_ns = vkr_monotonic_ns();
-        if (present_end_ns >= present_begin_ns) r->framegen_present_ns += present_end_ns - present_begin_ns;
+        if (present_end_ns >= present_begin_ns) {
+            const uint64_t present_elapsed_ns = present_end_ns - present_begin_ns;
+            r->framegen_present_ns += present_elapsed_ns;
+            if (g < 7u) {
+                r->framegen_present_slot_ns[g] += present_elapsed_ns;
+                r->framegen_present_slot_calls[g]++;
+            }
+        }
         r->framegen_present_calls++;
         if (gpr != VK_SUCCESS && gpr != VK_SUBOPTIMAL_KHR) {
             gen_present_fail_count++;
