@@ -82,9 +82,11 @@ weights to the live renderer. First benchmark a Lite model on Android, then eval
 quantized/runtime-converted implementation as a separate backend behind the current SnapFrame
 flow/warp path. The native Vulkan path remains the low-overhead fallback.
 
-For a test run, compare planned, acquired, compute_recorded, submitted, and made rather than
-treating any single count as FPS. A healthy run should show made <= submitted <= acquired <= planned and compute_completed <= submitted,
-with failures and per-slot WSI times explaining the gaps.
+For a test run, compare planned, acquired, compute_recorded, compute_completed, submitted, and
+made rather than treating any single count as FPS. A healthy run should show made <= acquired <=
+planned and compute_completed <= compute_recorded <= planned. Submitted is tracked separately:
+the X11 path batches generated work into one queue submit, while Wayland submits presentation
+slots individually, so these counts are not interchangeable with compute completion.
 
 The branch is experimental: a successful APK build and physical Turnip/Adreno stress test are
 still required before calling it hardware-validated. Current scene-cut resets are event/frame-gap
