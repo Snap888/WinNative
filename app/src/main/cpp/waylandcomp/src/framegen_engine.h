@@ -38,6 +38,11 @@ const char *fge_caps_reason_for(int kind);
 void fge_device_lost(void);
 void fge_reset_history(void);
 void fge_set_candidate_reconstruction(int mode);
+void fge_set_ai_mode(int mode);
+void fge_set_debug_flow(int enabled);
+void fge_set_debug_mode(int mode);
+void fge_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
+                    uint32_t width, uint32_t height);
 /* 1 when the engines can generate in `fmt` on this device (storage + linear sampling), beyond the
  * ring format probed at fge_probe - the FP16 scene of HDR frames (vk_present.c). */
 int fge_format_ok(VkFormat fmt);
