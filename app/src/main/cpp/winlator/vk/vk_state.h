@@ -457,6 +457,8 @@ typedef struct VkRenderer {
     uint64_t          framegen_acquire_timeouts;
     uint64_t          framegen_acquire_errors;
     uint64_t          framegen_acquire_ns;
+    uint64_t          framegen_acquire_slot_ns[7];
+    uint64_t          framegen_acquire_slot_calls[7];
     uint64_t          framegen_submit_ns;
     uint64_t          framegen_present_ns;
     uint64_t          framegen_present_calls;
