@@ -3081,7 +3081,7 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         "acquire_miss=%llu timeout=%llu acquire_err=%llu "
                         "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
                         "acquire_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms "
-                        "present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
+                        "present_fail=%llu source_present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
                         (unsigned long long)r->framegen_made_frames,
                         d_real ? (double)d_made / (double)d_real : 0.0,
@@ -3099,7 +3099,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
                         r->framegen_present_slot_calls[0] ? (double)r->framegen_present_slot_ns[0] / (double)r->framegen_present_slot_calls[0] / 1.0e6 : 0.0,
                         r->framegen_present_slot_calls[1] ? (double)r->framegen_present_slot_ns[1] / (double)r->framegen_present_slot_calls[1] / 1.0e6 : 0.0,
                         r->framegen_present_slot_calls[2] ? (double)r->framegen_present_slot_ns[2] / (double)r->framegen_present_slot_calls[2] / 1.0e6 : 0.0,
-                        (unsigned long long)r->framegen_present_failures, draw_ms, gap_ms);
+                        (unsigned long long)r->framegen_present_failures,
+                        (unsigned long long)r->framegen_source_present_failures, draw_ms, gap_ms);
                 r->framegen_acquire_ns = 0;
                 memset(r->framegen_acquire_slot_ns, 0, sizeof(r->framegen_acquire_slot_ns));
                 memset(r->framegen_acquire_slot_calls, 0, sizeof(r->framegen_acquire_slot_calls));
@@ -3339,6 +3340,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
     if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
         r->framegen_real_frames++;
         __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
+    } else {
+        r->framegen_source_present_failures++;
     }
     // Present the mirror separately so its result doesn't disturb the display recreate logic below.
     if (rec_this_frame) {
