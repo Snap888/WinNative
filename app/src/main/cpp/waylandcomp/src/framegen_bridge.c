@@ -84,6 +84,7 @@ static int format_refused(VkFormat f) {
 static _Atomic unsigned g_stat_generated;           /* since the last stats_take */
 static _Atomic uint64_t g_total_generated;
 static _Atomic uint64_t g_total_presented;
+static _Atomic unsigned g_last_presented_generated;
 static float g_presented_rate, g_source_rate;       /* smoothed, 0.5 s windows */
 static uint32_t g_present_accum, g_source_accum;
 static int64_t g_window_start_ns;
@@ -213,7 +214,7 @@ void vkp_framegen_stats(float out[6]) {
     if (g_engine_ok) fge_telemetry(&accepted, &src, &thermal);
     /* Planned is what is generated; the governor is off on both paths. Our own measured
      * source rate serves both engines (DIS measures none). */
-    out[0] = (float)g_planned;
+    out[0] = (float)atomic_load(&g_last_presented_generated); /* confirmed generated presents */
     out[1] = (float)g_planned;
     out[2] = g_source_rate;
     out[3] = g_presented_rate;
@@ -577,6 +578,7 @@ void vkp_framegen_presented(int generated, int source_presented) {
     if (generated < 0) generated = 0;
     if (source_presented != 0) source_presented = 1;
     if (generated == 0 && !source_presented) return;
+    atomic_store(&g_last_presented_generated, (unsigned)generated);
     int64_t now = now_ns();
     if (!g_window_start_ns) { g_window_start_ns = now; g_present_accum = 0; g_source_accum = 0; }
     g_present_accum += (uint32_t)generated + (uint32_t)source_presented;
