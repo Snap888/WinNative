@@ -331,6 +331,7 @@ public class VulkanRenderer
                 nativeSetSnapFrameDebugFlow(nativeHandle, snapFrameDebugFlow);
                 nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
                 nativeSetSnapFrameCandidateReconstruction(nativeHandle, snapFrameCandidateMode);
+                nativeSetSnapFrameAiMode(nativeHandle, snapFrameAiMode);
                 destroyed.set(false);
                 xServer.windowManager.addOnWindowModificationListener(this);
                 xServer.pointer.addOnPointerMotionListener(this);
@@ -1072,6 +1073,7 @@ public class VulkanRenderer
     private boolean snapFrameDebugFlow = false;
     private int snapFrameDebugMode = 0;
     private int snapFrameCandidateMode = 0;
+    private int snapFrameAiMode = 0;
 
     public void setSnapFrameGenerationEnabled(boolean enabled) {
         snapFrameGenerationRequested = enabled;
@@ -1091,6 +1093,12 @@ public class VulkanRenderer
     public void setSnapFrameDebugMode(int mode) {
         snapFrameDebugMode = Math.max(0, Math.min(2, mode));
         if (nativeHandle != 0) nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
+    }
+
+    /** 0=Auto (AI may adapt multiplier), 1=Off, 2=On (AI active, manual multiplier). */
+    public void setSnapFrameAiMode(int mode) {
+        snapFrameAiMode = Math.max(0, Math.min(2, mode));
+        if (nativeHandle != 0) nativeSetSnapFrameAiMode(nativeHandle, snapFrameAiMode);
     }
 
     /** 0=AI Auto, 1=Off, 2=On. */
@@ -1213,6 +1221,7 @@ public class VulkanRenderer
     private static native void nativeSetSnapFrameDebugFlow(long handle, boolean enabled);
     private static native void nativeSetSnapFrameDebugMode(long handle, int mode);
     private static native void nativeSetSnapFrameCandidateReconstruction(long handle, int mode);
+    private static native void nativeSetSnapFrameAiMode(long handle, int mode);
     private static native void nativeSetDisFrameGenerationEnabled(long handle, boolean enabled);
     private static native void nativeSetDisFrameGenerationScale(long handle, int scalePercent);
     private static native void nativeSetDisFrameGenerationTargetFps(long handle, int targetFps);
