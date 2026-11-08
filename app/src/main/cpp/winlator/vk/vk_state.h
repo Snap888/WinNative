@@ -434,6 +434,7 @@ typedef struct VkRenderer {
     bool              snap_debug_flow;
     uint32_t          snap_debug_mode;
     uint32_t          snap_candidate_reconstruction_mode;
+    uint32_t          snap_ai_mode;
     uint32_t          dis_scale;
     uint32_t          dis_target_fps;
     bool              dis_debug_flow;
