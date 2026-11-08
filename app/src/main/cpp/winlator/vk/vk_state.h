@@ -425,6 +425,7 @@ typedef struct VkRenderer {
     bool              swapchain_transfer_dst;
     bool              swapchain_storage;
     uint64_t          framegen_present_failures;
+    uint64_t          framegen_source_present_failures;
     struct VkrLsfg*   lsfg;
     char*             lsfg_cache_path;
     struct VkrDis*    dis;
