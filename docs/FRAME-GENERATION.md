@@ -71,6 +71,17 @@ but adaptive output-multiplier control remains active. Logs identify the metrics
 BYPASS/CONSERVATIVE reason, effective pressure, applied Flow Scale, candidate state, and dropped
 timestamp samples. Candidate reconstruction has its own GPU timestamp interval.
 
+### Practical-RIFE research direction
+
+[Practical-RIFE](https://github.com/hzwer/Practical-RIFE) is based on RIFE and SAFA and provides
+a useful reference for a future optional learned reconstruction backend. Its README recommends
+the 4.25 model for most scenes and describes Lite variants as lower-compute models; it also
+recommends reducing inference scale for very high-resolution input. These are model/inference
+trade-offs, not a ready-made Vulkan library. Do not add the Python/PyTorch runtime or model
+weights to the live renderer. First benchmark a Lite model on Android, then evaluate a
+quantized/runtime-converted implementation as a separate backend behind the current SnapFrame
+flow/warp path. The native Vulkan path remains the low-overhead fallback.
+
 For a test run, compare planned, acquired, compute_recorded, submitted, and made rather than
 treating any single count as FPS. A healthy run should show made <= submitted <= acquired <= planned and compute_completed <= submitted,
 with failures and per-slot WSI times explaining the gaps.
