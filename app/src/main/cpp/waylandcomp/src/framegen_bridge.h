@@ -103,5 +103,9 @@ void vkp_framegen_presented(int generated, int source_presented);
  * build in a deeper format is not an engine failure: the engine restarts and the format is refused,
  * so the caller goes back to 8 bits. */
 int vkp_framegen_format_ok(VkFormat fmt);
+/* SnapFrame flow viewer is rendered into the current scene before the output blit. */
+int vkp_framegen_debug_flow_active(void);
+void vkp_framegen_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
+                             uint32_t width, uint32_t height);
 
 #endif
