@@ -57,9 +57,10 @@ void vkp_framegen_set_debug_mode(int mode);
 int vkp_framegen_problem(void);
 int vkp_framegen_engine_available(int kind);
 const char *vkp_framegen_caps_reason(void);
-/* Same shape as VulkanRenderer.getFrameGenStats(): {generations trusted, generations planned,
- * real (source) fps, presented fps incl. generated frames, thermal (-1 = none), ms per
- * generated frame (-1 = unknown)}. */
+/* Same shape as VulkanRenderer.getFrameGenStats(): {generated frames successfully presented
+ * for the latest source frame, generations planned for the latest source frame, real (source)
+ * fps, presented fps incl. generated frames, thermal (-1 = none), ms per generated frame
+ * (-1 = unknown)}. The first two values must never be copied from the same planned counter. */
 void vkp_framegen_stats(float out[6]);
 /* Generated frames presented since the last call (compositor.c, the 10 s stats line). */
 unsigned vkp_framegen_stats_take(void);
