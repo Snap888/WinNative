@@ -43,6 +43,7 @@ struct SnapFrameVk {
     struct sf_image candidates[SF_PHASES][4],candidate_weights[SF_PHASES];
     uint32_t candidate_reconstruction_mode; int candidate_reconstruction_enabled,ai_quality_mode;
     uint32_t ai_recommended_multiplier,wsi_requested_multiplier,wsi_current_multiplier; int wsi_metrics_valid;
+    uint32_t ai_mode;
     float wsi_delivery_ratio,wsi_acquire_pressure,wsi_submit_pressure,wsi_present_pressure;
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; float search_radius_scale; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
@@ -292,7 +293,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
     e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
-    snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);
+    snap_ai_set_enabled(e->ai, e->ai_mode != 1u);
     SF_LOGI("prepared extent=%ux%u format=%u flow_scale=%u flow_extent=%ux%u candidate_mode=%u metrics=%d",
         w,h,(unsigned)fmt,e->flow_percent,e->active_flow_w,e->active_flow_h,
         e->candidate_reconstruction_mode,e->metrics_enabled);
@@ -300,6 +301,14 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
 fail:resources_destroy(e);SF_LOGI("prepare failed extent=%ux%u format=%u",w,h,(unsigned)fmt);return 0;
 }
 int snap_frame_vk_has_history(const SnapFrameVk*e){return e&&e->history_valid;}
+void snap_frame_vk_set_ai_mode(SnapFrameVk*e,uint32_t mode){
+    if(!e)return;
+    if(mode>2u)mode=0u;
+    e->ai_mode=mode;
+    if(e->ai)snap_ai_set_enabled(e->ai,mode!=1u);
+    if(mode!=0u)e->ai_recommended_multiplier=0u;
+    SF_LOGI("Snap AI policy=%u (%s)",mode,mode==0u?"AUTO":mode==1u?"OFF":"ON");
+}
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
     if(!e)return;
     /* 0=AI automatic, 1=forced off, 2=forced on. */
@@ -629,7 +638,7 @@ void snap_frame_vk_set_wsi_feedback(SnapFrameVk*e,uint32_t requested_multiplier,
     e->wsi_metrics_valid=1;
 }
 uint32_t snap_frame_vk_get_recommended_multiplier(const SnapFrameVk*e){
-    return e?e->ai_recommended_multiplier:0u;
+    return e&&e->ai_mode==0u?e->ai_recommended_multiplier:0u;
 }
 
 int snap_frame_vk_get_flow_metrics(const SnapFrameVk*e,float metrics[4]){if(!e||!metrics)return 0;SnapFrameVk*m=(SnapFrameVk*)e;pthread_mutex_lock(&m->telemetry_mutex);int valid=m->flow_metrics_valid;if(valid)memcpy(metrics,m->flow_metrics,sizeof(m->flow_metrics));pthread_mutex_unlock(&m->telemetry_mutex);return valid;}
