@@ -87,6 +87,7 @@ internal fun FrameGenPaneContent(
                     disDebugFlow = state.disFrameGenDebugFlow,
                     snapDebugMode = state.snapFrameDebugMode,
                     candidateMode = state.snapFrameCandidateMode,
+                    aiMode = state.snapFrameAiMode,
                     candidateAvailable = state.snapFrameCandidateAvailable,
                     logEnabled = state.snapFrameLogEnabled,
                     maxRefreshRate = state.maxRefreshRate,
@@ -100,6 +101,7 @@ internal fun FrameGenPaneContent(
                     onDisDebugFlowChanged = listener::onDisDebugFlowChanged,
                     onSnapDebugModeChanged = listener::onSnapFrameDebugModeChanged,
                     onCandidateModeChanged = listener::onSnapFrameCandidateModeChanged,
+                    onAiModeChanged = listener::onSnapFrameAiModeChanged,
                     onLogChanged = listener::onSnapFrameLogChanged,
                 )
 
@@ -155,6 +157,7 @@ internal fun FrameGenEngineSection(
     disDebugFlow: Boolean,
     snapDebugMode: Int,
     candidateMode: Int,
+    aiMode: Int,
     candidateAvailable: Boolean,
     logEnabled: Boolean,
     maxRefreshRate: Int,
@@ -168,6 +171,7 @@ internal fun FrameGenEngineSection(
     onDisDebugFlowChanged: (Boolean) -> Unit,
     onSnapDebugModeChanged: (Int) -> Unit,
     onCandidateModeChanged: (Int) -> Unit,
+    onAiModeChanged: (Int) -> Unit,
     onLogChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
@@ -230,6 +234,7 @@ internal fun FrameGenEngineSection(
                 debugFlow = disDebugFlow,
                 debugMode = snapDebugMode,
                 candidateMode = candidateMode,
+                aiMode = aiMode,
                 candidateAvailable = candidateAvailable,
                 logEnabled = logEnabled,
                 paneScale = paneScale,
@@ -238,6 +243,7 @@ internal fun FrameGenEngineSection(
                 onDebugFlowChanged = onDisDebugFlowChanged,
                 onDebugModeChanged = onSnapDebugModeChanged,
                 onCandidateModeChanged = onCandidateModeChanged,
+                onAiModeChanged = onAiModeChanged,
                 onLogChanged = onLogChanged,
             )
         }
@@ -520,6 +526,7 @@ private fun SnapFrameOptions(
     debugFlow: Boolean,
     debugMode: Int,
     candidateMode: Int,
+    aiMode: Int,
     candidateAvailable: Boolean,
     logEnabled: Boolean,
     paneScale: Float,
@@ -528,6 +535,7 @@ private fun SnapFrameOptions(
     onDebugFlowChanged: (Boolean) -> Unit,
     onDebugModeChanged: (Int) -> Unit,
     onCandidateModeChanged: (Int) -> Unit,
+    onAiModeChanged: (Int) -> Unit,
     onLogChanged: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
@@ -572,6 +580,21 @@ private fun SnapFrameOptions(
             }
         }
         FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
+        FrameGenFieldLabel("Snap AI policy", paneScale)
+        ChipFlow {
+            listOf("Auto AI", "Off", "On").forEachIndexed { index, label ->
+                HUDToggleChip(
+                    label = label,
+                    checked = aiMode == index,
+                    onClick = { onAiModeChanged(index) },
+                    modifier = Modifier.paneNavItem(
+                        cornerRadius = (16f * paneScale).dp,
+                        onActivate = { onAiModeChanged(index) },
+                    ),
+                )
+            }
+        }
+        FrameGenNote("Auto AI adapts the multiplier; Off disables Snap AI; On keeps AI active while respecting the selected x2/x3/x4 multiplier.", paneScale)
         if (candidateAvailable) {
             FrameGenFieldLabel(stringResource(R.string.session_drawer_snapframe_candidate_mode), paneScale)
             ChipFlow {
