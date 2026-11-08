@@ -313,6 +313,8 @@ void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
 void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->lifecycle.history_valid=0;/* Keep AI temporal state and monotonic frame IDs; history validity is handled by SnapFrame. */}}
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
+    /* A failed/unavailable telemetry retirement must never leave a stale reuse decision armed. */
+    e->reuse_previous_flow=0;
     uint64_t values[20];memset(values,0,sizeof(values));
     VkResult r=g_vk.GetQueryPoolResults(e->device,e->query_pool,slot*12u,10u,sizeof(values),values,
         sizeof(uint64_t)*2u,VK_QUERY_RESULT_64_BIT|VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);    e->query_pending[slot]=0;
