@@ -307,6 +307,8 @@ void snap_frame_vk_set_ai_mode(SnapFrameVk*e,uint32_t mode){
     e->ai_mode=mode;
     if(e->ai)snap_ai_set_enabled(e->ai,mode!=1u);
     if(mode!=0u)e->ai_recommended_multiplier=0u;
+    if(mode==1u){e->ai_quality_mode=0;e->reuse_previous_flow=0;e->search_radius_scale=1.0f;
+        if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO)e->candidate_reconstruction_enabled=0;}
     SF_LOGI("Snap AI policy=%u (%s)",mode,mode==0u?"AUTO":mode==1u?"OFF":"ON");
 }
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
@@ -412,8 +414,8 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
-                            (unsigned long long)e->query_frame_id[slot], (unsigned)decision.mode,
+                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
+                            (unsigned long long)e->query_frame_id[slot], e->ai_mode, (unsigned)decision.mode,
                             decision.bypass_reason, decision.conservative_reason, decision.flow_scale,
                             (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
                             decision.gpu_pressure_input, decision.gpu_pressure_effective, decision.pressure_ema,
