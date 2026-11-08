@@ -57,7 +57,7 @@ presentation path:
 - **compute_recorded** — generated-image compute/blit commands recorded;
 - **submitted** — generated work accepted by vkQueueSubmit;
 - **made / presented** — generated vkQueuePresentKHR calls that returned success or suboptimal;
-- **present_fail**, **acquire_timeout**, **acquire_error** — separate failure classes.
+- **present_fail**, **source_present_fail**, **acquire_timeout**, **acquire_error** — separate failure classes.
 
 The delivery ratio is successful generated presents divided by planned generated images. It is
 not inferred from the number of compute dispatches. Acquire, submit and each generated present
