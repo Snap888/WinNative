@@ -291,7 +291,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
-    e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
+    e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */e->wsi_metrics_valid=0;e->wsi_delivery_ratio=1.0f;e->wsi_acquire_pressure=0.0f;e->wsi_submit_pressure=0.0f;e->wsi_present_pressure=0.0f;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
     snap_ai_set_enabled(e->ai, e->ai_mode != 1u);
     SF_LOGI("prepared extent=%ux%u format=%u flow_scale=%u flow_extent=%ux%u candidate_mode=%u metrics=%d",
@@ -363,12 +363,23 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
             e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode, e->reuse_previous_flow);
     }
     if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
-        float flow_metrics[4]={0};void*mapped=NULL;
-        if(g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
+        /* GPU timestamps and WSI pressure remain useful even if the optional flow-metrics
+         * shader/readback is unavailable. In that case force a safe conservative decision:
+         * no stale-flow reuse, no candidate reconstruction, but still adapt the multiplier. */
+        float flow_metrics[4]={0.0f,0.0f,0.0f,1.0f};void*mapped=NULL;
+        int valid=1,metrics_source=0;
+        if(e->metrics_enabled&&metrics_ready&&
+           g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
             memcpy(flow_metrics,mapped,sizeof(flow_metrics));g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
-            int valid=1;for(uint32_t i=0;i<4;i++)if(!isfinite(flow_metrics[i])||flow_metrics[i]<0.0f||flow_metrics[i]>1.0f)valid=0;
-            if(valid){
-                pthread_mutex_lock(&e->telemetry_mutex);memcpy(e->flow_metrics,flow_metrics,sizeof(flow_metrics));e->flow_metrics_valid=1;pthread_mutex_unlock(&e->telemetry_mutex);
+            for(uint32_t i=0;i<4;i++)if(!isfinite(flow_metrics[i])||flow_metrics[i]<0.0f||flow_metrics[i]>1.0f)valid=0;
+            if(valid)metrics_source=1;
+        }
+        if(!valid){flow_metrics[0]=0.0f;flow_metrics[1]=0.0f;flow_metrics[2]=0.0f;flow_metrics[3]=1.0f;valid=1;}
+        if(valid){
+                pthread_mutex_lock(&e->telemetry_mutex);
+                if(metrics_source){memcpy(e->flow_metrics,flow_metrics,sizeof(flow_metrics));e->flow_metrics_valid=1;}
+                else e->flow_metrics_valid=0;
+                pthread_mutex_unlock(&e->telemetry_mutex);
                 SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
                 metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
                 metrics.motion_magnitude=flow_metrics[0];metrics.motion_complexity=flow_metrics[1];
@@ -414,9 +425,9 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
+                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x metrics_source=%u flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
                             (unsigned long long)e->query_frame_id[slot], e->ai_mode, (unsigned)decision.mode,
-                            decision.bypass_reason, decision.conservative_reason, decision.flow_scale,
+                            decision.bypass_reason, decision.conservative_reason, (unsigned)metrics_source, decision.flow_scale,
                             (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
                             decision.gpu_pressure_input, decision.gpu_pressure_effective, decision.pressure_ema,
                             metrics.motion_magnitude, metrics.motion_complexity, metrics.flow_confidence,
