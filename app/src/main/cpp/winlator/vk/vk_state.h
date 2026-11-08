@@ -209,6 +209,7 @@ typedef struct VkFrame {
     VkSemaphore image_available_gen[VK_FRAMEGEN_MAX_GENERATIONS];
     VkFence     in_flight;
     VkCommandBuffer cmd;
+    uint32_t    framegen_compute_pending;
 } VkFrame;
 
 // ============================================================
@@ -452,7 +453,8 @@ typedef struct VkRenderer {
     uint64_t          framegen_made_frames;       // generated frames with successful queue present
     uint64_t          framegen_planned_total;
     uint64_t          framegen_acquired_total;
-    uint64_t          framegen_compute_total;
+    uint64_t          framegen_compute_total;          // compute commands recorded
+    uint64_t          framegen_compute_completed_total; // GPU fence confirmed completion
     uint64_t          framegen_submitted_total;
     uint64_t          framegen_acquire_misses;
     uint64_t          framegen_acquire_timeouts;
