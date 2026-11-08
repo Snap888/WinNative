@@ -1393,6 +1393,7 @@ static void record_screen_blit(VkCommandBuffer cmd, VkImage src, int src_w, int 
  * a recreate that would have succeeded. Later slots have presents in flight on this swapchain,
  * so they never rebuild; they fail and the frame ends early. 0 on success. */
 static int acquire_image(int k, int first, uint32_t *img, VkResult *ar_out) {
+    if (ar_out) *ar_out = VK_ERROR_UNKNOWN;
     for (int attempt = 0; ; attempt++) {
         if (!g_swapchain && (!first || swap_init() != 0)) return -1;
         /* A bounded wait: a surface that went away without telling us must not park the
@@ -1401,13 +1402,15 @@ static int acquire_image(int k, int first, uint32_t *img, VkResult *ar_out) {
         VkResult ar = g_vk.AcquireNextImageKHR(g_dev, g_swapchain, vkp_framegen_acquire_timeout_ns(k), g_acqs[k], VK_NULL_HANDLE, img);
         perf_add(&g_perf.acquire_ns, &g_perf.acquire_max_ns, &g_perf.acquires, perf_now() - t_acq);
         if (ar == VK_SUCCESS || ar == VK_SUBOPTIMAL_KHR) { *ar_out = ar; return 0; }
-        if (ar == VK_ERROR_DEVICE_LOST) { device_lost("acquire"); return -1; }
+        if (ar == VK_ERROR_DEVICE_LOST) { if (ar_out) *ar_out = ar; device_lost("acquire"); return -1; }
         if (ar == VK_ERROR_OUT_OF_DATE_KHR || ar == VK_ERROR_SURFACE_LOST_KHR) {
+            if (ar_out) *ar_out = ar;
             wnc_log("gpu", "screen surface %s on acquire: rebuilding the swapchain", vk_result_name(ar));
             destroy_swapchain();
             if (first && attempt == 0) continue;
             return -1;
         }
+        if (ar_out) *ar_out = ar;
         wnc_log("error", "present: acquire %d failed (%s %d)", k, vk_result_name(ar), (int)ar);
         if (ar == VK_TIMEOUT || ar == VK_NOT_READY) return -1;
         destroy_swapchain(); /* anything else: start over next frame */
