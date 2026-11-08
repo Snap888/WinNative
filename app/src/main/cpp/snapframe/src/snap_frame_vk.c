@@ -464,8 +464,6 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 }
             }
         }
-    }
-}
 static void write_timestamp(SnapFrameVk*e,VkCommandBuffer cmd,uint32_t query){
     g_vk.CmdWriteTimestamp(cmd,VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,e->query_pool,e->query_slot*12u+query);
 }
