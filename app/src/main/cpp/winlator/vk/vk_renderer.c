@@ -1961,6 +1961,7 @@ static void create_snap(VkRenderer* r) {
     r->snap = snap_frame_vk_create(r->device, r->physical_device);
     if (r->snap) snap_frame_vk_set_debug_mode(r->snap, r->snap_debug_mode);
     if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, r->snap_candidate_reconstruction_mode);
+    if (r->snap) snap_frame_vk_set_ai_mode(r->snap, r->snap_ai_mode);
     if (!r->snap) {
         VK_LOGW("SnapFrame Vulkan backend unavailable on this X11 device");
         return;
@@ -4116,6 +4117,18 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugMode)(JNIEnv* env, jclass c
     pthread_mutex_lock(&r->render_mutex);
     r->snap_debug_mode = selected;
     if (r->snap) snap_frame_vk_set_debug_mode(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameAiMode)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_ai_mode = selected;
+    if (r->snap) snap_frame_vk_set_ai_mode(r->snap, selected);
     pthread_mutex_unlock(&r->render_mutex);
 }
 
