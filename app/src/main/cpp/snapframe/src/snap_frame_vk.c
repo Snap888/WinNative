@@ -48,6 +48,7 @@ struct SnapFrameVk {
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
+    uint32_t reuse_previous_flow;
     float stage_gpu_ms[6],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
     pthread_mutex_t telemetry_mutex; int telemetry_mutex_ready;
     SnapAIHandle *ai;
@@ -289,7 +290,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
-    e->prepared=1;e->history_valid=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
+    e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
     snap_ai_set_enabled(e->ai,0);snap_ai_set_enabled(e->ai,1);
     SF_LOGI("prepared extent=%ux%u format=%u flow_scale=%u flow_extent=%ux%u candidate_mode=%u metrics=%d",
@@ -343,10 +344,10 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     /* Sparse diagnostic telemetry: one line per 60 completed source frames. No GPU wait/readback
        is added here; query results are already retired asynchronously by the existing ring. */
     if (telemetry_valid && (e->query_frame_id[slot] % 60u) == 0u) {
-        SF_LOGI("frame=%llu gpu_ms=%.3f preprocess_ms=%.3f flow_ms=%.3f consistency_ms=%.3f warp_ms=%.3f candidate_ms=%.3f flow_scale=%u active_flow=%ux%u candidate_mode=%u candidate_enabled=%d ai_quality=%d",
+        SF_LOGI("frame=%llu gpu_ms=%.3f preprocess_ms=%.3f flow_ms=%.3f consistency_ms=%.3f warp_ms=%.3f candidate_ms=%.3f flow_scale=%u active_flow=%ux%u candidate_mode=%u candidate_enabled=%d ai_quality=%d reuse_flow=%u",
             (unsigned long long)e->query_frame_id[slot], total, stage_values[0], stage_values[2],
             stage_values[3], stage_values[4], stage_values[5], e->flow_percent, e->active_flow_w, e->active_flow_h,
-            e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode);
+            e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode, e->reuse_previous_flow);
     }
     if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
         float flow_metrics[4]={0};void*mapped=NULL;
@@ -385,6 +386,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                         e->candidate_reconstruction_enabled=e->ai_quality_mode;
                     }
                     if(decision.mode!=SNAP_AI_MODE_BYPASS){
+                        e->reuse_previous_flow=decision.reuse_previous_flow ? 1u : 0u;
                         e->search_radius_scale=fmaxf(0.75f,fminf(1.5f,decision.search_radius_scale));
                         uint32_t scale=(uint32_t)((float)e->manual_flow_percent*decision.flow_scale+0.5f);
                         if(scale<25)scale=25;if(scale>100)scale=100;e->flow_percent=scale;
@@ -392,13 +394,14 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                         /* BYPASS means no AI policy is active: restore the user's baseline,
                            otherwise an earlier QUALITY decision leaves flow permanently reduced. */
                         e->flow_percent=e->manual_flow_percent;
+                        e->reuse_previous_flow=0;
                         e->search_radius_scale=1.0f;
                         e->ai_quality_mode=0;
                         if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO)
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
+                        SF_LOGI("ai frame=%llu mode=%u bypass_reason=%u conservative_reason=0x%x flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
                             (unsigned long long)e->query_frame_id[slot], (unsigned)decision.mode,
                             decision.bypass_reason, decision.conservative_reason, decision.flow_scale,
                             (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
@@ -406,7 +409,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             metrics.motion_magnitude, metrics.motion_complexity, metrics.flow_confidence,
                             metrics.artifact_risk, e->search_radius_scale,
                             e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled,
-                            decision.recommended_multiplier, e->wsi_delivery_ratio,
+                            e->reuse_previous_flow, decision.recommended_multiplier, e->wsi_delivery_ratio,
                             e->wsi_acquire_pressure, e->wsi_submit_pressure, e->wsi_present_pressure);
                     }
                 }
@@ -441,6 +444,7 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
       dispatch(cmd,&e->pyramid,i-1,e->prev[i].w,e->prev[i].h);dispatch(cmd,&e->pyramid,i+1,e->curr[i].w,e->curr[i].h);barrier_compute(cmd);
     }
     write_timestamp(e,cmd,3);write_timestamp(e,cmd,4);
+    if (!e->reuse_previous_flow) {
     v[0]=e->prev[2].view;v[1]=e->curr[2].view;v[2]=e->forward.view;update_set(e,&e->flow,0,3,3,v);
     v[0]=e->curr[2].view;v[1]=e->prev[2].view;v[2]=e->backward.view;update_set(e,&e->flow,1,3,3,v);
     struct {uint32_t width,height;float search_radius_scale;} flow_pc={
@@ -473,6 +477,10 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     update_set(e,&e->motion_fusion,1,3,3,fusionViews);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->motion_fusion.layout,0,1,&e->motion_fusion.sets[1],0,NULL);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
+    } else {
+        /* Reuse the last fused vectors only while AI classifies the scene as static and safe. */
+        barrier_compute(cmd);
+    }
     write_timestamp(e,cmd,5);
     v[0]=e->fused_forward.view;v[1]=e->fused_backward.view;v[2]=e->mask.view;v[3]=e->curr[2].view;v[4]=e->prev[2].view;
     update_set(e,&e->consistency,0,5,27,v);

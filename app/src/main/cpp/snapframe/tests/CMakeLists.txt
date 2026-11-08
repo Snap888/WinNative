@@ -24,3 +24,10 @@ add_test(NAME snapframe_candidate_reconstruction_contract
         -DWAYLAND_PRESENT_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/vk_present.c
         -DX11_STATE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../winlator/vk/vk_state.h
         -P ${CMAKE_CURRENT_LIST_DIR}/check_candidate_reconstruction.cmake)
+
+add_executable(snapai_policy_tests
+    test_snap_ai_policy.cpp
+    ../../snapai/src/snap_ai.cpp)
+target_compile_features(snapai_policy_tests PRIVATE cxx_std_17)
+target_include_directories(snapai_policy_tests PRIVATE ../../snapai/include)
+add_test(NAME snapai_policy_tests COMMAND snapai_policy_tests)

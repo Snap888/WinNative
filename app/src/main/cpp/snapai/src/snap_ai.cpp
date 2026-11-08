@@ -140,13 +140,24 @@ SnapAIStatus snap_ai_update(SnapAIHandle* h, const SnapAIFrameMetrics* m, SnapAI
   const float uncertainty = clamp01((1.0f - raw_q) * 0.65f + risk * 0.35f);
   const float easy = (1.0f - h->complexity) * raw_q * (1.0f - risk);
   const float hard = clamp01(h->complexity * 0.55f + (1.0f - h->confidence) * 0.45f);
-  const bool unreliable_flow = raw_q < 0.18f || risk > 0.20f;
+  /* A near-zero-motion, low-complexity, low-risk scene is not an unreliable
+     motion estimate: there is effectively no motion to interpolate. Reuse the
+     previous vectors and avoid paying for both global/local matchers. */
+  const bool static_scene = raw_motion < 0.015f && raw_c < 0.04f && risk < 0.08f;
+  const bool unreliable_flow = (raw_q < 0.18f && !static_scene) || risk > 0.20f;
   uint32_t conservative_reason = SNAP_AI_CONSERVATIVE_NONE;
-  if (raw_q < 0.18f) conservative_reason |= SNAP_AI_CONSERVATIVE_LOW_CONFIDENCE;
+  if (raw_q < 0.18f && !static_scene) conservative_reason |= SNAP_AI_CONSERVATIVE_LOW_CONFIDENCE;
   if (risk > 0.20f) conservative_reason |= SNAP_AI_CONSERVATIVE_HIGH_ARTIFACT_RISK;
-  if (unreliable_flow) {
-    /* Keep the baseline flow scale/search radius and use the midpoint fallback.
-       Ask the host for bidirectional/artifact checks; never reuse stale flow here. */
+  if (static_scene) {
+    mode = SNAP_AI_MODE_CONSERVATIVE;
+    scale = h->previous_scale;
+    radius = 1.0f;
+    passes = h->cfg.min_refinement_passes;
+    reuse = true;
+    artifact = false;
+  } else if (unreliable_flow) {
+    /* Keep baseline flow scale/search radius and use the safe midpoint fallback.
+       Never reuse stale flow when motion or artifact risk makes the estimate uncertain. */
     mode = SNAP_AI_MODE_CONSERVATIVE;
     scale = 1.0f;
     radius = 1.0f;
