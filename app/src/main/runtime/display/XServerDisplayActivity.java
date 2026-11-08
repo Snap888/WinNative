@@ -971,6 +971,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private void applyWaylandFrameGeneration() {
         if (!waylandMode) return;
         WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+        WaylandCompositor.nativeSetSnapFrameAiMode(snapFrameAiMode);
+        WaylandCompositor.nativeSetSnapFrameDebugFlow(disFrameGenDebugFlow);
+        WaylandCompositor.nativeSetSnapFrameDebugMode(snapFrameDebugMode);
 
         if (snapFrameGenEnabled) {
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
@@ -6052,7 +6055,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     @Override
                     public void onDisDebugFlowChanged(boolean enabled) {
                         disFrameGenDebugFlow = enabled;
-                        if (xServerView != null && xServerView.getRenderer() != null) {
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameDebugFlow(enabled);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setDisDebugFlow(enabled);
                             xServerView.getRenderer().setSnapFrameDebugFlow(enabled);
                         }
@@ -6062,7 +6067,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     @Override
                     public void onSnapFrameDebugModeChanged(int mode) {
                         snapFrameDebugMode = Math.max(0, Math.min(2, mode));
-                        if (xServerView != null && xServerView.getRenderer() != null) {
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameDebugMode(snapFrameDebugMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setSnapFrameDebugMode(snapFrameDebugMode);
                         }
                         renderDrawerMenu();
@@ -6084,7 +6091,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     @Override
                     public void onSnapFrameAiModeChanged(int mode) {
                         snapFrameAiMode = Math.max(0, Math.min(2, mode));
-                        if (!waylandMode && xServerView != null && xServerView.getRenderer() != null) {
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameAiMode(snapFrameAiMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setSnapFrameAiMode(snapFrameAiMode);
                         }
                         saveFrameGenerationSettings();
