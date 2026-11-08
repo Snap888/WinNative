@@ -1745,6 +1745,25 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             if (ngen > VKP_FG_MAX_GENERATIONS) ngen = VKP_FG_MAX_GENERATIONS;
         }
 
+        /* Match the X11 flow viewer: when enabled, compute a fresh flow field even on frames
+         * where WSI could not acquire an interpolation slot, then draw that diagnostic into the
+         * scene image before it is blitted to the display. */
+        if (fg && vkp_framegen_debug_flow_active()) {
+            VkImageMemoryBarrier debug_barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_GENERAL, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = result,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+            g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    0, 0, NULL, 0, NULL, 1, &debug_barrier);
+            vkp_framegen_debug_into(cmd, result, result_view, (uint32_t)rw, (uint32_t)rh);
+        }
+
         /* 4. Mapping/blit: the first present carries generated frame 0, or the result itself. */
         record_screen_blit(cmd, ngen ? gens[0] : result, rw, rh, scene_w, scene_h, img, blit_filter);
     }
