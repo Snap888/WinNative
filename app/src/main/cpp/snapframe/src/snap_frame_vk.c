@@ -488,7 +488,8 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     update_set(e,&e->consistency,0,5,27,v);
     g_vk.CmdBindPipeline(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.pipeline);
     g_vk.CmdBindDescriptorSets(cmd,VK_PIPELINE_BIND_POINT_COMPUTE,e->consistency.layout,0,1,&e->consistency.sets[0],0,NULL);
-    g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(flow_pc),&flow_pc);
+    struct {uint32_t width,height;} consistency_pc={e->active_flow_w,e->active_flow_h};
+    g_vk.CmdPushConstants(cmd,e->consistency.layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(consistency_pc),&consistency_pc);
     write_timestamp(e,cmd,6);
     g_vk.CmdDispatch(cmd,div_up(e->active_flow_w,8),div_up(e->active_flow_h,8),1);barrier_compute(cmd);
     if(e->metrics_enabled){
