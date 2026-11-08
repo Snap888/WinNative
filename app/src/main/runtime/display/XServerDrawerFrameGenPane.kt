@@ -580,21 +580,23 @@ private fun SnapFrameOptions(
             }
         }
         FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
-        FrameGenFieldLabel("Snap AI policy", paneScale)
-        ChipFlow {
-            listOf("Auto AI", "Off", "On").forEachIndexed { index, label ->
-                HUDToggleChip(
-                    label = label,
-                    checked = aiMode == index,
-                    onClick = { onAiModeChanged(index) },
-                    modifier = Modifier.paneNavItem(
-                        cornerRadius = (16f * paneScale).dp,
-                        onActivate = { onAiModeChanged(index) },
-                    ),
-                )
+        if (aiMode >= 0) {
+            FrameGenFieldLabel("Snap AI policy", paneScale)
+            ChipFlow {
+                listOf("Auto AI", "Off", "On").forEachIndexed { index, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = aiMode == index,
+                        onClick = { onAiModeChanged(index) },
+                        modifier = Modifier.paneNavItem(
+                            cornerRadius = (16f * paneScale).dp,
+                            onActivate = { onAiModeChanged(index) },
+                        ),
+                    )
+                }
             }
+            FrameGenNote("Auto AI adapts the multiplier; Off disables Snap AI; On keeps AI active while respecting the selected x2/x3/x4 multiplier.", paneScale)
         }
-        FrameGenNote("Auto AI adapts the multiplier; Off disables Snap AI; On keeps AI active while respecting the selected x2/x3/x4 multiplier.", paneScale)
         if (candidateAvailable) {
             FrameGenFieldLabel(stringResource(R.string.session_drawer_snapframe_candidate_mode), paneScale)
             ChipFlow {
