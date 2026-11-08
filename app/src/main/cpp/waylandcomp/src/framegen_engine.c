@@ -34,6 +34,9 @@ static int g_kind = -1;
 static int g_chain_ok;
 static int g_chain_failed;
 static unsigned g_snap_process_errors;
+static int g_snap_ai_mode;
+static int g_snap_debug_flow;
+static uint32_t g_snap_debug_mode;
 
 static VkImage g_source;
 static uint64_t g_last_plan_ns;
@@ -142,7 +145,8 @@ static SnapFrameStatus snap_backend_process(void *user,const SnapFrameFrameInput
     if(!h||!h->vk||!output||!snap_frame_vulkan_frame_valid(input))return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
     const SnapFrameVulkanFrame*f=(const SnapFrameVulkanFrame*)input->native_frame;
     for(uint32_t i=0;i<f->output_capacity;i++)if(!f->outputs[i].image||!f->outputs[i].view)return SNAP_FRAME_ERROR_INVALID_ARGUMENT;
-    int ready=snap_frame_vk_process(h->vk,f->command_buffer,f->source_image,f->source_view,f->output_capacity);
+    uint32_t process_count = (g_snap_debug_flow && f->output_capacity == 0u) ? UINT32_MAX : f->output_capacity;
+    int ready=snap_frame_vk_process(h->vk,f->command_buffer,f->source_image,f->source_view,process_count);
     output->generated_frames=ready?f->output_capacity:0;
     float stages[6],total=0.0f;
     if(snap_frame_vk_get_telemetry(h->vk,stages,&total)){
@@ -173,6 +177,8 @@ int fge_start(int kind, const char *cache_path) {
         if (!created) return -1;
         pthread_mutex_lock(&g_snap_lock); g_snap = created; pthread_mutex_unlock(&g_snap_lock);
         g_snap_host.vk=created;g_snap_host.multiplier=g_multiplier;g_snap_frame_id=0;
+        snap_frame_vk_set_ai_mode(created, (uint32_t)g_snap_ai_mode);
+        snap_frame_vk_set_debug_mode(created, g_snap_debug_mode);
         SnapFrameEngineConfig cfg;snap_frame_default_config(&cfg);cfg.enabled=1;cfg.multiplier=g_multiplier;
         cfg.flow_scale_percent=(uint32_t)(g_flow_scale*100.0f);cfg.quality=SNAP_FRAME_QUALITY_BALANCED;
         SnapFrameBackendV1 backend={0};backend.struct_size=sizeof(backend);backend.api_version=SNAP_FRAME_API_VERSION;
@@ -358,6 +364,28 @@ void fge_reset_history(void) { if (g_snap) snap_frame_vk_reset_history(g_snap); 
 
 void fge_set_candidate_reconstruction(int mode) {
     if (g_snap) snap_frame_vk_set_candidate_reconstruction(g_snap, (uint32_t)mode);
+}
+
+void fge_set_ai_mode(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    g_snap_ai_mode = mode;
+    if (g_snap) snap_frame_vk_set_ai_mode(g_snap, (uint32_t)mode);
+}
+
+void fge_set_debug_flow(int enabled) {
+    g_snap_debug_flow = enabled ? 1 : 0;
+}
+
+void fge_set_debug_mode(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    g_snap_debug_mode = (uint32_t)mode;
+    if (g_snap) snap_frame_vk_set_debug_mode(g_snap, g_snap_debug_mode);
+}
+
+void fge_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
+                    uint32_t width, uint32_t height) {
+    if (g_snap && g_snap_debug_flow)
+        snap_frame_vk_debug_into(g_snap, cmd, output, output_view, width, height);
 }
 
 void fge_device_lost(void) {
