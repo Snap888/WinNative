@@ -51,6 +51,7 @@ struct SnapFrameVk {
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
     uint32_t reuse_previous_flow;
     float stage_gpu_ms[6],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
+    uint64_t telemetry_query_drops,ai_updates,ai_fallback_updates;
     pthread_mutex_t telemetry_mutex; int telemetry_mutex_ready;
     SnapAIHandle *ai;
     SnapFrameVkLifecycle lifecycle;
@@ -332,7 +333,13 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     /* Retire this slot's metrics on every path, including unavailable timestamps. */
     uint8_t metrics_ready=e->metrics_pending[slot];
     e->metrics_pending[slot]=0;
-    if(r!=VK_SUCCESS)return;
+    if(r!=VK_SUCCESS){
+        e->telemetry_query_drops++;
+        if((e->telemetry_query_drops%60u)==1u)
+            SF_LOGW("GPU timestamp sample dropped frame=%llu result=%d drops=%llu; AI update waits for a completed GPU sample",
+                (unsigned long long)e->query_frame_id[slot],(int)r,(unsigned long long)e->telemetry_query_drops);
+        return;
+    }
     float total=0.0f,stage_values[6]={0};
     for(uint32_t i=0;i<5;i++){
         uint64_t begin=values[(i*2u)*2u],begin_ok=values[(i*2u)*2u+1u];
@@ -362,7 +369,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
             stage_values[3], stage_values[4], stage_values[5], e->flow_percent, e->active_flow_w, e->active_flow_h,
             e->candidate_reconstruction_mode, e->candidate_reconstruction_enabled, e->ai_quality_mode, e->reuse_previous_flow);
     }
-    if(telemetry_valid&&e->ai&&e->metrics_enabled&&metrics_ready){
+    if(telemetry_valid&&e->ai){
         /* GPU timestamps and WSI pressure remain useful even if the optional flow-metrics
          * shader/readback is unavailable. In that case force a safe conservative decision:
          * no stale-flow reuse, no candidate reconstruction, but still adapt the multiplier. */
@@ -378,7 +385,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         if(valid){
                 pthread_mutex_lock(&e->telemetry_mutex);
                 if(metrics_source){memcpy(e->flow_metrics,flow_metrics,sizeof(flow_metrics));e->flow_metrics_valid=1;}
-                else e->flow_metrics_valid=0;
+                else {e->flow_metrics_valid=0;e->ai_fallback_updates++;}
                 pthread_mutex_unlock(&e->telemetry_mutex);
                 SnapAIFrameMetrics metrics={0};metrics.struct_size=sizeof(metrics);
                 metrics.frame_id=e->query_frame_id[slot];metrics.gpu_time_ms=total;
@@ -394,6 +401,7 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                 metrics.present_pressure=e->wsi_present_pressure;
                 SnapAIDecision decision={0};decision.struct_size=sizeof(decision);
                 if(snap_ai_update(e->ai,&metrics,&decision)==SNAP_AI_OK){
+                    e->ai_updates++;
                     if(decision.recommended_multiplier>=2u&&decision.recommended_multiplier<=4u)
                         e->ai_recommended_multiplier=decision.recommended_multiplier;
                     if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO){
