@@ -259,7 +259,7 @@ static int target_ensure(struct fx_target *t, int w, int h, const char *what) {
                             .format = g_fx_fmt, .extent = {(uint32_t)w, (uint32_t)h, 1}, .mipLevels = 1,
                             .arrayLayers = 1, .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL,
                             .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                     VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                             .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
     VkResult r = g_vk.CreateImage(g_dev, &ii, NULL, &t->img);
     if (r != VK_SUCCESS) { wnc_log("error", "effects: %s image %dx%d: vkCreateImage %d", what, w, h, (int)r); return -1; }
