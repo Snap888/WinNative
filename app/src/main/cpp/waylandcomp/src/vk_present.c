@@ -1783,7 +1783,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * earlier on the queue, so it still covers all of this frame's work). With FIFO the
      * presentation engine shows them on consecutive vblanks: that IS the pacing, no sleeps. */
     const int presents = 1 + ngen;
-    int fence_submitted = 0, presented_gen = 0;
+    int fence_submitted = 0, presented_gen = 0, source_present_attempted = 0;
     int generated_acquired = ngen > 0 ? 1 : 0;
     g_fg_planned_total += (uint64_t)ngen;
     g_fg_acquired_total += (uint64_t)generated_acquired;
@@ -1871,6 +1871,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         VkPresentInfoKHR pi = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .waitSemaphoreCount = 1,
                                .pWaitSemaphores = &g_rnds[k], .swapchainCount = 1,
                                .pSwapchains = &g_swapchain, .pImageIndices = &img};
+        if (k == ngen) source_present_attempted = 1;
         const int64_t t_pres = perf_now();
         pr = g_vk.QueuePresentKHR(g_queue, &pi);
         const int64_t present_elapsed_ns = perf_now() - t_pres;
@@ -1898,8 +1899,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     VkResult fr = timed_wait(g_fence, UINT64_MAX);
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
-    const int source_presented = (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
-    if (!source_presented && pr != VK_SUCCESS) { source_present_failures++; g_fg_source_present_failure_total++; }
+    const int source_presented = source_present_attempted &&
+        (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
+    if (source_present_attempted && !source_presented) {
+        source_present_failures++; g_fg_source_present_failure_total++;
+    }
     const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
     const float delivery_ratio = ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f;
     const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
