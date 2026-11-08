@@ -49,6 +49,27 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFr
     vkp_framegen_set_candidate_reconstruction((int)mode);
 }
 
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFrameAiMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    (void)env; (void)clazz;
+    vkp_framegen_set_ai_mode((int)mode);
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFrameDebugFlow(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    vkp_framegen_set_debug_flow(enabled == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetSnapFrameDebugMode(
+        JNIEnv *env, jclass clazz, jint mode) {
+    (void)env; (void)clazz;
+    vkp_framegen_set_debug_mode((int)mode);
+}
+
 JNIEXPORT jint JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeFrameGenProblem(JNIEnv *env, jclass clazz) {
     (void)env; (void)clazz;
