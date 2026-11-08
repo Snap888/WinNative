@@ -1562,7 +1562,7 @@ fun withDisFrameGenState(
         disFrameGenDebugFlow = debugFlow,
         snapFrameDebugMode = snapDebugMode.coerceIn(0, 2),
         snapFrameCandidateMode = candidateMode.coerceIn(0, 2),
-        snapFrameAiMode = aiMode.coerceIn(0, 2),
+        snapFrameAiMode = if (aiMode in 0..2) aiMode else -1,
         snapFrameCandidateAvailable = candidateAvailable,
         snapFrameLogEnabled = snapLogEnabled,
         items =
