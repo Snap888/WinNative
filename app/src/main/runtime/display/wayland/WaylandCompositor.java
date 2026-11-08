@@ -201,6 +201,11 @@ public final class WaylandCompositor {
     public static final int SNAPFRAME_RECONSTRUCTION_OFF = 1;
     public static final int SNAPFRAME_RECONSTRUCTION_ON = 2;
     public static native void nativeSetSnapFrameCandidateReconstruction(int mode);
+    /** Snap AI policy: 0=Auto, 1=Off, 2=On. */
+    public static native void nativeSetSnapFrameAiMode(int mode);
+    public static native void nativeSetSnapFrameDebugFlow(boolean enabled);
+    /** Flow viewer: 0=Motion, 1=Confidence, 2=Consistency. */
+    public static native void nativeSetSnapFrameDebugMode(int mode);
 
     public static native void nativeSetUpscaler(int mode);
     public static native void nativeSetUpscaleSharpness(int sharpness);
