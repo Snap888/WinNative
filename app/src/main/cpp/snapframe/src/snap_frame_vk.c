@@ -51,7 +51,7 @@ struct SnapFrameVk {
     uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
     uint32_t reuse_previous_flow;
     float stage_gpu_ms[6],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
-    uint64_t telemetry_query_drops,ai_updates,ai_fallback_updates;
+    uint64_t telemetry_query_drops,candidate_timestamp_drops,ai_updates,ai_fallback_updates;
     pthread_mutex_t telemetry_mutex; int telemetry_mutex_ready;
     SnapAIHandle *ai;
     SnapFrameVkLifecycle lifecycle;
@@ -344,7 +344,15 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     for(uint32_t i=0;i<5;i++){
         uint64_t begin=values[(i*2u)*2u],begin_ok=values[(i*2u)*2u+1u];
         uint64_t end=values[(i*2u+1u)*2u],end_ok=values[(i*2u+1u)*2u+1u];
-        if(!begin_ok||!end_ok||end<begin)return;
+        if(!begin_ok||!end_ok||end<begin){
+            e->telemetry_query_drops++;
+            if((e->telemetry_query_drops%60u)==1u)
+                SF_LOGI("GPU timestamp availability missing frame=%llu drops=%llu",
+                    (unsigned long long)e->query_frame_id[slot],
+                    (unsigned long long)e->telemetry_query_drops);
+            e->candidate_pending[slot]=0;
+            return;
+        }
         stage_values[i]=(float)(end-begin)*e->timestamp_period_ms;
         total+=stage_values[i];
     }
@@ -355,6 +363,12 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         if(cr==VK_SUCCESS&&cv[1]&&cv[3]&&cv[2]>=cv[0]){
             stage_values[5]=(float)(cv[2]-cv[0])*e->timestamp_period_ms;
             total+=stage_values[5];
+        } else {
+            e->candidate_timestamp_drops++;
+            if((e->candidate_timestamp_drops%60u)==1u)
+                SF_LOGI("candidate reconstruction timestamp unavailable frame=%llu result=%d drops=%llu",
+                    (unsigned long long)e->query_frame_id[slot],(int)cr,
+                    (unsigned long long)e->candidate_timestamp_drops);
         }
     }
     e->candidate_pending[slot]=0;
@@ -433,11 +447,12 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x metrics_source=%u ai_updates=%llu ai_fallback_updates=%llu query_drops=%llu flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
+                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x metrics_source=%u ai_updates=%llu ai_fallback_updates=%llu query_drops=%llu candidate_query_drops=%llu flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
                             (unsigned long long)e->query_frame_id[slot], e->ai_mode, (unsigned)decision.mode,
                             decision.bypass_reason, decision.conservative_reason, (unsigned)metrics_source,
                             (unsigned long long)e->ai_updates, (unsigned long long)e->ai_fallback_updates,
-                            (unsigned long long)e->telemetry_query_drops, decision.flow_scale,
+                            (unsigned long long)e->telemetry_query_drops,
+                            (unsigned long long)e->candidate_timestamp_drops, decision.flow_scale,
                             (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
                             decision.gpu_pressure_input, decision.gpu_pressure_effective, decision.pressure_ema,
                             metrics.motion_magnitude, metrics.motion_complexity, metrics.flow_confidence,
