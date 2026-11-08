@@ -2746,6 +2746,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
      * until that policy is selected, preserve the requested multiplier.
      */
     uint32_t snap_effective_multiplier = r->framegen_multiplier;
+    if (r->snap) {
+        /* Only Auto policy exposes a recommendation; Off/On return zero and
+         * always preserve the selected x2/x3/x4 multiplier. */
+        const uint32_t ai_multiplier = snap_frame_vk_get_recommended_multiplier(r->snap);
+        if (ai_multiplier >= 2u && ai_multiplier < snap_effective_multiplier)
+            snap_effective_multiplier = ai_multiplier;
+    }
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
         r->framegen_refresh_rate = pending_mhz > 0 ? (float)pending_mhz / 1000.0f : 0.0f;
