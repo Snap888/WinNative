@@ -433,9 +433,11 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
                             e->candidate_reconstruction_enabled=0;
                     }
                     if ((e->query_frame_id[slot] % 60u) == 0u) {
-                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x metrics_source=%u flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
+                        SF_LOGI("ai frame=%llu ai_policy=%u mode=%u bypass_reason=%u conservative_reason=0x%x metrics_source=%u ai_updates=%llu ai_fallback_updates=%llu query_drops=%llu flow_scale_req=%.3f flow_scale_applied=%.3f pressure_input=%.3f pressure_effective=%.3f pressure_ema=%.3f motion=%.3f complexity=%.3f confidence=%.3f artifact_risk=%.3f search_radius=%.2f candidate_mode=%u candidate_enabled=%d reuse_flow=%u ai_multiplier=%u delivery=%.3f acquire_pressure=%.3f submit_pressure=%.3f present_pressure=%.3f",
                             (unsigned long long)e->query_frame_id[slot], e->ai_mode, (unsigned)decision.mode,
-                            decision.bypass_reason, decision.conservative_reason, (unsigned)metrics_source, decision.flow_scale,
+                            decision.bypass_reason, decision.conservative_reason, (unsigned)metrics_source,
+                            (unsigned long long)e->ai_updates, (unsigned long long)e->ai_fallback_updates,
+                            (unsigned long long)e->telemetry_query_drops, decision.flow_scale,
                             (float)e->flow_percent / (float)(e->manual_flow_percent ? e->manual_flow_percent : 1u),
                             decision.gpu_pressure_input, decision.gpu_pressure_effective, decision.pressure_ema,
                             metrics.motion_magnitude, metrics.motion_complexity, metrics.flow_confidence,
