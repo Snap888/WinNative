@@ -1573,7 +1573,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     /* HDR frames with frame generation through an HDR10 swapchain: the scene, the effects and the
      * engine's frames in FP16 (FG_HDR_FMT) where the engine can take that format - more than 8 bits of
      * PQ through interpolation - else the 8-bit scene, as before. */
-    const int deep = hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
+    const int deep = hf && n > 0 && fg && !vkp_framegen_debug_flow_active() && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
                      ensure_img(&g_fgscene, scene_w, scene_h, FG_HDR_FMT,
                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
