@@ -104,7 +104,7 @@ static struct vkp_perf g_perf;
 /* Frame-generation lifecycle totals. Compositor-thread only; each stage is counted separately. */
 static uint64_t g_fg_planned_total, g_fg_acquired_total, g_fg_compute_recorded_total;
 static uint64_t g_fg_submit_success_total, g_fg_submit_failure_total;
-static uint64_t g_fg_present_success_total, g_fg_present_failure_total;
+static uint64_t g_fg_present_success_total, g_fg_present_failure_total, g_fg_source_present_failure_total;
 static uint64_t g_fg_acquire_timeout_total, g_fg_acquire_error_total;
 static int64_t perf_now(void) {
     struct timespec ts;
@@ -1789,7 +1789,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     g_fg_acquired_total += (uint64_t)generated_acquired;
     int generated_present_failures = 0, generated_submit_calls = 0, generated_present_calls = 0;
     int generated_acquire_timeouts = 0, generated_acquire_errors = 0;
-    int generated_submit_failures = 0;
+    int generated_submit_failures = 0, source_present_failures = 0;
     uint64_t generated_acquire_ns = ngen > 0 ? (uint64_t)initial_acquire_ns : 0u;
     uint64_t generated_submit_ns = 0, generated_present_ns = 0;
     float generated_acquire_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
@@ -1899,6 +1899,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
     const int source_presented = (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
+    if (!source_presented && pr != VK_SUCCESS) { source_present_failures++; g_fg_source_present_failure_total++; }
     const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
     const float delivery_ratio = ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f;
     const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
@@ -1910,14 +1911,15 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
     static uint64_t fg_wsi_log_frames;
     if (++fg_wsi_log_frames % 120u == 0u && ngen > 0) {
-        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_timeout=%d acquire_error=%d submit_fail=%d present_fail=%d totals[plan=%llu acquire=%llu compute_recorded=%llu submit_ok=%llu submit_fail=%llu present_ok=%llu present_fail=%llu acquire_timeout=%llu acquire_error=%llu] acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
+        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_timeout=%d acquire_error=%d submit_fail=%d present_fail=%d source_present_fail=%d totals[plan=%llu acquire=%llu compute_recorded=%llu submit_ok=%llu submit_fail=%llu present_ok=%llu present_fail=%llu source_present_fail=%llu acquire_timeout=%llu acquire_error=%llu] acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
             ngen, generated_acquired, presented_gen,
             generated_acquire_timeouts, generated_acquire_errors, generated_submit_failures,
-            generated_present_failures,
+            generated_present_failures, source_present_failures,
             (unsigned long long)g_fg_planned_total, (unsigned long long)g_fg_acquired_total,
             (unsigned long long)g_fg_compute_recorded_total,
             (unsigned long long)g_fg_submit_success_total, (unsigned long long)g_fg_submit_failure_total,
             (unsigned long long)g_fg_present_success_total, (unsigned long long)g_fg_present_failure_total,
+            (unsigned long long)g_fg_source_present_failure_total,
             (unsigned long long)g_fg_acquire_timeout_total, (unsigned long long)g_fg_acquire_error_total,
             (double)generated_acquire_ns / 1.0e6, (double)generated_submit_ns / 1.0e6,
             (double)generated_present_ns / 1.0e6,
