@@ -1776,8 +1776,9 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         /* 4. Mapping/blit: the first present carries generated frame 0, or the result itself. */
         record_screen_blit(cmd, ngen ? gens[0] : result, rw, rh, scene_w, scene_h, img, blit_filter);
     }
-    g_vk.EndCommandBuffer(cmd);
-    g_fg_compute_recorded_total += (uint64_t)ngen;
+    VkResult end_cmd_result = g_vk.EndCommandBuffer(cmd);
+    if (end_cmd_result == VK_SUCCESS) g_fg_compute_recorded_total += (uint64_t)ngen;
+    else LOGE("present: scene command buffer end failed (%d)", (int)end_cmd_result);
 
     /* One submit + present per slot: generated frames first, the real frame last. The frame
      * fence rides on the last submit (a fence signal is ordered after everything submitted
