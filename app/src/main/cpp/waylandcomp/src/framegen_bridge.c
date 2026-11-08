@@ -22,6 +22,9 @@ static _Atomic int   g_mult = 2;
 static _Atomic int   g_dis_min_side = 180;
 static _Atomic int   g_target_fps;
 static _Atomic int   g_candidate_reconstruction; /* 0=AI auto, 1=off, 2=on */
+static _Atomic int   g_ai_mode; /* 0=Auto, 1=Off, 2=On */
+static _Atomic int   g_debug_flow;
+static _Atomic int   g_debug_mode;
 static _Atomic int   g_cfg_dirty = 1;
 static float g_flow = 0.8f, g_refresh_hz;          /* under g_lock */
 static char *g_cache_path;                          /* under g_lock */
@@ -157,6 +160,23 @@ void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps) {
 void vkp_framegen_set_candidate_reconstruction(int mode) {
     if (mode < 0 || mode > 2) mode = 0;
     atomic_store(&g_candidate_reconstruction, mode);
+    atomic_store(&g_cfg_dirty, 1);
+}
+
+void vkp_framegen_set_ai_mode(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    atomic_store(&g_ai_mode, mode);
+    atomic_store(&g_cfg_dirty, 1);
+}
+
+void vkp_framegen_set_debug_flow(int enabled) {
+    atomic_store(&g_debug_flow, enabled ? 1 : 0);
+    atomic_store(&g_cfg_dirty, 1);
+}
+
+void vkp_framegen_set_debug_mode(int mode) {
+    if (mode < 0 || mode > 2) mode = 0;
+    atomic_store(&g_debug_mode, mode);
     atomic_store(&g_cfg_dirty, 1);
 }
 
@@ -324,6 +344,17 @@ static int engine_usable(void) {
     return g_dev_ready && !g_dev_lost && fge_caps_ok(kind) && !start_failed_for(kind);
 }
 
+int vkp_framegen_debug_flow_active(void) {
+    return atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME
+        && atomic_load(&g_armed) && atomic_load(&g_debug_flow);
+}
+
+void vkp_framegen_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
+                             uint32_t width, uint32_t height) {
+    if (vkp_framegen_debug_flow_active())
+        fge_debug_into(cmd, output, output_view, width, height);
+}
+
 int vkp_framegen_format_ok(VkFormat fmt) {
     if (fmt == VK_FORMAT_R8G8B8A8_UNORM) return 1;
     if (!g_dev_ready || g_dev_lost || format_refused(fmt)) return 0;
@@ -440,6 +471,9 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
         fge_configure((uint32_t)mult, flow, hz, atomic_load(&g_dis_min_side),
                       atomic_load(&g_target_fps));
         fge_set_candidate_reconstruction(atomic_load(&g_candidate_reconstruction));
+         fge_set_ai_mode(atomic_load(&g_ai_mode));
+         fge_set_debug_flow(atomic_load(&g_debug_flow));
+         fge_set_debug_mode(atomic_load(&g_debug_mode));
     }
     if (!fge_prepare((uint32_t)w, (uint32_t)h, fmt)) {
         if (fmt != VK_FORMAT_R8G8B8A8_UNORM && fge_unavailable()) {
