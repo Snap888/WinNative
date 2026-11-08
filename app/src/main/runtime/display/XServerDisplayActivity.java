@@ -5624,7 +5624,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         : xServerView != null && xServerView.getRenderer() != null
                                 && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
                 snapFrameLogEnabled,
-                waylandMode ? -1 : snapFrameAiMode);
+                snapFrameAiMode);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
