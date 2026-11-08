@@ -3214,10 +3214,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
 
-    vkEndCommandBuffer(f->cmd);
-    /* Count generated images whose compute/blit commands were recorded. Submission and
-     * successful presentation are accounted independently below. */
-    r->framegen_compute_total += gen_count;
+    VkResult end_cmd_result = vkEndCommandBuffer(f->cmd);
+    /* Count generated images only when Vulkan accepted the completed command buffer. */
+    if (end_cmd_result == VK_SUCCESS) r->framegen_compute_total += gen_count;
+    else VK_LOGE("vkEndCommandBuffer -> %d", (int)end_cmd_result);
 
     #define VK_MAX_FRAME_SEMAPHORES (2 + VK_FRAMEGEN_MAX_GENERATIONS)
     VkSemaphore wait_sems[VK_MAX_FRAME_SEMAPHORES];
