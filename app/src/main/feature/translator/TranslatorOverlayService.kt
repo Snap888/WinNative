@@ -171,14 +171,14 @@ class TranslatorOverlayService : Service() {
     private fun createOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 8, 12, 8); setBackgroundColor(0xDD111923.toInt()) }
-        val toggle = Button(this).apply { text = "译"; setOnClickListener { panel?.visibility = if (panel?.visibility == View.VISIBLE) View.GONE else View.VISIBLE } }
+        val toggle = Button(this).apply { setText("译"); setOnClickListener { panel?.visibility = if (panel?.visibility == View.VISIBLE) View.GONE else View.VISIBLE } }
         val text = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; this.text = "WinTranslator: ожидание текста"; setPadding(8, 8, 8, 8) }
         output = text
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(Button(this).apply { text = "Пауза"; setOnClickListener { capturing = !capturing; this.text = if (capturing) "Пауза" else "Продолжить" } })
-        actions.addView(Button(this).apply { text = "Настройки"; setOnClickListener { startActivity(Intent(this@TranslatorOverlayService, TranslatorConfigActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
-        actions.addView(Button(this).apply { text = "Скрыть"; setOnClickListener { panel?.visibility = View.GONE } })
-        actions.addView(Button(this).apply { text = "Стоп"; setOnClickListener { stopSelf() } })
+        actions.addView(Button(this).apply { setText("Пауза"); setOnClickListener { capturing = !capturing; setText(if (capturing) "Пауза" else "Продолжить") } })
+        actions.addView(Button(this).apply { setText("Настройки"); setOnClickListener { startActivity(Intent(this@TranslatorOverlayService, TranslatorConfigActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
+        actions.addView(Button(this).apply { setText("Скрыть"); setOnClickListener { panel?.visibility = View.GONE } })
+        actions.addView(Button(this).apply { setText("Стоп"); setOnClickListener { stopSelf() } })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text); addView(actions) }
         panel = details; details.visibility = View.GONE
         container.addView(toggle); container.addView(details); root = container
