@@ -64,6 +64,7 @@ object GameTranslator {
         lastSource = ""
         enabledState.value = true
         statusState.value = "Turnip: включён захват сцены, ожидание текста"
+        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
         WaylandCompositor.nativeSetTranslatorEnabled(true)
     }
 
@@ -105,13 +106,13 @@ object GameTranslator {
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             if (text.isBlank()) {
                                 statusState.value = "Turnip: кадр получен, ищу текст…"
-                            } else if (normalized != lastSource) {
+                            } else if (normalized != lastSource || System.currentTimeMillis() - lastTranslationAt > 10000L) {
                                 lastSource = normalized
                                 statusState.value = "OCR: текст найден, перевожу…"
                                 val translated = runCatching { TranslationProvider.translate(context, text) }
                                     .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
+                                lastTranslationAt = System.currentTimeMillis()
                                 if (enabledState.value) {
-                                    lastTranslationAt = System.currentTimeMillis()
                                     showTranslation(context, width, text, translated)
                                     statusState.value = if (translated.startsWith("Перевод недоступен:"))
                                         "OCR работает; ошибка сервиса перевода"

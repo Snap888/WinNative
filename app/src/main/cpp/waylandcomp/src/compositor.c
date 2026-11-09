@@ -2136,10 +2136,16 @@ static void render_scene(void) {
     int rendered = 0;
     int fx_on = vkp_effects_active();
     int framegen = vkp_framegen_active();
+    const int translator_requested = vkp_translator_enabled();
     /* HDR (see hdr_plan): route 0 = the old paths below; 1 / 2 = composed; 3 = layer only, effects and
      * frame generation skipped. Always 0 while the HDR gate is closed: nothing changes for that session. */
     struct hdr_scene hs;
-    int hdr_route = hdr_plan(&dl, w, h, fx_on, framegen, &hs);
+    int hdr_route = hdr_plan(&dl, w, h, fx_on || translator_requested, framegen, &hs);
+    /* An importable HDR scene must use the Turnip swapchain while OCR is active. An unimportable
+     * HDR surface remains on its protected display-layer route and is explicitly not captured. */
+    if (translator_requested && hdr_route == 1) hdr_route = 2;
+    const int translator_on = translator_requested && hdr_route != 3;
+    vkp_set_translator_capture_suspended(translator_requested && hdr_route == 3);
     const char *hdr_copy = NULL;           /* why this scene's HDR frames (if any) took the copy path */
     if (wnc_color_hdr_open()) {
         hdr_note_route(hdr_route, &hs);
@@ -2181,7 +2187,6 @@ static void render_scene(void) {
      *     game keeps its layer and the display does the scene -> output mapping;
      *   - screen effects DO when a window is drawn above the game: the chain has to see the whole
      *     scene to look the way it does on the copy path, and here the game is only part of it. */
-    const int translator_on = vkp_translator_enabled();
     const int pass_on = fx_on || framegen || translator_on;
     int li = (g_zero_copy && !framegen && !translator_on) ? layer_candidate(&dl, w, h) : -1;
     int over = li >= 0 ? dl.n - 1 - li : 0; /* draws above the fullscreen game (0 or 1) */
@@ -2284,6 +2289,7 @@ static void render_scene(void) {
     }
     } /* routes 0 and 3 */
     free(hs.is_hdr);
+    vkp_set_translator_capture_suspended(0);
     if (hdr_copy && rendered && wnc_color_hdr_open()) hdr_count_copied(&dl, hdr_copy);
     if (rendered) {
         int64_t t = now_ns();
