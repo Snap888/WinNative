@@ -1,6 +1,7 @@
 package com.winlator.cmod.feature.translator
 
 import android.content.Context
+import android.text.Html
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -30,6 +31,7 @@ internal object TranslationProvider {
         if (provider == "auto") {
             val attempts = mutableListOf<Pair<String, () -> String>>()
             attempts += "Google Translate" to { googleFree(text, source, target) }
+            attempts += "Yandex Translate" to { yandexFree(text, source, target) }
             attempts += "MyMemory" to { myMemory(text, source, target) }
             if (source != "auto") attempts += "Apertium" to { apertium(text, source, target) }
             var last: Throwable? = null
@@ -52,8 +54,9 @@ internal object TranslationProvider {
                 require(source != "auto") { "Для Apertium укажи исходный язык (например EN)" }
                 apertium(text, source, target)
             }
+            "yandex_free" -> yandexFree(text, source, target)
             "yandex" -> {
-                require(key.isNotBlank()) { "Официальный Yandex API требует ключ. Для перевода без ключа выбери «Авто»." }
+                require(key.isNotBlank()) { "Официальный Yandex API требует ключ. Для перевода без ключа выбери «Yandex Translate (веб)»." }
                 yandex(text, source, target, key)
             }
             "google_cloud", "google" -> {
@@ -98,7 +101,34 @@ internal object TranslationProvider {
         return json.getJSONObject("responseData").getString("translatedText")
     }
 
-    /** Yandex legacy Translate API. Requires a user-supplied key; no key is bundled. */
+
+    @Volatile private var cachedYandexSid: String? = null
+    @Volatile private var cachedYandexSidAt: Long = 0L
+
+    /** Unofficial Yandex website-widget API. No key, but CAPTCHA/rate limits are possible. */
+    private fun yandexFree(text: String, source: String, target: String): String {
+        val now = System.currentTimeMillis()
+        var sid = cachedYandexSid
+        if (sid.isNullOrBlank() || now - cachedYandexSidAt > 3 * 60 * 60 * 1000L) {
+            val widget = request("https://translate.yandex.net/website-widget/v1/widget.js?widgetId=ytWidget&pageLang=en&widgetTheme=light&autoMode=false", "GET")
+            val marker = "sid: " + 39.toChar()
+            val sidStart = widget.indexOf(marker)
+            sid = if (sidStart >= 0) widget.substring(sidStart + marker.length)
+                .takeWhile { it.isDigit() || it in "abcdef." } else null
+            if (sid.isNullOrBlank()) error("Yandex не выдал SID (возможна CAPTCHA или блокировка)")
+            cachedYandexSid = sid
+            cachedYandexSidAt = now
+        }
+        val lang = if (source == "auto") target else source + "-" + target
+        val url = "https://translate.yandex.net/api/v1/tr.json/translate?srv=tr-url-widget&id=" +
+            enc(sid!!) + "-0-0&format=html&lang=" + enc(lang) + "&text=" + enc(text)
+        val json = JSONObject(request(url, "GET"))
+        val translated = json.optJSONArray("text")?.optString(0).orEmpty()
+        if (translated.isBlank()) error("Yandex вернул пустой перевод")
+        return Html.fromHtml(translated, Html.FROM_HTML_MODE_LEGACY).toString()
+    }
+
+    /** Official legacy Yandex API. Requires a user-supplied key. */
     private fun yandex(text: String, source: String, target: String, key: String): String {
         val params = "key=${enc(key)}&text=${enc(text)}&lang=${enc(if (source == "auto") target else "$source-$target")}"
         val json = JSONObject(request("https://translate.yandex.net/api/v1/tr.json/translate?$params", "GET"))
