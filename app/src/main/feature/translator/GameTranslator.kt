@@ -147,7 +147,7 @@ object GameTranslator {
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val source = (prefs.getString("source", "AUTO") ?: "AUTO").uppercase()
                 recognizeAll(InputImage.fromBitmap(frameBitmap, 0), source, width, height,
-                    onSuccess = { lines ->
+                    onSuccess = success@{ lines ->
                         try {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
@@ -180,7 +180,7 @@ object GameTranslator {
                                     }
                                     if (candidateHits < 2) {
                                         statusState.value = "OCR: подтверждаю новую строку…"
-                                        return@addOnSuccessListener
+                                        return@success
                                     }
                                 } else {
                                     candidateText = ""
