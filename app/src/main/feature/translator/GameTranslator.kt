@@ -100,12 +100,14 @@ object GameTranslator {
     fun setGlassAlpha(context: Context, value: Int) {
         val safe = value.coerceIn(20, 95)
         glassAlphaState.value = safe
+        lastRenderedGeometry = "" // Repaint the current translation with the new glass opacity.
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putInt(GLASS_ALPHA_KEY, safe).apply()
     }
 
     fun setFontAuto(context: Context, enabled: Boolean) {
         fontAutoState.value = enabled
+        lastRenderedGeometry = "" // Repaint without waiting for a new dialogue.
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(FONT_AUTO_KEY, enabled).apply()
     }
@@ -113,6 +115,7 @@ object GameTranslator {
     fun setFontSize(context: Context, value: Float) {
         val safe = value.coerceIn(12f, 36f)
         fontSizeState.value = safe
+        lastRenderedGeometry = "" // Repaint without waiting for a new dialogue.
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putFloat(FONT_SIZE_KEY, safe).apply()
     }
