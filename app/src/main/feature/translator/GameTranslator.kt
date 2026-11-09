@@ -325,9 +325,14 @@ object GameTranslator {
                         // a translucent cool tint and fine highlight create a glass-like surface.
                         val padX = max(3, box.height() / 10)
                         val padY = max(2, box.height() / 12)
+                        val nextTop = lines.filter { it !== line && it.bounds.top >= box.bottom }
+                            .minOfOrNull { it.bounds.top } ?: sceneHeight
+                        val glassBottom = min(nextTop - 2,
+                            box.top + max(box.height() * 2, textPaint.textSize.toInt() * 2))
+                            .coerceAtLeast(box.bottom + padY)
                         val rect = Rect(
                             max(0, box.left - padX), max(0, box.top - padY),
-                            min(sceneWidth, box.right + padX), min(sceneHeight, box.bottom + padY)
+                            min(sceneWidth, box.right + padX), min(sceneHeight, glassBottom)
                         )
                         drawFrostedGlass(canvas, softenedFrame, rect, sceneWidth, sceneHeight)
                         val inner = max(3, box.height() / 12)
