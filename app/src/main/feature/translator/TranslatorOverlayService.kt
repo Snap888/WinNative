@@ -45,6 +45,7 @@ class TranslatorOverlayService : Service() {
     private var capturing = true
     private var lastFrame = 0L
     private var lastText = ""
+    private var lastTranslation = ""
     private val executor = Executors.newSingleThreadExecutor()
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private lateinit var thread: HandlerThread
@@ -99,12 +100,22 @@ class TranslatorOverlayService : Service() {
     private fun recognize(image: Image) {
         val input = try { InputImage.fromMediaImage(image, 0) } catch (t: Throwable) { image.close(); return }
         recognizer.process(input).addOnSuccessListener { result ->
-            val text = result.text.lines().map { it.trim() }.filter { it.length >= 2 }.distinct().joinToString("\n").take(1800)
-            if (text.isNotBlank() && text != lastText) {
+            val ownLines = lastTranslation.lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val text = result.text.lines().map { it.trim() }
+                .filter { it.length >= 2 && !it.equals("ОРИГИНАЛ", true) && !it.equals("ПЕРЕВОД", true) }
+                .filterNot { line -> ownLines.any { it.equals(line, ignoreCase = true) } }
+                .distinct().joinToString("\n").take(1800)
+            val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
+            val previous = lastText.lowercase().replace(Regex("\\s+"), " ").trim()
+            if (text.isNotBlank() && normalized != previous) {
                 lastText = text
+                handler.post { output?.text = "Распознано. Перевожу…\n$text" }
                 executor.execute {
                     val translated = runCatching { translate(text) }.getOrElse { "Ошибка перевода: " + (it.message ?: "API") }
-                    handler.post { output?.text = "ОРИГИНАЛ\n$text\n\nПЕРЕВОД\n$translated" }
+                    handler.post {
+                        lastTranslation = translated
+                        output?.text = "ОРИГИНАЛ\n$text\n\nПЕРЕВОД\n$translated"
+                    }
                 }
             }
         }.addOnFailureListener { e -> handler.post { output?.text = "OCR: " + (e.message ?: "ошибка") } }
@@ -173,7 +184,7 @@ class TranslatorOverlayService : Service() {
     private fun createOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 8, 12, 8); setBackgroundColor(0xDD111923.toInt()) }
-        val toggle = Button(this).apply { setText("译"); setOnClickListener { panel?.visibility = if (panel?.visibility == View.VISIBLE) View.GONE else View.VISIBLE } }
+        val toggle = Button(this).apply { setText("ПЕРЕВОД"); setOnClickListener { panel?.visibility = if (panel?.visibility == View.VISIBLE) View.GONE else View.VISIBLE } }
         val text = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; this.text = "WinTranslator: ожидание текста"; setPadding(8, 8, 8, 8) }
         output = text
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -183,11 +194,12 @@ class TranslatorOverlayService : Service() {
             pauseButton.setText(if (capturing) "Пауза" else "Продолжить")
         }
         actions.addView(pauseButton)
+        actions.addView(Button(this).apply { setText("Скан"); setOnClickListener { lastFrame = 0L; output?.text = "Повторное сканирование…" } })
         actions.addView(Button(this).apply { setText("Настройки"); setOnClickListener { startActivity(Intent(this@TranslatorOverlayService, TranslatorConfigActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
         actions.addView(Button(this).apply { setText("Скрыть"); setOnClickListener { panel?.visibility = View.GONE } })
         actions.addView(Button(this).apply { setText("Стоп"); setOnClickListener { stopSelf() } })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text); addView(actions) }
-        panel = details; details.visibility = View.GONE
+        panel = details; details.visibility = View.VISIBLE
         container.addView(toggle); container.addView(details); root = container
         val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
         val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, type,
