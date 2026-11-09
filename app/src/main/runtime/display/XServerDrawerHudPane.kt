@@ -281,8 +281,8 @@ internal fun HUDPaneContent(
                     Button(
                         onClick = {
                             context.startActivity(
-                                android.content.Intent(context, TranslatorConfigActivity::class.java)
-                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                Intent(context, TranslatorConfigActivity::class.java)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                             )
                         },
                         modifier = Modifier.fillMaxWidth(),
