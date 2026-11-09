@@ -204,12 +204,15 @@ object GameTranslator {
                                 // Two consecutive empty OCR results suppress one-frame OCR jitter.
                                 emptyFrameHits++
                                 if (emptyFrameHits >= 2 || now - lastVisibleTextAt > EMPTY_CLEAR_AFTER_MS) {
-                                    lastSource = ""
-                                    lastTranslatedText = ""
-                                    lastRenderedGeometry = ""
-                                    candidateText = ""
-                                    candidateHits = 0
-                                    WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                                    if (lastSource.isNotEmpty() || lastTranslatedText.isNotEmpty()) {
+                                        lastSource = ""
+                                        lastTranslatedText = ""
+                                        lastRenderedGeometry = ""
+                                        candidateText = ""
+                                        candidateHits = 0
+                                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                                    }
+                                    emptyFrameHits = 0
                                     statusState.value = "Turnip: текста в кадре нет"
                                 } else {
                                     statusState.value = "OCR: проверяю исчезновение текста…"
@@ -268,7 +271,7 @@ object GameTranslator {
                     },
                     onFailure = { error ->
                         bitmap?.recycle()
-                        if (System.currentTimeMillis() - lastVisibleTextAt > 1400L) {
+                        if (System.currentTimeMillis() - lastVisibleTextAt > EMPTY_CLEAR_AFTER_MS) {
                             WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                             lastSource = ""
                             lastTranslatedText = ""
@@ -505,7 +508,11 @@ object GameTranslator {
                                 .minOfOrNull { it.bounds.top } ?: sceneHeight
                             val belowY = box.bottom + margin
                             val available = (nextTop - belowY).coerceAtLeast(0)
-                            if (available >= 24) {
+                            val belowRect = Rect(box.left, belowY, sceneWidth - 8, belowY + available)
+                            val overlapsBelow = lines.any { other ->
+                                other !== line && Rect.intersects(belowRect, other.bounds)
+                            }
+                            if (available >= 24 && !overlapsBelow) {
                                 drawFitted(canvas, translatedLine, box.left, belowY,
                                     (sceneWidth - box.left - 8).coerceAtLeast(box.width()),
                                     available, textPaint, stroke)
