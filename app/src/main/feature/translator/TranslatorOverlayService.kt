@@ -177,7 +177,12 @@ class TranslatorOverlayService : Service() {
         val text = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; this.text = "WinTranslator: ожидание текста"; setPadding(8, 8, 8, 8) }
         output = text
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(Button(this).apply { setText("Пауза"); setOnClickListener { capturing = !capturing; setText(if (capturing) "Пауза" else "Продолжить") } })
+        val pauseButton = Button(this).apply { setText("Пауза") }
+        pauseButton.setOnClickListener {
+            capturing = !capturing
+            pauseButton.setText(if (capturing) "Пауза" else "Продолжить")
+        }
+        actions.addView(pauseButton)
         actions.addView(Button(this).apply { setText("Настройки"); setOnClickListener { startActivity(Intent(this@TranslatorOverlayService, TranslatorConfigActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
         actions.addView(Button(this).apply { setText("Скрыть"); setOnClickListener { panel?.visibility = View.GONE } })
         actions.addView(Button(this).apply { setText("Стоп"); setOnClickListener { stopSelf() } })
