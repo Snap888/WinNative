@@ -49,6 +49,7 @@ static jmethodID g_on_game_program;  /* static void onGameProgram(int, String) *
 static jmethodID g_on_pointer_lock;  /* static void onPointerLock(boolean, int, int) */
 static jmethodID g_on_clipboard;     /* static void onClipboardText(byte[]) */
 static jmethodID g_on_text_input;    /* static void onTextInput(boolean, String, int, int, int, int) */
+static jmethodID g_on_translator_frame; /* static void onTranslatorFrame(int, int, byte[]) */
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     (void)reserved;
