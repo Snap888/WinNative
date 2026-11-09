@@ -128,6 +128,7 @@ static struct { VkImage img; VkDeviceMemory mem; int w, h; } g_scene;
 /* Optional in-game translation capture. Readback is throttled and uses host-coherent
  * staging memory; the compositor already waits its frame fence before handing bytes to OCR. */
 static volatile int g_translator_enabled;
+static volatile int g_translator_capture_suspended;
 static VkBuffer g_translator_readback;
 static VkDeviceMemory g_translator_readback_mem;
 static void *g_translator_readback_map;
@@ -146,6 +147,9 @@ void vkp_set_translator_enabled(int enabled) {
     g_translator_enabled = enabled ? 1 : 0;
 }
 int vkp_translator_enabled(void) { return g_translator_enabled != 0; }
+void vkp_set_translator_capture_suspended(int suspended) {
+    g_translator_capture_suspended = suspended ? 1 : 0;
+}
 
 /* UI/OCR worker only copies bytes here. Vulkan image creation/upload happens on the compositor thread. */
 void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height) {
@@ -212,6 +216,8 @@ static void translator_readback_destroy(void) {
     g_translator_readback_size = 0;
     g_translator_readback_w = g_translator_readback_h = 0;
 }
+
+static int memory_type(uint32_t bits, VkMemoryPropertyFlags want);
 
 static int translator_readback_ensure(int w, int h) {
     VkDeviceSize bytes = (VkDeviceSize)w * (VkDeviceSize)h * 4u;
