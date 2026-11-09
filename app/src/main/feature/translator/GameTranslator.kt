@@ -151,6 +151,9 @@ object GameTranslator {
                                 val frameKey = "$normalized#$geometry"
                                 if (frameKey != lastSource || System.currentTimeMillis() - lastTranslationAt > 30000L) {
                                     lastSource = frameKey
+                                    // A changed dialogue line invalidates the previous overlay while
+                                    // the network translation is pending.
+                                    WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                                     statusState.value = "OCR: ${clean.size} строк, перевожу…"
                                     val translated = runCatching { TranslationProvider.translate(context, text) }
                                         .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
@@ -178,6 +181,8 @@ object GameTranslator {
                     })
             } catch (error: Throwable) {
                 bitmap?.recycle()
+                WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                lastSource = ""
                 statusState.value = "Ошибка кадра: ${error.message ?: "неизвестно"}"
                 busy.set(false)
             }
@@ -295,13 +300,23 @@ object GameTranslator {
                         val nextTop = lines.filter { it.bounds.top > box.top }
                             .minOfOrNull { it.bounds.top } ?: sceneHeight
                         val belowY = box.bottom + margin
-                        val aboveY = box.top - margin - max(box.height(), 28)
-                        val y = if (sceneHeight - belowY >= 28 && belowY + 24 <= nextTop) belowY
-                            else max(0, aboveY)
-                        val safeBottom = if (y >= box.bottom) nextTop else box.top
+                        val belowSpace = min(sceneHeight, nextTop) - belowY
+                        val aboveBottom = box.top - margin
+                        val aboveSpace = aboveBottom
+                        val y: Int
+                        val safeHeight: Int
+                        if (belowSpace >= 24) {
+                            y = belowY
+                            safeHeight = belowSpace
+                        } else if (aboveSpace >= 24) {
+                            safeHeight = min(aboveSpace, max(box.height(), 28))
+                            y = aboveBottom - safeHeight
+                        } else {
+                            // Do not cover the original or neighboring HUD when no safe slot exists.
+                            return@forEachIndexed
+                        }
                         val width = (sceneWidth - box.left - 8).coerceAtLeast(box.width())
-                        drawFitted(canvas, translatedLine, box.left, y, width,
-                            (safeBottom - y).coerceAtLeast(24), textPaint, stroke)
+                        drawFitted(canvas, translatedLine, box.left, y, width, safeHeight, textPaint, stroke)
                     }
                     TranslatorDisplayMode.REPLACE_TEXT -> {
                         // Frosted-glass patch: downsampled live scene provides a soft blur, then
