@@ -57,7 +57,7 @@ class TranslatorOverlayService : Service() {
         val channel = NotificationChannel(CHANNEL, "WinTranslator", NotificationManager.IMPORTANCE_LOW)
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         val notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_translate).setContentTitle("WinTranslator AI")
+            .setSmallIcon(android.R.drawable.ic_menu_info_details).setContentTitle("WinTranslator AI")
             .setContentText("Игровой переводчик активен").setOngoing(true).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         else startForeground(NOTIFICATION_ID, notification)
@@ -176,6 +176,7 @@ class TranslatorOverlayService : Service() {
         output = text
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         actions.addView(Button(this).apply { text = "Пауза"; setOnClickListener { capturing = !capturing; this.text = if (capturing) "Пауза" else "Продолжить" } })
+        actions.addView(Button(this).apply { text = "Настройки"; setOnClickListener { startActivity(Intent(this@TranslatorOverlayService, TranslatorConfigActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } })
         actions.addView(Button(this).apply { text = "Скрыть"; setOnClickListener { panel?.visibility = View.GONE } })
         actions.addView(Button(this).apply { text = "Стоп"; setOnClickListener { stopSelf() } })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text); addView(actions) }
