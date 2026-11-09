@@ -155,7 +155,7 @@ void vkp_set_translator_capture_suspended(int suspended) {
 /* UI/OCR worker only copies bytes here. Vulkan image creation/upload happens on the compositor thread. */
 void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height) {
     uint8_t *copy = NULL;
-    if (rgba && width > 0 && height > 0 && width <= 2048 && height <= 1024) {
+    if (rgba && width > 0 && height > 0 && width <= 4096 && height <= 2160) {
         size_t bytes = (size_t)width * (size_t)height * 4u;
         copy = malloc(bytes);
         if (copy) memcpy(copy, rgba, bytes);
@@ -1870,7 +1870,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         struct vkp_draw overlay = {g_translator_overlay, 0, 0,
             (float)g_translator_overlay->w, (float)g_translator_overlay->h,
             20, scene_h - g_translator_overlay->h - 20,
-            g_translator_overlay->w, g_translator_overlay->h, 0};
+            g_translator_overlay->w, g_translator_overlay->h, 1};
         VkImageBlit overlay_blit;
         if (draw_to_scene_blit(&overlay, scene_w, scene_h, &overlay_blit)) {
             record_draw(cmd, &overlay, &overlay_blit, scene_img, scene_fmt,

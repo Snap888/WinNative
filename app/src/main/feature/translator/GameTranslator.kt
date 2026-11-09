@@ -5,13 +5,16 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.graphics.Typeface
+import android.text.TextUtils
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.Text as MlText
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
@@ -19,31 +22,43 @@ import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.winlator.cmod.runtime.display.wayland.WaylandCompositor
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.max
+import kotlin.math.min
 
-/**
- * End-to-end in-game translation for the embedded Wayland compositor:
- * Turnip scene readback -> on-device ML Kit OCR -> keyless translation providers -> Vulkan draw.
- * The compositor sends frames at a low cadence; all OCR/network work runs on this worker.
- */
+enum class TranslatorDisplayMode(val title: String, val description: String) {
+    ORIGINAL_AND_TRANSLATION("A • Оригинал + перевод", "Перевод под исходной строкой"),
+    REPLACE_TEXT("B • Замена текста", "Перевод закрывает исходную область"),
+    BESIDE_ORIGINAL("C • Рядом с оригиналом", "Перевод справа от исходной строки")
+}
+
+/** Turnip scene readback -> multi-script ML Kit OCR -> keyless translation -> Vulkan overlay. */
 object GameTranslator {
     private const val PREFS = "wintranslator"
+    private const val MODE_KEY = "display_mode"
+    private const val MAX_LINES = 18
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "GameTranslator-OCR") }
     private val busy = AtomicBoolean(false)
     private val enabledState = mutableStateOf(false)
     private val statusState = mutableStateOf("Выключен")
+    private val displayModeState = mutableStateOf(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
     @Volatile private var appContext: Context? = null
     @Volatile private var lastSource = ""
     @Volatile private var lastTranslationAt = 0L
@@ -53,8 +68,18 @@ object GameTranslator {
     private val chinese by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
     private val korean by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
 
+    private data class OcrLine(val text: String, val bounds: Rect)
+
     val enabled: Boolean get() = enabledState.value
     val status: String get() = statusState.value
+    val displayMode: TranslatorDisplayMode get() = displayModeState.value
+
+    fun setDisplayMode(context: Context, mode: TranslatorDisplayMode) {
+        displayModeState.value = mode
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(MODE_KEY, mode.name).apply()
+        statusState.value = "Режим отображения: ${mode.title}"
+    }
 
     fun start(context: Context) {
         if (!WaylandCompositor.nativeIsRunning()) {
@@ -62,9 +87,13 @@ object GameTranslator {
             return
         }
         appContext = context.applicationContext
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        displayModeState.value = runCatching {
+            TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
+        }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
         lastSource = ""
         enabledState.value = true
-        statusState.value = "Turnip: включён захват сцены, ожидание текста"
+        statusState.value = "Turnip: захват сцены включён, ожидание текста"
         WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
         WaylandCompositor.nativeSetTranslatorEnabled(true)
     }
@@ -83,8 +112,10 @@ object GameTranslator {
         if (!enabledState.value || width <= 0 || height <= 0 || rgba.size < width * height * 4) return
         if (!busy.compareAndSet(false, true)) return
         worker.execute {
+            var bitmap: Bitmap? = null
             try {
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                val frameBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                bitmap = frameBitmap
                 val pixels = IntArray(width * height)
                 var p = 0
                 for (i in pixels.indices) {
@@ -94,117 +125,240 @@ object GameTranslator {
                     val a = rgba[p++].toInt() and 0xff
                     pixels[i] = Color.argb(a, r, g, b)
                 }
-                bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+                frameBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val source = (prefs.getString("source", "AUTO") ?: "AUTO").uppercase()
-                recognizeWithFallback(InputImage.fromBitmap(bitmap, 0), source,
-                    onSuccess = { recognized ->
+                recognizeAll(InputImage.fromBitmap(frameBitmap, 0), source, width, height,
+                    onSuccess = { lines ->
                         try {
-                            val text = recognized.lines().map { it.trim() }
-                                .filter { it.length >= 2 }
-                                .distinct().joinToString("\n").take(1400)
+                            val clean = lines.distinctBy { it.text.lowercase().replace(Regex("\\s+"), " ").trim() }
+                                .take(MAX_LINES)
+                            val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             if (text.isBlank()) {
                                 statusState.value = "Turnip: кадр получен, ищу текст…"
                             } else if (normalized != lastSource || System.currentTimeMillis() - lastTranslationAt > 10000L) {
                                 lastSource = normalized
-                                statusState.value = "OCR: текст найден, перевожу…"
+                                statusState.value = "OCR: ${clean.size} строк, перевожу…"
                                 val translated = runCatching { TranslationProvider.translate(context, text) }
                                     .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
                                 lastTranslationAt = System.currentTimeMillis()
-                                if (enabledState.value) {
-                                    showTranslation(width, text, translated)
-                                    statusState.value = if (translated.startsWith("Перевод недоступен:"))
-                                        "OCR работает; ошибка сервиса перевода"
-                                    else "Перевод готов • ${translated.take(72)}"
+                                if (enabledState.value && !translated.startsWith("Перевод недоступен:")) {
+                                    drawModeOverlay(width, height, clean, translated, displayModeState.value)
+                                    statusState.value = "Перевод готов • ${displayModeState.value.title}"
+                                } else if (enabledState.value) {
+                                    statusState.value = "OCR работает; ошибка сервиса перевода"
                                 }
                             }
                         } finally {
-                            bitmap.recycle()
+                            bitmap?.recycle()
                             busy.set(false)
                         }
                     },
                     onFailure = { error ->
-                        bitmap.recycle()
+                        bitmap?.recycle()
                         statusState.value = "Ошибка OCR: ${error.message ?: "ML Kit"}"
                         busy.set(false)
                     })
             } catch (error: Throwable) {
+                bitmap?.recycle()
                 statusState.value = "Ошибка кадра: ${error.message ?: "неизвестно"}"
                 busy.set(false)
             }
         }
     }
 
-    private fun recognizeWithFallback(
+    /**
+     * AUTO deliberately runs every installed script recognizer. Results are merged by geometry/text,
+     * so Latin HUD labels no longer prevent Japanese/Chinese/Korean dialogue from being detected.
+     */
+    private fun recognizeAll(
         input: InputImage,
         source: String,
-        onSuccess: (String) -> Unit,
-        onFailure: (Throwable) -> Unit,
+        width: Int,
+        height: Int,
+        onSuccess: (List<OcrLine>) -> Unit,
+        onFailure: (Throwable) -> Unit
     ) {
-        val recognizers = when (source) {
+        val recognizers: List<TextRecognizer> = when (source) {
             "JA" -> listOf(japanese)
             "ZH", "ZH-CN", "ZH-TW" -> listOf(chinese)
             "KO" -> listOf(korean)
             "AUTO" -> listOf(latin, japanese, chinese, korean)
             else -> listOf(latin)
         }
-        fun attempt(index: Int) {
+        val collected = mutableListOf<OcrLine>()
+        fun run(index: Int) {
+            if (index >= recognizers.size) {
+                onSuccess(collected.sortedWith(compareBy<OcrLine> { it.bounds.top }.thenBy { it.bounds.left }))
+                return
+            }
             recognizers[index].process(input)
-                .addOnSuccessListener(worker) { result ->
-                    if (result.text.isNotBlank() || index == recognizers.lastIndex) onSuccess(result.text)
-                    else attempt(index + 1)
+                .addOnSuccessListener(worker) { result: MlText ->
+                    result.textBlocks.forEach { block ->
+                        block.lines.forEach { line ->
+                            val text = line.text.trim()
+                            val box = line.boundingBox
+                            if (text.length >= 2 && box != null) {
+                                val clipped = Rect(
+                                    box.left.coerceIn(0, width - 1),
+                                    box.top.coerceIn(0, height - 1),
+                                    box.right.coerceIn(1, width),
+                                    box.bottom.coerceIn(1, height)
+                                )
+                                if (clipped.width() > 0 && clipped.height() > 0) {
+                                    val duplicate = collected.any {
+                                        it.text.equals(text, ignoreCase = true) &&
+                                            Rect.intersects(it.bounds, clipped)
+                                    }
+                                    if (!duplicate) collected.add(OcrLine(text, clipped))
+                                }
+                            }
+                        }
+                    }
+                    run(index + 1)
                 }
                 .addOnFailureListener(worker) { error ->
-                    if (index < recognizers.lastIndex) attempt(index + 1) else onFailure(error)
+                    if (index == recognizers.lastIndex && collected.isEmpty()) onFailure(error)
+                    else run(index + 1)
                 }
         }
-        attempt(0)
+        run(0)
     }
 
-    private fun showTranslation(sceneWidth: Int, original: String, translated: String) {
-        val maxWidth = (sceneWidth - 48).coerceIn(240, 1200)
-        val padding = 22f
-        val originalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xffc5ced8.toInt()
-            textSize = (sceneWidth / 70f).coerceIn(14f, 22f)
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-        }
-        val translationPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = (sceneWidth / 48f).coerceIn(18f, 30f)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        }
-        val shown = translated.take(500)
-        val layout = StaticLayout.Builder.obtain(shown, 0, shown.length, translationPaint,
-            (maxWidth - padding * 2).toInt())
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setIncludePad(false)
-            .setMaxLines(7)
-            .setEllipsize(android.text.TextUtils.TruncateAt.END)
-            .build()
-        val originalLine = original.replace("\n", " ").take(110)
-        val height = (padding * 2 + originalPaint.textSize + 10 + layout.height).toInt().coerceAtMost(440)
-        val bitmap = Bitmap.createBitmap(maxWidth, height, Bitmap.Config.ARGB_8888)
+    private fun drawModeOverlay(
+        sceneWidth: Int,
+        sceneHeight: Int,
+        lines: List<OcrLine>,
+        translated: String,
+        mode: TranslatorDisplayMode
+    ) {
+        // A full-scene transparent layer keeps each label anchored to its OCR rectangle.
+        // Vulkan alpha blending is enabled for this draw; B paints only the original text boxes.
+        val bitmap = Bitmap.createBitmap(sceneWidth, sceneHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(0xff101722.toInt())
-        canvas.drawText(originalLine, padding, padding + originalPaint.textSize, originalPaint)
-        canvas.save()
-        canvas.translate(padding, padding + originalPaint.textSize + 12)
-        layout.draw(canvas)
-        canvas.restore()
-        val argb = IntArray(maxWidth * height)
-        bitmap.getPixels(argb, 0, maxWidth, 0, 0, maxWidth, height)
+        val translations = translated.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        val lineMappingValid = translations.size == lines.size
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = (sceneWidth / 58f).coerceIn(15f, 30f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setShadowLayer(3f, 1f, 2f, Color.BLACK)
+        }
+        val originalPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xffe6edf5.toInt()
+            textSize = (sceneWidth / 76f).coerceIn(12f, 22f)
+            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            setShadowLayer(2f, 1f, 1f, Color.BLACK)
+        }
+        val stroke = TextPaint(textPaint).apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = max(2f, textPaint.textSize / 8f)
+            clearShadowLayer()
+        }
+
+        if (!lineMappingValid) {
+            // Some providers collapse line breaks. Preserve correctness rather than pairing
+            // unrelated sentences with OCR boxes: display the complete translation as a block.
+            drawTextBlock(canvas, translated, sceneWidth, sceneHeight, textPaint, stroke)
+        } else {
+            lines.forEachIndexed { index, line ->
+                val box = line.bounds
+                val translatedLine = translations[index]
+                val margin = max(5, box.height() / 7)
+                when (mode) {
+                    TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION -> {
+                        val y = (box.bottom + margin).coerceAtMost(sceneHeight - 2)
+                        drawFitted(canvas, translatedLine, box.left, y, box.width().coerceAtLeast(80),
+                            (sceneHeight - y).coerceAtLeast(24), textPaint, stroke)
+                    }
+                    TranslatorDisplayMode.REPLACE_TEXT -> {
+                        val rect = Rect(
+                            max(0, box.left - margin), max(0, box.top - margin),
+                            min(sceneWidth, box.right + margin), min(sceneHeight, box.bottom + margin)
+                        )
+                        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xe8202630.toInt() }
+                        canvas.drawRoundRect(rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(),
+                            rect.bottom.toFloat(), 5f, 5f, bg)
+                        drawFitted(canvas, translatedLine, rect.left + margin, rect.top + margin,
+                            (rect.width() - margin * 2).coerceAtLeast(40),
+                            (rect.height() - margin * 2).coerceAtLeast(20), textPaint, stroke)
+                    }
+                    TranslatorDisplayMode.BESIDE_ORIGINAL -> {
+                        val rightSpace = sceneWidth - box.right - margin
+                        if (rightSpace >= max(100, box.width() / 2)) {
+                            drawFitted(canvas, translatedLine, box.right + margin, box.top,
+                                rightSpace, max(box.height() * 3, 54), textPaint, stroke)
+                        } else {
+                            drawFitted(canvas, translatedLine, box.left, box.bottom + margin,
+                                box.width().coerceAtLeast(100),
+                                (sceneHeight - box.bottom - margin).coerceAtLeast(30), textPaint, stroke)
+                        }
+                    }
+                }
+            }
+        }
+
+        val argb = IntArray(sceneWidth * sceneHeight)
+        bitmap.getPixels(argb, 0, sceneWidth, 0, 0, sceneWidth, sceneHeight)
         val rgba = ByteArray(argb.size * 4)
-        var o = 0
+        var out = 0
         for (pixel in argb) {
-            rgba[o++] = ((pixel shr 16) and 0xff).toByte()
-            rgba[o++] = ((pixel shr 8) and 0xff).toByte()
-            rgba[o++] = (pixel and 0xff).toByte()
-            rgba[o++] = ((pixel ushr 24) and 0xff).toByte()
+            rgba[out++] = ((pixel shr 16) and 0xff).toByte()
+            rgba[out++] = ((pixel shr 8) and 0xff).toByte()
+            rgba[out++] = (pixel and 0xff).toByte()
+            rgba[out++] = ((pixel ushr 24) and 0xff).toByte()
         }
         bitmap.recycle()
-        WaylandCompositor.nativeSetTranslatorOverlay(rgba, maxWidth, height)
+        WaylandCompositor.nativeSetTranslatorOverlay(rgba, sceneWidth, sceneHeight)
+    }
+
+    private fun drawTextBlock(
+        canvas: Canvas, text: String, width: Int, height: Int,
+        paint: TextPaint, stroke: TextPaint
+    ) {
+        val panelWidth = min(width - 32, 900).coerceAtLeast(160)
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, panelWidth - 28)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).setMaxLines(10)
+            .setEllipsize(TextUtils.TruncateAt.END).build()
+        val x = 16f
+        val y = (height - layout.height - 36).coerceAtLeast(8).toFloat()
+        canvas.drawRoundRect(x, y, x + panelWidth, y + layout.height + 20, 8f, 8f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xb8202630.toInt() })
+        canvas.save()
+        canvas.translate(x + 14, y + 10)
+        layout.draw(canvas)
+        canvas.restore()
+    }
+
+    private fun drawFitted(
+        canvas: Canvas, text: String, x: Int, y: Int, maxWidth: Int, maxHeight: Int,
+        paint: TextPaint, stroke: TextPaint
+    ) {
+        if (maxWidth <= 8 || maxHeight <= 8 || text.isBlank()) return
+        var size = paint.textSize
+        var layout: StaticLayout
+        do {
+            paint.textSize = size
+            stroke.textSize = size
+            layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, maxWidth)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).setMaxLines(3)
+                .setEllipsize(TextUtils.TruncateAt.END).build()
+            if (layout.height <= maxHeight || size <= 11f) break
+            size -= 2f
+        } while (size > 9f)
+        canvas.save()
+        canvas.clipRect(x, y, min(canvas.width, x + maxWidth), min(canvas.height, y + maxHeight))
+        canvas.translate(x.toFloat(), y.toFloat())
+        val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, maxWidth)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL).setIncludePad(false).setMaxLines(3)
+            .setEllipsize(TextUtils.TruncateAt.END).build()
+        strokeLayout.draw(canvas)
+        layout.draw(canvas)
+        canvas.restore()
+        paint.textSize = (canvas.width / 58f).coerceIn(15f, 30f)
+        stroke.textSize = paint.textSize
     }
 }
 
@@ -213,23 +367,34 @@ internal fun GameTranslatorPanel(paneScale: Float) {
     val context = LocalContext.current
     val enabled = GameTranslator.enabled
     val status = GameTranslator.status
+    val selectedMode = GameTranslator.displayMode
+    var menuExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
-        Text(
-            "Игровой переводчик",
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = (13f * paneScale).sp,
-        )
+        Text("Игровой переводчик", color = MaterialTheme.colorScheme.onSurface, fontSize = (13f * paneScale).sp)
         Button(
             onClick = { if (enabled) GameTranslator.stop() else GameTranslator.start(context) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (enabled) "ОСТАНОВИТЬ ПЕРЕВОД" else "ВКЛЮЧИТЬ ПЕРЕВОД В ИГРЕ")
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (enabled) "ОСТАНОВИТЬ ПЕРЕВОД" else "ВКЛЮЧИТЬ ПЕРЕВОД В ИГРЕ") }
+        Row {
+            Button(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Режим: ${selectedMode.title}")
+            }
+            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                TranslatorDisplayMode.values().forEach { mode ->
+                    DropdownMenuItem(
+                        text = { Text(mode.title) },
+                        onClick = {
+                            GameTranslator.setDisplayMode(context, mode)
+                            menuExpanded = false
+                        }
+                    )
+                }
+            }
         }
-        Text(
-            "Turnip/Vulkan → ML Kit OCR → Google / Yandex / MyMemory → Vulkan overlay",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = (10f * paneScale).sp,
-        )
+        Text(selectedMode.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = (10f * paneScale).sp)
+        Text("Turnip/Vulkan → ML Kit OCR (Latin/Japanese/Chinese/Korean) → перевод → Vulkan alpha overlay",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (10f * paneScale).sp)
         Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (11f * paneScale).sp)
     }
 }
