@@ -1,16 +1,23 @@
-# WinTranslator AI
+# Игровой переводчик WinNative
 
-Opt-in online game-text translation overlay for WinNative.
+## Запуск
+1. Открой WinNative → Настройки → Инструменты → **Игровой переводчик**.
+2. Выбери провайдера, исходный язык (AUTO) и язык перевода (RU), укажи endpoint и API-ключ, если выбранный сервис его требует.
+3. Нажми **Запустить перевод в игре**.
+4. Разреши WinNative отображаться поверх других приложений.
+5. Подтверди системный запрос Android на захват экрана.
+6. Вернись в игру. На экране появится плавающая кнопка **ПЕРЕВОД**. Нажми её, чтобы открыть панель; кнопка **Скан** повторяет распознавание вручную.
 
-- Android MediaProjection with explicit system consent.
-- On-device Google ML Kit Latin OCR; captured frames are not uploaded.
-- Throttled OCR and duplicate-text suppression.
-- Floating in-game pill with pause, hide and stop controls.
-- DeepL, LibreTranslate, Google Cloud Translation and OpenAI-compatible endpoints.
-- Configurable endpoint, API key, source/target language and model.
+## Управление в игре
+- **ПЕРЕВОД** — открыть/скрыть панель переводчика.
+- **Пауза / Продолжить** — остановить или возобновить OCR.
+- **Скан** — принудительно запросить новый кадр для OCR.
+- **Настройки** — открыть настройки провайдера и языков.
+- **Скрыть** — свернуть панель, оставив плавающую кнопку.
+- **Стоп** — завершить захват экрана и убрать оверлей.
 
-## Use
-Open Settings > Tools > Game Translator. Configure an HTTPS provider and API key, save, grant display-over-other-apps permission, start the translator and approve Android's screen-capture prompt. Tap the floating «译» button in-game.
+## Провайдеры
+Поддерживаются DeepL, LibreTranslate, Google Cloud Translation и OpenAI-compatible Chat Completions. Для большинства публичных API нужен собственный ключ. LibreTranslate может требовать ключ в зависимости от выбранного сервера. Используй HTTPS endpoint.
 
-## Limitations
-This first version translates visible text in a floating overlay; it does not inject replacement strings into the Windows process or modify game files. OCR uses the ML Kit Latin script model; other scripts need additional script models. Only recognized text is sent to the selected translation API. API keys are stored in private app preferences; use a dedicated restricted key.
+## Принцип работы и ограничения
+Android MediaProjection захватывает экран после явного согласия пользователя. Google ML Kit распознаёт текст локально; наружу отправляются только распознанные строки. Текущая сборка использует Latin OCR model, поэтому для японского, китайского, корейского и других письменностей понадобятся дополнительные OCR-модели. Перевод отображается поверх игры и не заменяет текст внутри Windows-процесса. Отдельная физическая клавиатурная комбинация зависит от маршрутизации клавиш конкретного контейнера; универсальный Android hotkey не обещается.

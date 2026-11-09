@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources><string name="translator_title">Game Translator</string></resources>
+<resources>
+    <string name="translator_title">Игровой переводчик</string>
+</resources>
