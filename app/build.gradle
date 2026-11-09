@@ -383,6 +383,7 @@ dependencies {
     androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
     implementation libs.okhttp
     implementation libs.okhttpDnsOverHttps
     implementation libs.serializationJson

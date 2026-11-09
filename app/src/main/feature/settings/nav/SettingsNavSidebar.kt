@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.TabletAndroid
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.VideogameAsset
 import androidx.compose.material.icons.outlined.ViewInAr
 import androidx.compose.material.icons.outlined.Widgets
@@ -125,6 +126,7 @@ enum class SettingsNavItem(
     INPUT_CONTROLS(R.id.main_menu_input_controls, Icons.Outlined.SportsEsports, R.string.common_ui_input_controls, NavSection.SYSTEM),
     RETRO(R.id.main_menu_retro, Icons.Outlined.VideogameAsset, R.string.settings_retro_title, NavSection.SYSTEM),
     OTHER(R.id.main_menu_other, Icons.Outlined.Widgets, R.string.common_ui_other, NavSection.SYSTEM),
+    TRANSLATOR(R.id.main_menu_translator, Icons.Outlined.Translate, R.string.translator_title, NavSection.TOOLS),
     DEBUG(R.id.main_menu_advanced, Icons.Outlined.BugReport, R.string.settings_debug_title, NavSection.TOOLS),
     CREDITS(R.id.main_menu_credits, Icons.Outlined.Info, R.string.retro_scr_tab_credits, NavSection.CREDITS),
     SUPPORT(R.id.main_menu_support, Icons.Outlined.HelpOutline, R.string.settings_support_title, NavSection.HELP),
