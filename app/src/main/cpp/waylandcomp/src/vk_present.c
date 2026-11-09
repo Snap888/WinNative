@@ -255,7 +255,7 @@ static int translator_readback_ensure(int w, int h) {
 static int translator_capture_due(void) {
     if (!g_translator_enabled) return 0;
     int64_t now = perf_now();
-    if (now - g_translator_last_capture_ns < 750000000LL) return 0;
+    if (now - g_translator_last_capture_ns < 250000000LL) return 0;
     g_translator_last_capture_ns = now;
     return 1;
 }
