@@ -78,6 +78,8 @@ object GameTranslator {
         displayModeState.value = mode
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(MODE_KEY, mode.name).apply()
+        lastSource = "" // Re-render the next live OCR frame using the newly selected layout.
+        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
         statusState.value = "Режим отображения: ${mode.title}"
     }
 
@@ -135,19 +137,31 @@ object GameTranslator {
                                 .take(MAX_LINES)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
+                            // Text absence in the current captured frame is authoritative: remove
+                            // the previous overlay immediately so translations never float over a
+                            // menu transition, cutscene, fade, or cleared dialogue box.
                             if (text.isBlank()) {
-                                statusState.value = "Turnip: кадр получен, ищу текст…"
-                            } else if (normalized != lastSource || System.currentTimeMillis() - lastTranslationAt > 10000L) {
-                                lastSource = normalized
-                                statusState.value = "OCR: ${clean.size} строк, перевожу…"
-                                val translated = runCatching { TranslationProvider.translate(context, text) }
-                                    .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
-                                lastTranslationAt = System.currentTimeMillis()
-                                if (enabledState.value && !translated.startsWith("Перевод недоступен:")) {
-                                    drawModeOverlay(width, height, clean, translated, displayModeState.value)
-                                    statusState.value = "Перевод готов • ${displayModeState.value.title}"
-                                } else if (enabledState.value) {
-                                    statusState.value = "OCR работает; ошибка сервиса перевода"
+                                lastSource = ""
+                                WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                                statusState.value = "Turnip: текста в текущем кадре нет"
+                            } else {
+                                val geometry = clean.joinToString("|") {
+                                    "${it.bounds.left},${it.bounds.top},${it.bounds.right},${it.bounds.bottom}"
+                                }
+                                val frameKey = "$normalized#$geometry"
+                                if (frameKey != lastSource || System.currentTimeMillis() - lastTranslationAt > 30000L) {
+                                    lastSource = frameKey
+                                    statusState.value = "OCR: ${clean.size} строк, перевожу…"
+                                    val translated = runCatching { TranslationProvider.translate(context, text) }
+                                        .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
+                                    lastTranslationAt = System.currentTimeMillis()
+                                    if (enabledState.value && !translated.startsWith("Перевод недоступен:")) {
+                                        drawModeOverlay(frameBitmap, width, height, clean, translated, displayModeState.value)
+                                        statusState.value = "Перевод готов • ${displayModeState.value.title}"
+                                    } else if (enabledState.value) {
+                                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                                        statusState.value = "OCR работает; ошибка сервиса перевода"
+                                    }
                                 }
                             }
                         } finally {
@@ -157,6 +171,8 @@ object GameTranslator {
                     },
                     onFailure = { error ->
                         bitmap?.recycle()
+                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                        lastSource = ""
                         statusState.value = "Ошибка OCR: ${error.message ?: "ML Kit"}"
                         busy.set(false)
                     })
@@ -227,6 +243,7 @@ object GameTranslator {
     }
 
     private fun drawModeOverlay(
+        sourceFrame: Bitmap,
         sceneWidth: Int,
         sceneHeight: Int,
         lines: List<OcrLine>,
@@ -239,17 +256,25 @@ object GameTranslator {
         val canvas = Canvas(bitmap)
         val translations = translated.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
         val lineMappingValid = translations.size == lines.size
+        if (!lineMappingValid) {
+            // Never show an unanchored translation: it could describe text that is no longer
+            // visible or be paired with the wrong dialogue line.
+            bitmap.recycle()
+            WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+            statusState.value = "Перевод скрыт: сервис изменил структуру строк"
+            return
+        }
+        val softenedFrame = Bitmap.createScaledBitmap(
+            sourceFrame,
+            max(1, sceneWidth / 10),
+            max(1, sceneHeight / 10),
+            true
+        )
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = (sceneWidth / 58f).coerceIn(15f, 30f)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setShadowLayer(3f, 1f, 2f, Color.BLACK)
-        }
-        val originalPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xffe6edf5.toInt()
-            textSize = (sceneWidth / 76f).coerceIn(12f, 22f)
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-            setShadowLayer(2f, 1f, 1f, Color.BLACK)
         }
         val stroke = TextPaint(textPaint).apply {
             color = Color.BLACK
@@ -258,47 +283,67 @@ object GameTranslator {
             clearShadowLayer()
         }
 
-        if (!lineMappingValid) {
-            // Some providers collapse line breaks. Preserve correctness rather than pairing
-            // unrelated sentences with OCR boxes: display the complete translation as a block.
-            drawTextBlock(canvas, translated, sceneWidth, sceneHeight, textPaint, stroke)
-        } else {
+        run {
             lines.forEachIndexed { index, line ->
                 val box = line.bounds
                 val translatedLine = translations[index]
                 val margin = max(5, box.height() / 7)
                 when (mode) {
                     TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION -> {
-                        val y = (box.bottom + margin).coerceAtMost(sceneHeight - 2)
-                        drawFitted(canvas, translatedLine, box.left, y, box.width().coerceAtLeast(80),
-                            (sceneHeight - y).coerceAtLeast(24), textPaint, stroke)
+                        // Keep the original untouched. Use the wider free screen area, but stop
+                        // before the next OCR line to avoid writing over adjacent dialogue.
+                        val nextTop = lines.filter { it.bounds.top > box.top }
+                            .minOfOrNull { it.bounds.top } ?: sceneHeight
+                        val belowY = box.bottom + margin
+                        val aboveY = box.top - margin - max(box.height(), 28)
+                        val y = if (sceneHeight - belowY >= 28 && belowY + 24 <= nextTop) belowY
+                            else max(0, aboveY)
+                        val safeBottom = if (y >= box.bottom) nextTop else box.top
+                        val width = (sceneWidth - box.left - 8).coerceAtLeast(box.width())
+                        drawFitted(canvas, translatedLine, box.left, y, width,
+                            (safeBottom - y).coerceAtLeast(24), textPaint, stroke)
                     }
                     TranslatorDisplayMode.REPLACE_TEXT -> {
+                        // Frosted-glass patch: downsampled live scene provides a soft blur, then
+                        // a translucent cool tint and fine highlight create a glass-like surface.
+                        val padX = max(3, box.height() / 10)
+                        val padY = max(2, box.height() / 12)
                         val rect = Rect(
-                            max(0, box.left - margin), max(0, box.top - margin),
-                            min(sceneWidth, box.right + margin), min(sceneHeight, box.bottom + margin)
+                            max(0, box.left - padX), max(0, box.top - padY),
+                            min(sceneWidth, box.right + padX), min(sceneHeight, box.bottom + padY)
                         )
-                        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xe8202630.toInt() }
-                        canvas.drawRoundRect(rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(),
-                            rect.bottom.toFloat(), 5f, 5f, bg)
-                        drawFitted(canvas, translatedLine, rect.left + margin, rect.top + margin,
-                            (rect.width() - margin * 2).coerceAtLeast(40),
-                            (rect.height() - margin * 2).coerceAtLeast(20), textPaint, stroke)
+                        drawFrostedGlass(canvas, softenedFrame, rect, sceneWidth, sceneHeight)
+                        val inner = max(3, box.height() / 12)
+                        drawFitted(canvas, translatedLine, rect.left + inner, rect.top + inner,
+                            (rect.width() - inner * 2).coerceAtLeast(24),
+                            (rect.height() - inner * 2).coerceAtLeast(18), textPaint, stroke)
                     }
                     TranslatorDisplayMode.BESIDE_ORIGINAL -> {
                         val rightSpace = sceneWidth - box.right - margin
-                        if (rightSpace >= max(100, box.width() / 2)) {
-                            drawFitted(canvas, translatedLine, box.right + margin, box.top,
-                                rightSpace, max(box.height() * 3, 54), textPaint, stroke)
+                        val rightRect = Rect(box.right + margin, box.top,
+                            sceneWidth - 6, min(sceneHeight, box.bottom + max(box.height() * 2, 48)))
+                        val overlapsRight = lines.any { other ->
+                            other !== line && Rect.intersects(rightRect, other.bounds)
+                        }
+                        if (rightSpace >= max(120, box.width() / 2) && !overlapsRight) {
+                            drawFitted(canvas, translatedLine, rightRect.left, rightRect.top,
+                                rightRect.width(), rightRect.height(), textPaint, stroke)
                         } else {
-                            drawFitted(canvas, translatedLine, box.left, box.bottom + margin,
-                                box.width().coerceAtLeast(100),
-                                (sceneHeight - box.bottom - margin).coerceAtLeast(30), textPaint, stroke)
+                            val nextTop = lines.filter { it.bounds.top > box.top }
+                                .minOfOrNull { it.bounds.top } ?: sceneHeight
+                            val belowY = box.bottom + margin
+                            val available = (nextTop - belowY).coerceAtLeast(0)
+                            if (available >= 24) {
+                                drawFitted(canvas, translatedLine, box.left, belowY,
+                                    (sceneWidth - box.left - 8).coerceAtLeast(box.width()),
+                                    available, textPaint, stroke)
+                            }
                         }
                     }
                 }
             }
         }
+        softenedFrame.recycle()
 
         val argb = IntArray(sceneWidth * sceneHeight)
         bitmap.getPixels(argb, 0, sceneWidth, 0, 0, sceneWidth, sceneHeight)
@@ -312,6 +357,42 @@ object GameTranslator {
         }
         bitmap.recycle()
         WaylandCompositor.nativeSetTranslatorOverlay(rgba, sceneWidth, sceneHeight)
+    }
+
+    private fun drawFrostedGlass(
+        canvas: Canvas,
+        blurredScene: Bitmap,
+        rect: Rect,
+        sceneWidth: Int,
+        sceneHeight: Int
+    ) {
+        if (rect.width() <= 0 || rect.height() <= 0) return
+        val radius = (rect.height() * 0.16f).coerceIn(4f, 12f)
+        val path = android.graphics.Path().apply {
+            addRoundRect(rect.left.toFloat(), rect.top.toFloat(), rect.right.toFloat(),
+                rect.bottom.toFloat(), radius, radius, android.graphics.Path.Direction.CW)
+        }
+        val src = Rect(
+            (rect.left.toFloat() / sceneWidth * blurredScene.width).toInt().coerceIn(0, blurredScene.width - 1),
+            (rect.top.toFloat() / sceneHeight * blurredScene.height).toInt().coerceIn(0, blurredScene.height - 1),
+            (rect.right.toFloat() / sceneWidth * blurredScene.width).toInt().coerceIn(1, blurredScene.width),
+            (rect.bottom.toFloat() / sceneHeight * blurredScene.height).toInt().coerceIn(1, blurredScene.height)
+        )
+        canvas.save()
+        canvas.clipPath(path)
+        canvas.drawBitmap(blurredScene, src, android.graphics.RectF(rect),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 205 })
+        canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x705b7188; style = Paint.Style.FILL })
+        canvas.restore()
+        canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x9feaf4ff.toInt()
+                style = Paint.Style.STROKE
+                strokeWidth = max(1f, rect.height() / 36f)
+            })
+        canvas.drawLine(rect.left + radius, rect.top + 1f, rect.right - radius, rect.top + 1f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x80ffffff.toInt(); strokeWidth = 1f })
     }
 
     private fun drawTextBlock(
