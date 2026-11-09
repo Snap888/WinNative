@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
 
@@ -296,43 +297,59 @@ object GameTranslator {
             "AUTO" -> listOf(latin, japanese, chinese, korean)
             else -> listOf(latin)
         }
-        val collected = mutableListOf<OcrLine>()
-        fun run(index: Int) {
-            if (index >= recognizers.size) {
-                onSuccess(collected.sortedWith(compareBy<OcrLine> { it.bounds.top }.thenBy { it.bounds.left }))
-                return
-            }
-            recognizers[index].process(input)
-                .addOnSuccessListener(worker) { result: MlText ->
-                    result.textBlocks.forEach { block ->
-                        block.lines.forEach { line ->
-                            val text = line.text.trim()
-                            val box = line.boundingBox
-                            if (text.length >= 2 && box != null) {
-                                val clipped = Rect(
-                                    box.left.coerceIn(0, width - 1),
-                                    box.top.coerceIn(0, height - 1),
-                                    box.right.coerceIn(1, width),
-                                    box.bottom.coerceIn(1, height)
-                                )
-                                if (clipped.width() > 0 && clipped.height() > 0) {
-                                    val duplicate = collected.any {
-                                        it.text.equals(text, ignoreCase = true) &&
-                                            Rect.intersects(it.bounds, clipped)
+        val collected = java.util.Collections.synchronizedList(mutableListOf<OcrLine>())
+        val remaining = AtomicInteger(recognizers.size)
+        val errorLock = Any()
+        var lastError: Throwable? = null
+
+        fun finishOne() {
+            if (remaining.decrementAndGet() != 0) return
+            val snapshot = synchronized(collected) { collected.toList() }
+            val failure = synchronized(errorLock) { lastError }
+            if (snapshot.isEmpty() && failure != null) onFailure(failure)
+            else onSuccess(snapshot.sortedWith(compareBy<OcrLine> { it.bounds.top }.thenBy { it.bounds.left }))
+        }
+
+        // Start every required script recognizer immediately instead of waiting for four
+        // sequential ML Kit passes. Listener callbacks are serialized on the OCR worker.
+        recognizers.forEach { recognizer ->
+            try {
+                recognizer.process(input)
+                    .addOnSuccessListener(worker) { result: MlText ->
+                        synchronized(collected) {
+                            result.textBlocks.forEach { block ->
+                                block.lines.forEach { line ->
+                                    val text = line.text.trim()
+                                    val box = line.boundingBox
+                                    if (text.length >= 2 && box != null) {
+                                        val clipped = Rect(
+                                            box.left.coerceIn(0, width - 1),
+                                            box.top.coerceIn(0, height - 1),
+                                            box.right.coerceIn(1, width),
+                                            box.bottom.coerceIn(1, height)
+                                        )
+                                        if (clipped.width() > 0 && clipped.height() > 0) {
+                                            val duplicate = collected.any {
+                                                it.text.equals(text, ignoreCase = true) &&
+                                                    Rect.intersects(it.bounds, clipped)
+                                            }
+                                            if (!duplicate) collected.add(OcrLine(text, clipped))
+                                        }
                                     }
-                                    if (!duplicate) collected.add(OcrLine(text, clipped))
                                 }
                             }
                         }
+                        finishOne()
                     }
-                    run(index + 1)
-                }
-                .addOnFailureListener(worker) { error ->
-                    if (index == recognizers.lastIndex && collected.isEmpty()) onFailure(error)
-                    else run(index + 1)
-                }
+                    .addOnFailureListener(worker) { error ->
+                        synchronized(errorLock) { lastError = error }
+                        finishOne()
+                    }
+            } catch (error: Throwable) {
+                synchronized(errorLock) { lastError = error }
+                finishOne()
+            }
         }
-        run(0)
     }
 
     private fun drawModeOverlay(
