@@ -63,6 +63,11 @@ object GameTranslator {
     @Volatile private var lastSource = ""
     @Volatile private var lastTranslationAt = 0L
     @Volatile private var lastTranslationFailureAt = 0L
+    @Volatile private var lastVisibleTextAt = 0L
+    @Volatile private var candidateText = ""
+    @Volatile private var candidateHits = 0
+    @Volatile private var lastRenderedGeometry = ""
+    @Volatile private var lastTranslatedText = ""
 
     private val latin by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val japanese by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
@@ -95,6 +100,11 @@ object GameTranslator {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
         lastSource = ""
+        candidateText = ""
+        candidateHits = 0
+        lastVisibleTextAt = 0L
+        lastRenderedGeometry = ""
+        lastTranslatedText = ""
         enabledState.value = true
         statusState.value = "Turnip: захват сцены включён, ожидание текста"
         WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
@@ -106,6 +116,11 @@ object GameTranslator {
         WaylandCompositor.nativeSetTranslatorEnabled(false)
         WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
         statusState.value = "Выключен"
+        lastSource = ""
+        candidateText = ""
+        candidateHits = 0
+        lastTranslatedText = ""
+        lastRenderedGeometry = ""
         busy.set(false)
     }
 
@@ -139,42 +154,71 @@ object GameTranslator {
                             val clean = lines.take(MAX_LINES)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
-                            // Text absence in the current captured frame is authoritative: remove
-                            // the previous overlay immediately so translations never float over a
-                            // menu transition, cutscene, fade, or cleared dialogue box.
-                            if (text.isBlank()) {
-                                lastSource = ""
-                                WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                                statusState.value = "Turnip: текста в текущем кадре нет"
-                            } else {
-                                // Quantize OCR geometry so one-pixel detector jitter does not
-                                // trigger another network request or flicker the translated overlay.
-                                val geometry = clean.joinToString("|") {
-                                    "${it.bounds.left / 8},${it.bounds.top / 8},${it.bounds.right / 8},${it.bounds.bottom / 8}"
-                                }
-                                val frameKey = "$normalized#$geometry"
-                                val now = System.currentTimeMillis()
-                                val retryAllowed = now - lastTranslationFailureAt >= 5000L
-                                if (((frameKey != lastSource || lastTranslationFailureAt > 0L) && retryAllowed) || now - lastTranslationAt > 30000L) {
-                                    lastSource = frameKey
-                                    // A changed dialogue line invalidates the previous overlay while
-                                    // the network translation is pending.
+                            val now = System.currentTimeMillis()
+                            if (normalized.isBlank()) {
+                                // A single missed OCR frame is not proof that the game text vanished.
+                                // Keep the last confirmed overlay briefly to mask recognizer jitter.
+                                if (now - lastVisibleTextAt > 1400L) {
+                                    lastSource = ""
+                                    lastTranslatedText = ""
+                                    lastRenderedGeometry = ""
+                                    candidateText = ""
+                                    candidateHits = 0
                                     WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                                    statusState.value = "OCR: ${clean.size} строк, перевожу…"
-                                    val result = runCatching { TranslationProvider.translate(context, text) }
-                                    val translated = result.getOrNull().orEmpty()
-                                    lastTranslationAt = System.currentTimeMillis()
-                                    if (result.isFailure || translated.isBlank()) {
-                                        // Allow a bounded retry instead of permanently caching a failed
-                                        // provider response for the same dialogue line.
-                                        lastSource = frameKey
-                                        lastTranslationFailureAt = System.currentTimeMillis()
-                                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                                        statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
-                                    } else if (enabledState.value) {
-                                        lastTranslationFailureAt = 0L
-                                        drawModeOverlay(frameBitmap, width, height, clean, translated, displayModeState.value)
-                                        statusState.value = "Перевод готов • ${displayModeState.value.title}"
+                                    statusState.value = "Turnip: текста в кадре нет"
+                                } else {
+                                    statusState.value = "OCR: кратковременный пропуск, сохраняю перевод"
+                                }
+                            } else {
+                                lastVisibleTextAt = now
+                                // Confirm a changed dialogue twice before replacing the current
+                                // overlay. This filters one-frame OCR substitutions during animation.
+                                if (normalized != lastSource && lastSource.isNotEmpty()) {
+                                    if (candidateText == normalized) candidateHits++ else {
+                                        candidateText = normalized
+                                        candidateHits = 1
+                                    }
+                                    if (candidateHits < 2) {
+                                        statusState.value = "OCR: подтверждаю новую строку…"
+                                        return@addOnSuccessListener
+                                    }
+                                } else {
+                                    candidateText = ""
+                                    candidateHits = 0
+                                }
+
+                                val geometry = clean.joinToString("|") {
+                                    "${it.bounds.left / 16},${it.bounds.top / 16},${it.bounds.right / 16},${it.bounds.bottom / 16}"
+                                }
+                                if (normalized == lastSource) {
+                                    // Same dialogue: do not clear/retranslate. Reposition only when
+                                    // the OCR anchor moved by a meaningful amount.
+                                    if (geometry != lastRenderedGeometry && lastTranslatedText.isNotBlank()) {
+                                        drawModeOverlay(frameBitmap, width, height, clean,
+                                            lastTranslatedText, displayModeState.value)
+                                        lastRenderedGeometry = geometry
+                                    }
+                                } else {
+                                    val retryAllowed = now - lastTranslationFailureAt >= 5000L
+                                    if (retryAllowed) {
+                                        lastSource = normalized
+                                        lastRenderedGeometry = geometry
+                                        // Keep old overlay until the new translation is ready;
+                                        // this avoids blank flashes while network providers respond.
+                                        statusState.value = "OCR: ${clean.size} строк, перевожу…"
+                                        val result = runCatching { TranslationProvider.translate(context, text) }
+                                        val translated = result.getOrNull().orEmpty()
+                                        lastTranslationAt = System.currentTimeMillis()
+                                        if (result.isFailure || translated.isBlank()) {
+                                            lastTranslationFailureAt = System.currentTimeMillis()
+                                            statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
+                                        } else if (enabledState.value) {
+                                            lastTranslationFailureAt = 0L
+                                            lastTranslatedText = translated
+                                            drawModeOverlay(frameBitmap, width, height, clean,
+                                                translated, displayModeState.value)
+                                            statusState.value = "Перевод готов • ${displayModeState.value.title}"
+                                        }
                                     }
                                 }
                             }
@@ -185,16 +229,24 @@ object GameTranslator {
                     },
                     onFailure = { error ->
                         bitmap?.recycle()
-                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                        lastSource = ""
-                        statusState.value = "Ошибка OCR: ${error.message ?: "ML Kit"}"
+                        if (System.currentTimeMillis() - lastVisibleTextAt > 1400L) {
+                            WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                            lastSource = ""
+                            lastTranslatedText = ""
+                            lastRenderedGeometry = ""
+                        }
+                        statusState.value = "OCR: временная ошибка распознавания"
                         busy.set(false)
                     })
             } catch (error: Throwable) {
                 bitmap?.recycle()
-                WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                lastSource = ""
-                statusState.value = "Ошибка кадра: ${error.message ?: "неизвестно"}"
+                if (System.currentTimeMillis() - lastVisibleTextAt > 1400L) {
+                    WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                    lastSource = ""
+                    lastTranslatedText = ""
+                    lastRenderedGeometry = ""
+                }
+                statusState.value = "Ошибка обработки кадра: ${error.message ?: "неизвестно"}"
                 busy.set(false)
             }
         }
