@@ -2181,8 +2181,9 @@ static void render_scene(void) {
      *     game keeps its layer and the display does the scene -> output mapping;
      *   - screen effects DO when a window is drawn above the game: the chain has to see the whole
      *     scene to look the way it does on the copy path, and here the game is only part of it. */
-    const int pass_on = fx_on || framegen;
-    int li = (g_zero_copy && !framegen) ? layer_candidate(&dl, w, h) : -1;
+    const int translator_on = vkp_translator_enabled();
+    const int pass_on = fx_on || framegen || translator_on;
+    int li = (g_zero_copy && !framegen && !translator_on) ? layer_candidate(&dl, w, h) : -1;
     int over = li >= 0 ? dl.n - 1 - li : 0; /* draws above the fullscreen game (0 or 1) */
     const int fx_blocks = (li >= 0 && fx_on && over > 0);
     if (fx_blocks) { li = -1; over = 0; }
@@ -2193,7 +2194,7 @@ static void render_scene(void) {
      * show the game layer and hide it again on every frame. */
     const int ov_blocks = (li >= 0 && over > 0 && !fx_blocks && !sc_layer_overlay_affordable());
     if (ov_blocks) { li = -1; over = 0; }
-    const int blocked = framegen ? 1 : (fx_blocks ? 2 : (ov_blocks ? 3 : 0));
+    const int blocked = translator_on ? 4 : (framegen ? 1 : (fx_blocks ? 2 : (ov_blocks ? 3 : 0)));
     if (g_zero_copy && blocked != g_zero_copy_paused) {
         g_zero_copy_paused = blocked;
         if (blocked == 1)
@@ -2203,15 +2204,17 @@ static void render_scene(void) {
         else if (blocked == 3)
             wnc_log("layer", "zero-copy paused: a window above the game would need a second display layer, "
                                 "which this display cannot compose in hardware - whole scene on the copy path");
+        else if (blocked == 4)
+            wnc_log("translator", "zero-copy paused only while game translation is enabled: Turnip scene readback required");
         else
             wnc_log("effects", "zero-copy resumed: the game is back on its own display layer");
     }
     struct surface *ls = li >= 0 ? surface_for_image(dl.d[li].img) : NULL;
     /* A frame this renderer could not import can only be shown on the layer, effects or not. */
-    if (li < 0) ls = ahb_layer_only_candidate(w, h);
+    if (li < 0) ls = translator_on ? NULL : ahb_layer_only_candidate(w, h);
     /* HDR: the same, for a game's SUBSURFACE swapchain whose 10-bit frame the compositor could not
      * import (NULL whenever the HDR gate is closed - nothing is ever noted then). */
-    if (li < 0 && !ls) ls = hdr_unimported_fullscreen(&dl, w, h);
+    if (li < 0 && !ls && !translator_on) ls = hdr_unimported_fullscreen(&dl, w, h);
     if (ls && pass_on && li < 0 && !g_zero_copy_fx_skip_said) {
         g_zero_copy_fx_skip_said = 1;
         wnc_log(framegen ? "framegen" : "effects",

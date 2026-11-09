@@ -70,6 +70,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
             g_on_clipboard = (*env)->GetStaticMethodID(env, g_compositor_cls, "onClipboardText", "([B)V");
             g_on_text_input = (*env)->GetStaticMethodID(env, g_compositor_cls, "onTextInput",
                                                         "(ZLjava/lang/String;IIII)V");
+            g_on_translator_frame = (*env)->GetStaticMethodID(env, g_compositor_cls, "onTranslatorFrame", "(II[B)V");
+            if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); g_on_translator_frame = NULL; }
         }
     }
     return JNI_VERSION_1_6;
@@ -172,6 +174,20 @@ void wnc_on_text_input(int enabled, const char *program, int x, int y, int w, in
                                  (jint)x, (jint)y, (jint)w, (jint)h);
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     if (jp) (*env)->DeleteLocalRef(env, jp);
+}
+
+/* Low-rate Turnip scene readback callback. Java immediately queues OCR off this render thread. */
+void wnc_on_translator_frame(const uint8_t *rgba, int width, int height) {
+    JNIEnv *env = thread_env();
+    if (!env || !g_compositor_cls || !g_on_translator_frame || !rgba || width <= 0 || height <= 0) return;
+    jsize length = (jsize)((size_t)width * (size_t)height * 4u);
+    jbyteArray pixels = (*env)->NewByteArray(env, length);
+    if (!pixels) { if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env); return; }
+    (*env)->SetByteArrayRegion(env, pixels, 0, length, (const jbyte *)rgba);
+    if (!(*env)->ExceptionCheck(env))
+        (*env)->CallStaticVoidMethod(env, g_compositor_cls, g_on_translator_frame, (jint)width, (jint)height, pixels);
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    (*env)->DeleteLocalRef(env, pixels);
 }
 
 /* android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY: the level the hwui RenderThread runs at. */
@@ -359,6 +375,32 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetZeroCo
     if (!live) g_zero_copy = on ? 1 : 0; /* read by ahb_swapchain_init before the queue drains */
     wnc_host_zero_copy(on ? 1 : 0, live);
     __android_log_print(ANDROID_LOG_INFO, TAG, "zero-copy layer mode %s%s", on ? "on" : "off", live ? " (live)" : "");
+}
+
+/* Translator controls. Enabling routes only this session through the Turnip compositor pass;
+ * the global zero-copy preference is preserved and resumes when translation is switched off. */
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetTranslatorEnabled(
+        JNIEnv *env, jclass clazz, jboolean enabled) {
+    (void)env; (void)clazz;
+    vkp_set_translator_enabled(enabled ? 1 : 0);
+    __android_log_print(ANDROID_LOG_INFO, TAG, "Vulkan game translator %s", enabled ? "enabled" : "disabled");
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetTranslatorOverlay(
+        JNIEnv *env, jclass clazz, jbyteArray rgba, jint width, jint height) {
+    (void)clazz;
+    if (!rgba || width <= 0 || height <= 0) {
+        vkp_translator_overlay_set_rgba(NULL, 0, 0);
+        return;
+    }
+    jsize length = (*env)->GetArrayLength(env, rgba);
+    if ((int64_t)width * height * 4 > length) return;
+    jbyte *pixels = (*env)->GetByteArrayElements(env, rgba, NULL);
+    if (!pixels) return;
+    vkp_translator_overlay_set_rgba((const uint8_t *)pixels, width, height);
+    (*env)->ReleaseByteArrayElements(env, rgba, pixels, JNI_ABORT);
 }
 
 /* Milliseconds since the compositor last put a game frame on the layer without a copy; -1 = never

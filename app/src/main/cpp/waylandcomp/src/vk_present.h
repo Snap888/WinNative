@@ -73,6 +73,11 @@ int vkp_image_width(const struct vkp_image *img);
 int vkp_image_height(const struct vkp_image *img);
 void vkp_image_destroy(struct vkp_image *img);
 
+/* Game translator: request scene readback and a compositor-owned RGBA overlay. */
+void vkp_set_translator_enabled(int enabled);
+int vkp_translator_enabled(void);
+void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height);
+
 // One scene draw: the src rectangle of an image (image pixels) scaled into the dst
 // rectangle (scene pixels). The scene is mapped onto the output by the scale mode.
 struct vkp_draw {
