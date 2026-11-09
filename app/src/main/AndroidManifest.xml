@@ -187,12 +187,6 @@
             android:exported="false" />
 
         <service
-            android:name="com.winlator.cmod.feature.translator.TranslatorOverlayService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
-
-        <service
             android:name="com.winlator.cmod.feature.stores.steam.service.SteamService"
             android:enabled="true"
             android:exported="false"

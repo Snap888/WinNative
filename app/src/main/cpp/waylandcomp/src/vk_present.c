@@ -124,7 +124,6 @@ static VkResult timed_wait(VkFence fence, uint64_t timeout) {
  * screen-effect chain (effects_chain.c) — and of frame generation once that lands. Recreated on a
  * scene size change; frames are fenced, so never while the GPU reads it. */
 static struct { VkImage img; VkDeviceMemory mem; int w, h; } g_scene;
-static int memory_type(uint32_t bits, VkMemoryPropertyFlags want);
 
 /* Optional in-game translation capture. Readback is throttled and uses host-coherent
  * staging memory; the compositor already waits its frame fence before handing bytes to OCR. */
@@ -141,15 +140,12 @@ static int g_translator_overlay_visible;
 static pthread_mutex_t g_translator_overlay_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *g_translator_overlay_pending;
 static int g_translator_overlay_pending_w, g_translator_overlay_pending_h;
-static int g_translator_overlay_pending_valid;
-static volatile int g_translator_capture_suspended;
 extern void wnc_on_translator_frame(const uint8_t *rgba, int width, int height);
 
 void vkp_set_translator_enabled(int enabled) {
     g_translator_enabled = enabled ? 1 : 0;
 }
 int vkp_translator_enabled(void) { return g_translator_enabled != 0; }
-void vkp_set_translator_capture_suspended(int suspended) { g_translator_capture_suspended = suspended ? 1 : 0; }
 
 /* UI/OCR worker only copies bytes here. Vulkan image creation/upload happens on the compositor thread. */
 void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height) {
@@ -164,7 +160,6 @@ void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height)
     g_translator_overlay_pending = copy;
     g_translator_overlay_pending_w = copy ? width : 0;
     g_translator_overlay_pending_h = copy ? height : 0;
-    g_translator_overlay_pending_valid = 1;
     pthread_mutex_unlock(&g_translator_overlay_lock);
 }
 
@@ -172,18 +167,16 @@ void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height)
  * to the BGRA byte order of vkp_image_create_shm's linear image. */
 static void translator_overlay_apply(void) {
     uint8_t *rgba;
-    int w, h, valid;
+    int w, h;
     pthread_mutex_lock(&g_translator_overlay_lock);
-    valid = g_translator_overlay_pending_valid;
     rgba = g_translator_overlay_pending;
     w = g_translator_overlay_pending_w;
     h = g_translator_overlay_pending_h;
     g_translator_overlay_pending = NULL;
     g_translator_overlay_pending_w = g_translator_overlay_pending_h = 0;
-    g_translator_overlay_pending_valid = 0;
     pthread_mutex_unlock(&g_translator_overlay_lock);
-    if (!valid) return;
-    if (!rgba || w <= 0 || h <= 0) {
+    if (!rgba) return;
+    if (w <= 0 || h <= 0) {
         g_translator_overlay_visible = 0;
         free(rgba);
         return;
@@ -243,7 +236,7 @@ static int translator_readback_ensure(int w, int h) {
         g_vk.MapMemory(g_dev, g_translator_readback_mem, 0, req.size, 0, &g_translator_readback_map) != VK_SUCCESS) {
         translator_readback_destroy(); return -1;
     }
-    g_translator_readback_size = bytes;
+    g_translator_readback_size = req.size;
     g_translator_readback_w = w; g_translator_readback_h = h;
     wnc_log("translator", "Turnip staging readback ready: %dx%d RGBA", w, h);
     return 0;
@@ -1715,7 +1708,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         }
     }
     /* An HDR scene always takes the pass: its draws are composed into one encoding first. */
-    const int translator = g_translator_enabled != 0 && g_translator_capture_suspended == 0;
+    const int translator = g_translator_enabled != 0;
     const int pass = deep || ((fx || fg || translator || (hf && n > 0)) && ensure_scene_image(scene_w, scene_h) == 0);
     const int capture_now = translator && !deep && pass && translator_capture_due() &&
                             translator_readback_ensure(scene_w, scene_h) == 0;
@@ -1861,7 +1854,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
 
     /* The translation is a normal compositor draw, not an Android system overlay. It is inserted
      * after readback so the OCR never recognizes its own previous translation. */
-    if (translator && pass && g_translator_overlay_visible && g_translator_overlay) {
+    if (translator && g_translator_overlay_visible && g_translator_overlay) {
         struct vkp_draw overlay = {g_translator_overlay, 0, 0,
             (float)g_translator_overlay->w, (float)g_translator_overlay->h,
             20, scene_h - g_translator_overlay->h - 20,

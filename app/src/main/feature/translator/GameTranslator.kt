@@ -9,7 +9,6 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.graphics.Typeface
-import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.TextRecognition
@@ -27,8 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -60,6 +57,10 @@ object GameTranslator {
     val status: String get() = statusState.value
 
     fun start(context: Context) {
+        if (!WaylandCompositor.nativeIsRunning()) {
+            statusState.value = "Запусти игру в Wayland-сессии перед включением перевода"
+            return
+        }
         appContext = context.applicationContext
         lastSource = ""
         enabledState.value = true
@@ -96,11 +97,10 @@ object GameTranslator {
                 bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val source = (prefs.getString("source", "AUTO") ?: "AUTO").uppercase()
-                val recognizer = recognizerFor(source)
-                recognizer.process(InputImage.fromBitmap(bitmap, 0))
-                    .addOnSuccessListener(worker) { result ->
+                recognizeWithFallback(InputImage.fromBitmap(bitmap, 0), source,
+                    onSuccess = { recognized ->
                         try {
-                            val text = result.text.lines().map { it.trim() }
+                            val text = recognized.lines().map { it.trim() }
                                 .filter { it.length >= 2 }
                                 .distinct().joinToString("\n").take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
@@ -113,7 +113,7 @@ object GameTranslator {
                                     .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
                                 lastTranslationAt = System.currentTimeMillis()
                                 if (enabledState.value) {
-                                    showTranslation(context, width, text, translated)
+                                    showTranslation(width, text, translated)
                                     statusState.value = if (translated.startsWith("Перевод недоступен:"))
                                         "OCR работает; ошибка сервиса перевода"
                                     else "Перевод готов • ${translated.take(72)}"
@@ -123,12 +123,12 @@ object GameTranslator {
                             bitmap.recycle()
                             busy.set(false)
                         }
-                    }
-                    .addOnFailureListener(worker) { error ->
+                    },
+                    onFailure = { error ->
                         bitmap.recycle()
                         statusState.value = "Ошибка OCR: ${error.message ?: "ML Kit"}"
                         busy.set(false)
-                    }
+                    })
             } catch (error: Throwable) {
                 statusState.value = "Ошибка кадра: ${error.message ?: "неизвестно"}"
                 busy.set(false)
@@ -136,14 +136,33 @@ object GameTranslator {
         }
     }
 
-    private fun recognizerFor(source: String): TextRecognizer = when (source) {
-        "JA" -> japanese
-        "ZH", "ZH-CN", "ZH-TW" -> chinese
-        "KO" -> korean
-        else -> latin
+    private fun recognizeWithFallback(
+        input: InputImage,
+        source: String,
+        onSuccess: (String) -> Unit,
+        onFailure: (Throwable) -> Unit,
+    ) {
+        val recognizers = when (source) {
+            "JA" -> listOf(japanese)
+            "ZH", "ZH-CN", "ZH-TW" -> listOf(chinese)
+            "KO" -> listOf(korean)
+            "AUTO" -> listOf(latin, japanese, chinese, korean)
+            else -> listOf(latin)
+        }
+        fun attempt(index: Int) {
+            recognizers[index].process(input)
+                .addOnSuccessListener(worker) { result ->
+                    if (result.text.isNotBlank() || index == recognizers.lastIndex) onSuccess(result.text)
+                    else attempt(index + 1)
+                }
+                .addOnFailureListener(worker) { error ->
+                    if (index < recognizers.lastIndex) attempt(index + 1) else onFailure(error)
+                }
+        }
+        attempt(0)
     }
 
-    private fun showTranslation(context: Context, sceneWidth: Int, original: String, translated: String) {
+    private fun showTranslation(sceneWidth: Int, original: String, translated: String) {
         val maxWidth = (sceneWidth - 48).coerceIn(240, 1200)
         val padding = 22f
         val originalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

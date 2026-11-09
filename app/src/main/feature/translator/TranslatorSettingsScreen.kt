@@ -1,13 +1,6 @@
 package com.winlator.cmod.feature.translator
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjectionManager
-import android.net.Uri
-import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -48,7 +41,6 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     var target by remember { mutableStateOf(prefs.getString(TARGET, "RU") ?: "RU") }
     var model by remember { mutableStateOf(prefs.getString(MODEL, "gpt-4o-mini") ?: "gpt-4o-mini") }
     var status by remember { mutableStateOf("Бесплатный автоматический перевод готов") }
-    var pendingCapture by remember { mutableStateOf(false) }
     var testText by remember { mutableStateOf("The door is locked. Find the key.") }
     var testResult by remember { mutableStateOf("") }
     var testing by remember { mutableStateOf(false) }
@@ -58,23 +50,6 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
             .putString(API_KEY, apiKey.trim()).putString(SOURCE, source.trim().uppercase())
             .putString(TARGET, target.trim().uppercase()).putString(MODEL, model.trim()).apply()
         status = "Настройки сохранены"
-    }
-
-    val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            TranslatorOverlayService.start(context, result.resultCode, result.data!!)
-            status = "Разрешение на захват получено. Вернись в игру."
-        } else status = "Захват не разрешён Android."
-    }
-    val overlayPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (Settings.canDrawOverlays(context) && pendingCapture) {
-            pendingCapture = false
-            val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            captureLauncher.launch(manager.createScreenCaptureIntent())
-        } else if (!Settings.canDrawOverlays(context)) {
-            pendingCapture = false
-            status = "Нет разрешения «Поверх других приложений»."
-        }
     }
 
     val providers = listOf(
@@ -103,26 +78,11 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
 
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Быстрый запуск", style = MaterialTheme.typography.titleMedium)
+                Text("Запуск в игре", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Сохрани язык и провайдера, затем запусти переводчик. Android запросит разрешение на захват изображения.",
+                    "Запускай и останавливай переводчик в панели FPS / Frame Generation во время Wayland-сессии. Кадры поступают из Turnip/Vulkan-композитора; Android MediaProjection не используется.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Button(onClick = {
-                    save()
-                    if (!Settings.canDrawOverlays(context)) {
-                        pendingCapture = true
-                        status = "Разреши WinNative отображаться поверх других приложений."
-                        overlayPermissionLauncher.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + context.packageName)))
-                    } else {
-                        val manager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        captureLauncher.launch(manager.createScreenCaptureIntent())
-                    }
-                }, modifier = Modifier.fillMaxWidth()) { Text("ЗАПУСТИТЬ ПЕРЕВОД В ИГРЕ") }
-                OutlinedButton(onClick = {
-                    context.stopService(Intent(context, TranslatorOverlayService::class.java))
-                    status = "Переводчик остановлен"
-                }, modifier = Modifier.fillMaxWidth()) { Text("Остановить переводчик") }
                 Text(status, style = MaterialTheme.typography.bodyMedium)
             }
         }
