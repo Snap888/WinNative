@@ -1711,7 +1711,6 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         }
     }
     /* An HDR scene always takes the pass: its draws are composed into one encoding first. */
-    const int translator = g_translator_enabled != 0;
     const int pass = deep || ((fx || fg || translator || (hf && n > 0)) && ensure_scene_image(scene_w, scene_h) == 0);
     const int capture_now = translator && !deep && pass && translator_capture_due() &&
                             translator_readback_ensure(scene_w, scene_h) == 0;
