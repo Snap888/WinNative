@@ -62,6 +62,7 @@ object GameTranslator {
     @Volatile private var appContext: Context? = null
     @Volatile private var lastSource = ""
     @Volatile private var lastTranslationAt = 0L
+    @Volatile private var lastTranslationFailureAt = 0L
 
     private val latin by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val japanese by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
@@ -133,8 +134,9 @@ object GameTranslator {
                 recognizeAll(InputImage.fromBitmap(frameBitmap, 0), source, width, height,
                     onSuccess = { lines ->
                         try {
-                            val clean = lines.distinctBy { it.text.lowercase().replace(Regex("\\s+"), " ").trim() }
-                                .take(MAX_LINES)
+                            // Keep identical labels in different HUD locations: they are distinct
+                            // visible strings and must retain their own OCR anchors.
+                            val clean = lines.take(MAX_LINES)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             // Text absence in the current captured frame is authoritative: remove
@@ -151,16 +153,25 @@ object GameTranslator {
                                     "${it.bounds.left / 8},${it.bounds.top / 8},${it.bounds.right / 8},${it.bounds.bottom / 8}"
                                 }
                                 val frameKey = "$normalized#$geometry"
-                                if (frameKey != lastSource || System.currentTimeMillis() - lastTranslationAt > 30000L) {
+                                val now = System.currentTimeMillis()
+                                val retryAllowed = now - lastTranslationFailureAt >= 5000L
+                                if ((frameKey != lastSource && retryAllowed) || now - lastTranslationAt > 30000L) {
                                     lastSource = frameKey
                                     // A changed dialogue line invalidates the previous overlay while
                                     // the network translation is pending.
                                     WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                                     statusState.value = "OCR: ${clean.size} строк, перевожу…"
-                                    val translated = runCatching { TranslationProvider.translate(context, text) }
-                                        .getOrElse { "Перевод недоступен: ${it.message ?: "ошибка сервиса"}" }
+                                    val result = runCatching { TranslationProvider.translate(context, text) }
+                                    val translated = result.getOrNull().orEmpty()
                                     lastTranslationAt = System.currentTimeMillis()
-                                    if (enabledState.value && !translated.startsWith("Перевод недоступен:")) {
+                                    if (result.isFailure || translated.isBlank()) {
+                                        // Allow a bounded retry instead of permanently caching a failed
+                                        // provider response for the same dialogue line.
+                                        lastSource = frameKey
+                                        lastTranslationFailureAt = System.currentTimeMillis()
+                                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+                                        statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
+                                    } else if (enabledState.value) {
                                         drawModeOverlay(frameBitmap, width, height, clean, translated, displayModeState.value)
                                         statusState.value = "Перевод готов • ${displayModeState.value.title}"
                                     } else if (enabledState.value) {
