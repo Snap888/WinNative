@@ -17,6 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.winlator.cmod.feature.settings.SettingsNavBridge
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val PREFS = "wintranslator"
 private const val PROVIDER = "provider"
@@ -30,6 +33,7 @@ private const val MODEL = "model"
 fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
+    val scope = rememberCoroutineScope()
     var provider by remember {
         mutableStateOf(
             when (prefs.getString(PROVIDER, "auto") ?: "auto") {
@@ -45,6 +49,9 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     var model by remember { mutableStateOf(prefs.getString(MODEL, "gpt-4o-mini") ?: "gpt-4o-mini") }
     var status by remember { mutableStateOf("Бесплатный автоматический перевод готов") }
     var pendingCapture by remember { mutableStateOf(false) }
+    var testText by remember { mutableStateOf("The door is locked. Find the key.") }
+    var testResult by remember { mutableStateOf("") }
+    var testing by remember { mutableStateOf(false) }
 
     fun save() {
         prefs.edit().putString(PROVIDER, provider).putString(ENDPOINT, endpoint.trim())
@@ -148,6 +155,50 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
                     }
                 } else {
                     Text("Ключи и endpoint не нужны. В режиме «Авто» приложение само переключится на следующий сервис при ошибке.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Проверка перевода", style = MaterialTheme.typography.titleMedium)
+                Text("Отправляет тестовую фразу выбранному сервису. Работает отдельно от захвата экрана.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = testText,
+                    onValueChange = { testText = it.take(1000) },
+                    label = { Text("Текст для перевода") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+                Button(
+                    enabled = !testing && testText.isNotBlank(),
+                    onClick = {
+                        save()
+                        testing = true
+                        testResult = "Запрос отправлен…"
+                        scope.launch {
+                            val result = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    TranslationProvider.translate(context, testText.trim())
+                                }
+                            }
+                            testResult = result.fold(
+                                onSuccess = { "Перевод ($target):\\n$it" },
+                                onFailure = { "Ошибка: ${it.message ?: "неизвестная ошибка"}" }
+                            )
+                            testing = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (testing) "ПЕРЕВОД…" else "ПРОВЕРИТЬ ПЕРЕВОД") }
+                if (testResult.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(testResult, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }
