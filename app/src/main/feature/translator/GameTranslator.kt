@@ -28,6 +28,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +57,10 @@ enum class TranslatorDisplayMode(val title: String, val description: String) {
 object GameTranslator {
     private const val PREFS = "wintranslator"
     private const val MODE_KEY = "display_mode"
+    private const val GLASS_ALPHA_KEY = "glass_alpha"
+    private const val FONT_AUTO_KEY = "font_auto"
+    private const val FONT_SIZE_KEY = "font_size"
+    private const val EMPTY_CLEAR_AFTER_MS = 550L
     private const val MAX_LINES = 18
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "GameTranslator-OCR") }
     private val translationWorker = Executors.newFixedThreadPool(2) { r -> Thread(r, "GameTranslator-Network") }
@@ -63,6 +69,9 @@ object GameTranslator {
     private val enabledState = mutableStateOf(false)
     private val statusState = mutableStateOf("Выключен")
     private val displayModeState = mutableStateOf(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
+    private val glassAlphaState = mutableStateOf(72)
+    private val fontAutoState = mutableStateOf(true)
+    private val fontSizeState = mutableStateOf(22f)
     @Volatile private var appContext: Context? = null
     @Volatile private var lastSource = ""
     @Volatile private var lastTranslationAt = 0L
@@ -70,6 +79,7 @@ object GameTranslator {
     @Volatile private var lastVisibleTextAt = 0L
     @Volatile private var candidateText = ""
     @Volatile private var candidateHits = 0
+    @Volatile private var emptyFrameHits = 0
     @Volatile private var lastRenderedGeometry = ""
     @Volatile private var lastTranslatedText = ""
 
@@ -83,6 +93,29 @@ object GameTranslator {
     val enabled: Boolean get() = enabledState.value
     val status: String get() = statusState.value
     val displayMode: TranslatorDisplayMode get() = displayModeState.value
+    val glassAlpha: Int get() = glassAlphaState.value
+    val fontAuto: Boolean get() = fontAutoState.value
+    val fontSize: Float get() = fontSizeState.value
+
+    fun setGlassAlpha(context: Context, value: Int) {
+        val safe = value.coerceIn(20, 95)
+        glassAlphaState.value = safe
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putInt(GLASS_ALPHA_KEY, safe).apply()
+    }
+
+    fun setFontAuto(context: Context, enabled: Boolean) {
+        fontAutoState.value = enabled
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(FONT_AUTO_KEY, enabled).apply()
+    }
+
+    fun setFontSize(context: Context, value: Float) {
+        val safe = value.coerceIn(12f, 36f)
+        fontSizeState.value = safe
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putFloat(FONT_SIZE_KEY, safe).apply()
+    }
 
     fun setDisplayMode(context: Context, mode: TranslatorDisplayMode) {
         displayModeState.value = mode
@@ -103,9 +136,13 @@ object GameTranslator {
         displayModeState.value = runCatching {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
+        glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 72).coerceIn(20, 95)
+        fontAutoState.value = prefs.getBoolean(FONT_AUTO_KEY, true)
+        fontSizeState.value = prefs.getFloat(FONT_SIZE_KEY, 22f).coerceIn(12f, 36f)
         lastSource = ""
         candidateText = ""
         candidateHits = 0
+        emptyFrameHits = 0
         lastVisibleTextAt = 0L
         lastRenderedGeometry = ""
         lastTranslatedText = ""
@@ -161,9 +198,9 @@ object GameTranslator {
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             val now = System.currentTimeMillis()
                             if (normalized.isBlank()) {
-                                // A single missed OCR frame is not proof that the game text vanished.
-                                // Keep the last confirmed overlay briefly to mask recognizer jitter.
-                                if (now - lastVisibleTextAt > 1400L) {
+                                // Two consecutive empty OCR results suppress one-frame OCR jitter.
+                                emptyFrameHits++
+                                if (emptyFrameHits >= 2 || now - lastVisibleTextAt > EMPTY_CLEAR_AFTER_MS) {
                                     lastSource = ""
                                     lastTranslatedText = ""
                                     lastRenderedGeometry = ""
@@ -172,9 +209,10 @@ object GameTranslator {
                                     WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                                     statusState.value = "Turnip: текста в кадре нет"
                                 } else {
-                                    statusState.value = "OCR: кратковременный пропуск, сохраняю перевод"
+                                    statusState.value = "OCR: проверяю исчезновение текста…"
                                 }
                             } else {
+                                emptyFrameHits = 0
                                 lastVisibleTextAt = now
                                 // Confirm a changed dialogue twice before replacing the current
                                 // overlay. This filters one-frame OCR substitutions during animation.
@@ -200,7 +238,7 @@ object GameTranslator {
                                     // the OCR anchor moved by a meaningful amount.
                                     if (geometry != lastRenderedGeometry && lastTranslatedText.isNotBlank()) {
                                         drawModeOverlay(frameBitmap, width, height, clean,
-                                            lastTranslatedText, displayModeState.value)
+                                            lastTranslatedText, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value)
                                         lastRenderedGeometry = geometry
                                     } else if (lastTranslatedText.isBlank() &&
                                         now - lastTranslationFailureAt >= 2500L) {
@@ -267,7 +305,7 @@ object GameTranslator {
                 }
                 lastTranslationFailureAt = 0L
                 lastTranslatedText = translated
-                drawModeOverlay(frameBitmap, width, height, lines, translated, displayModeState.value)
+                drawModeOverlay(frameBitmap, width, height, lines, translated, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value)
                 lastRenderedGeometry = geometry
                 statusState.value = "Перевод готов • ${displayModeState.value.title}"
             } finally {
@@ -358,7 +396,10 @@ object GameTranslator {
         sceneHeight: Int,
         lines: List<OcrLine>,
         translated: String,
-        mode: TranslatorDisplayMode
+        mode: TranslatorDisplayMode,
+        glassAlpha: Int,
+        fontAuto: Boolean,
+        manualFontSize: Float
     ) {
         // A full-scene transparent layer keeps each label anchored to its OCR rectangle.
         // Vulkan alpha blending is enabled for this draw; B paints only the original text boxes.
@@ -382,7 +423,8 @@ object GameTranslator {
         )
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = (sceneWidth / 58f).coerceIn(15f, 30f)
+            textSize = if (fontAuto) (sceneWidth / 58f).coerceIn(15f, 30f)
+                else (manualFontSize * sceneWidth / 1080f).coerceIn(10f, 72f)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setShadowLayer(3f, 1f, 2f, Color.BLACK)
         }
@@ -433,11 +475,13 @@ object GameTranslator {
                         val glassBottom = min(nextTop - 2,
                             box.top + max(box.height() * 2, textPaint.textSize.toInt() * 2))
 .coerceAtLeast(box.bottom)
-                        val rect = Rect(
-                            max(0, box.left - padX), max(0, box.top - padY),
-                            min(sceneWidth, box.right + padX), min(sceneHeight, glassBottom)
-                        )
-                        drawFrostedGlass(canvas, softenedFrame, rect, sceneWidth, sceneHeight)
+                        val rectLeft = max(0, box.left - padX)
+                        val desiredWidth = max(box.width() + padX * 2,
+                            min((sceneWidth * 0.56f).toInt(), (box.width() * 2.6f).toInt()))
+                        val rectRight = min(sceneWidth - 4, max(box.right + padX, rectLeft + desiredWidth))
+                        val rect = Rect(rectLeft, max(0, box.top - padY),
+                            rectRight.coerceAtLeast(rectLeft + 1), min(sceneHeight, glassBottom))
+                        drawFrostedGlass(canvas, softenedFrame, rect, sceneWidth, sceneHeight, glassAlpha)
                         val inner = max(3, box.height() / 12)
                         drawFitted(canvas, translatedLine, rect.left + inner, rect.top + inner,
                             (rect.width() - inner * 2).coerceAtLeast(24),
@@ -489,7 +533,8 @@ object GameTranslator {
         blurredScene: Bitmap,
         rect: Rect,
         sceneWidth: Int,
-        sceneHeight: Int
+        sceneHeight: Int,
+        opacity: Int
     ) {
         if (rect.width() <= 0 || rect.height() <= 0) return
         val radius = (rect.height() * 0.16f).coerceIn(4f, 12f)
@@ -506,9 +551,9 @@ object GameTranslator {
         canvas.save()
         canvas.clipPath(path)
         canvas.drawBitmap(blurredScene, src, android.graphics.RectF(rect),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 190 })
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = (opacity * 2.55f).toInt().coerceIn(0, 255) })
         canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x705b7188; style = Paint.Style.FILL })
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ((opacity * 1.45f).toInt().coerceIn(0, 220) shl 24) or 0x005b7188; style = Paint.Style.FILL })
         canvas.restore()
         canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -563,7 +608,8 @@ object GameTranslator {
         strokeLayout.draw(canvas)
         layout.draw(canvas)
         canvas.restore()
-        paint.textSize = (canvas.width / 58f).coerceIn(15f, 30f)
+        paint.textSize = if (fontAutoState.value) (canvas.width / 58f).coerceIn(15f, 30f)
+            else (fontSizeState.value * canvas.width / 1080f).coerceIn(10f, 72f)
         stroke.textSize = paint.textSize
     }
 }
@@ -574,6 +620,9 @@ internal fun GameTranslatorPanel(paneScale: Float) {
     val enabled = GameTranslator.enabled
     val status = GameTranslator.status
     val selectedMode = GameTranslator.displayMode
+    val glassAlpha = GameTranslator.glassAlpha
+    val fontAuto = GameTranslator.fontAuto
+    val fontSize = GameTranslator.fontSize
     var menuExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
         Text("Игровой переводчик", color = MaterialTheme.colorScheme.onSurface, fontSize = (13f * paneScale).sp)
@@ -581,8 +630,8 @@ internal fun GameTranslatorPanel(paneScale: Float) {
             onClick = { if (enabled) GameTranslator.stop() else GameTranslator.start(context) },
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (enabled) "ОСТАНОВИТЬ ПЕРЕВОД" else "ВКЛЮЧИТЬ ПЕРЕВОД В ИГРЕ") }
-        Row {
-            Button(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Button(onClick = { menuExpanded = true }, modifier = Modifier.weight(1f)) {
                 Text("Режим: ${selectedMode.title}")
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
@@ -596,6 +645,25 @@ internal fun GameTranslatorPanel(paneScale: Float) {
                     )
                 }
             }
+        }
+        if (selectedMode == TranslatorDisplayMode.REPLACE_TEXT) {
+            Column {
+                Text("Прозрачность стекла: $glassAlpha%", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = (10f * paneScale).sp)
+                Slider(value = glassAlpha.toFloat(), onValueChange = { GameTranslator.setGlassAlpha(context, it.toInt()) },
+                    valueRange = 20f..95f)
+            }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Размер шрифта: ${if (fontAuto) "Авто" else "Ручной"}", modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (10f * paneScale).sp)
+            Switch(checked = !fontAuto, onCheckedChange = { GameTranslator.setFontAuto(context, !it) })
+        }
+        if (!fontAuto) {
+            Text("Размер: ${fontSize.toInt()}", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = (10f * paneScale).sp)
+            Slider(value = fontSize, onValueChange = { GameTranslator.setFontSize(context, it) },
+                valueRange = 12f..36f)
         }
         Text(selectedMode.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = (10f * paneScale).sp)
