@@ -329,7 +329,7 @@ object GameTranslator {
                             .minOfOrNull { it.bounds.top } ?: sceneHeight
                         val glassBottom = min(nextTop - 2,
                             box.top + max(box.height() * 2, textPaint.textSize.toInt() * 2))
-                            .coerceAtLeast(box.bottom + padY)
+.coerceAtLeast(box.bottom)
                         val rect = Rect(
                             max(0, box.left - padX), max(0, box.top - padY),
                             min(sceneWidth, box.right + padX), min(sceneHeight, glassBottom)
