@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
@@ -55,6 +56,8 @@ object GameTranslator {
     private const val MODE_KEY = "display_mode"
     private const val MAX_LINES = 18
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "GameTranslator-OCR") }
+    private val translationWorker = Executors.newFixedThreadPool(2) { r -> Thread(r, "GameTranslator-Network") }
+    private val translationsInFlight = ConcurrentHashMap.newKeySet<String>()
     private val busy = AtomicBoolean(false)
     private val enabledState = mutableStateOf(false)
     private val statusState = mutableStateOf("Выключен")
@@ -148,6 +151,7 @@ object GameTranslator {
                 val source = (prefs.getString("source", "AUTO") ?: "AUTO").uppercase()
                 recognizeAll(InputImage.fromBitmap(frameBitmap, 0), source, width, height,
                     onSuccess = success@{ lines ->
+                        var bitmapTransferred = false
                         try {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
@@ -197,49 +201,22 @@ object GameTranslator {
                                         drawModeOverlay(frameBitmap, width, height, clean,
                                             lastTranslatedText, displayModeState.value)
                                         lastRenderedGeometry = geometry
-                                    } else if (lastTranslatedText.isBlank() && lastTranslationFailureAt > 0L &&
-                                        now - lastTranslationFailureAt >= 5000L) {
-                                        // Retry a failed provider for the same stable dialogue.
-                                        val retry = runCatching { TranslationProvider.translate(context, text) }
-                                        val translated = retry.getOrNull().orEmpty()
-                                        if (retry.isSuccess && translated.isNotBlank() && enabledState.value) {
-                                            lastTranslationFailureAt = 0L
-                                            lastTranslatedText = translated
-                                            drawModeOverlay(frameBitmap, width, height, clean,
-                                                translated, displayModeState.value)
-                                            lastRenderedGeometry = geometry
-                                            statusState.value = "Перевод готов • ${displayModeState.value.title}"
-                                        } else {
-                                            lastTranslationFailureAt = now
-                                            statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
-                                        }
-                                    }
+                                    } else if (lastTranslatedText.isBlank() &&
+                                        now - lastTranslationFailureAt >= 2500L) {
+                                        bitmapTransferred = translateAsync(context, frameBitmap, width, height,
+                                            clean, text, normalized, geometry)
+                                    }               }
                                 } else {
-                                    val retryAllowed = now - lastTranslationFailureAt >= 5000L
-                                    if (retryAllowed) {
-                                        lastSource = normalized
-                                        lastRenderedGeometry = geometry
-                                        // Keep old overlay until the new translation is ready;
-                                        // this avoids blank flashes while network providers respond.
-                                        statusState.value = "OCR: ${clean.size} строк, перевожу…"
-                                        val result = runCatching { TranslationProvider.translate(context, text) }
-                                        val translated = result.getOrNull().orEmpty()
-                                        lastTranslationAt = System.currentTimeMillis()
-                                        if (result.isFailure || translated.isBlank()) {
-                                            lastTranslationFailureAt = System.currentTimeMillis()
-                                            statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
-                                        } else if (enabledState.value) {
-                                            lastTranslationFailureAt = 0L
-                                            lastTranslatedText = translated
-                                            drawModeOverlay(frameBitmap, width, height, clean,
-                                                translated, displayModeState.value)
-                                            statusState.value = "Перевод готов • ${displayModeState.value.title}"
-                                        }
-                                    }
+                                    lastSource = normalized
+                                    lastRenderedGeometry = geometry
+                                    lastTranslationFailureAt = 0L
+                                    statusState.value = "OCR: ${clean.size} строк, перевожу…"
+                                    bitmapTransferred = translateAsync(context, frameBitmap, width, height,
+                                        clean, text, normalized, geometry)
                                 }
                             }
                         } finally {
-                            bitmap?.recycle()
+                            if (!bitmapTransferred) bitmap?.recycle()
                             busy.set(false)
                         }
                     },
@@ -266,6 +243,34 @@ object GameTranslator {
                 busy.set(false)
             }
         }
+    }
+
+    /** Network work is isolated from OCR so new frames can be processed while a provider responds. */
+    private fun translateAsync(context: Context, frameBitmap: Bitmap, width: Int, height: Int,
+        lines: List<OcrLine>, text: String, normalized: String, geometry: String): Boolean {
+        if (!translationsInFlight.add(normalized)) return false
+        translationWorker.execute {
+            try {
+                val result = runCatching { TranslationProvider.translate(context, text) }
+                val translated = result.getOrNull().orEmpty()
+                lastTranslationAt = System.currentTimeMillis()
+                if (!enabledState.value || lastSource != normalized) return@execute
+                if (result.isFailure || translated.isBlank()) {
+                    lastTranslationFailureAt = System.currentTimeMillis()
+                    statusState.value = "Перевод временно недоступен; повтор через 2,5 секунды"
+                    return@execute
+                }
+                lastTranslationFailureAt = 0L
+                lastTranslatedText = translated
+                drawModeOverlay(frameBitmap, width, height, lines, translated, displayModeState.value)
+                lastRenderedGeometry = geometry
+                statusState.value = "Перевод готов • ${displayModeState.value.title}"
+            } finally {
+                translationsInFlight.remove(normalized)
+                if (!frameBitmap.isRecycled) frameBitmap.recycle()
+            }
+        }
+        return true
     }
 
     /**
