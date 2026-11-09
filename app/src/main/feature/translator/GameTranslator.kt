@@ -45,7 +45,7 @@ import kotlin.math.min
 
 enum class TranslatorDisplayMode(val title: String, val description: String) {
     ORIGINAL_AND_TRANSLATION("A • Оригинал + перевод", "Перевод под исходной строкой"),
-    REPLACE_TEXT("B • Замена текста", "Перевод закрывает исходную область"),
+    REPLACE_TEXT("B • Замена текста", "Перевод на месте оригинала • матовое стекло"),
     BESIDE_ORIGINAL("C • Рядом с оригиналом", "Перевод справа от исходной строки")
 }
 
@@ -145,8 +145,10 @@ object GameTranslator {
                                 WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                                 statusState.value = "Turnip: текста в текущем кадре нет"
                             } else {
+                                // Quantize OCR geometry so one-pixel detector jitter does not
+                                // trigger another network request or flicker the translated overlay.
                                 val geometry = clean.joinToString("|") {
-                                    "${it.bounds.left},${it.bounds.top},${it.bounds.right},${it.bounds.bottom}"
+                                    "${it.bounds.left / 8},${it.bounds.top / 8},${it.bounds.right / 8},${it.bounds.bottom / 8}"
                                 }
                                 val frameKey = "$normalized#$geometry"
                                 if (frameKey != lastSource || System.currentTimeMillis() - lastTranslationAt > 30000L) {
@@ -489,7 +491,7 @@ internal fun GameTranslatorPanel(paneScale: Float) {
         }
         Text(selectedMode.description, color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = (10f * paneScale).sp)
-        Text("Turnip/Vulkan → ML Kit OCR (Latin/Japanese/Chinese/Korean) → перевод → Vulkan alpha overlay",
+        Text("Turnip/Vulkan → OCR → перевод с привязкой к исходным координатам → Vulkan overlay",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (10f * paneScale).sp)
         Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (11f * paneScale).sp)
     }
