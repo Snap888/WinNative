@@ -2,6 +2,7 @@ package com.winlator.cmod.runtime.display
 
 import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -140,6 +141,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -167,6 +169,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.winlator.cmod.R
+import com.winlator.cmod.feature.translator.TranslatorConfigActivity
 import com.winlator.cmod.shared.theme.WinNativeBackground
 import com.winlator.cmod.shared.theme.WinNativeOutline
 import com.winlator.cmod.shared.theme.WinNativePanel
@@ -207,6 +210,7 @@ internal fun HUDPaneContent(
     val elementOrder = listOf(1, 2, 3, 8, 4, 5, 6, 0, 7)
     val active =
         state.items.firstOrNull { it.itemId == R.id.main_menu_fps_monitor }?.active ?: false
+    val context = LocalContext.current
 
     activeEditor?.let { editor ->
         HUDMetricInputDialog(
@@ -251,6 +255,42 @@ internal fun HUDPaneContent(
                 checked = active,
                 onCheckedChange = { listener.onActionSelected(R.id.main_menu_fps_monitor) },
             )
+
+            // Keep the game translator beside the in-session FPS/HUD controls.
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = PaneInnerResting,
+                shape = RoundedCornerShape((14f * paneScale).dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RestingCardBorder),
+            ) {
+                Column(
+                    modifier = Modifier.padding((12f * paneScale).dp),
+                    verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp),
+                ) {
+                    Text(
+                        "Игровой переводчик",
+                        color = DrawerTextPrimary,
+                        fontSize = (14f * paneScale).sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "OCR-перевод текста с экрана поверх игры. Настройка и запуск доступны здесь.",
+                        color = DrawerTextSecondary,
+                        fontSize = (12f * paneScale).sp,
+                    )
+                    Button(
+                        onClick = {
+                            context.startActivity(
+                                android.content.Intent(context, TranslatorConfigActivity::class.java)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("ОТКРЫТЬ ПЕРЕВОДЧИК")
+                    }
+                }
+            }
 
             // Mango-style HUD toggle + settings gear, shown whether the HUD is on or off.
             var mangoSettingsOpen by remember { mutableStateOf(false) }
