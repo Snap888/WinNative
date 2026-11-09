@@ -88,9 +88,11 @@ class TranslatorOverlayService : Service() {
                 lastFrame = now
                 recognize(image)
             }, handler)
+            projection?.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() { stopSelf() }
+            }, handler)
             display = projection?.createVirtualDisplay("WinTranslator", width, height, metrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader?.surface, null, handler)
-            projection?.registerCallback(object : MediaProjection.Callback() { override fun onStop() { stopSelf() } }, handler)
         } catch (t: Throwable) { output?.text = "Захват экрана: " + (t.message ?: "ошибка") }
     }
 
