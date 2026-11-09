@@ -474,24 +474,19 @@ object GameTranslator {
                     TranslatorDisplayMode.REPLACE_TEXT -> {
                         // Frosted-glass patch: downsampled live scene provides a soft blur, then
                         // a translucent cool tint and fine highlight create a glass-like surface.
-                        val padX = max(3, box.height() / 10)
-                        val padY = max(2, box.height() / 12)
+                        // Size the glass strictly from the translated glyph bounds. The old
+                        // 2.6x source-width heuristic created oversized empty panels.
+                        val rectLeft = max(2, box.left - 4)
+                        val rectTop = max(2, box.top - 3)
                         val nextTop = lines.filter { it !== line && it.bounds.top >= box.bottom }
                             .minOfOrNull { it.bounds.top } ?: sceneHeight
-                        val glassBottom = min(nextTop - 2,
-                            box.top + max(box.height() * 2, textPaint.textSize.toInt() * 2))
-.coerceAtLeast(box.bottom)
-                        val rectLeft = max(0, box.left - padX)
-                        val desiredWidth = max(box.width() + padX * 2,
-                            min((sceneWidth * 0.56f).toInt(), (box.width() * 2.6f).toInt()))
-                        val rectRight = min(sceneWidth - 4, max(box.right + padX, rectLeft + desiredWidth))
-                        val rect = Rect(rectLeft, max(0, box.top - padY),
-                            rectRight.coerceAtLeast(rectLeft + 1), min(sceneHeight, glassBottom))
-                        drawFrostedGlass(canvas, softenedFrame, rect, sceneWidth, sceneHeight, glassAlpha)
-                        val inner = max(3, box.height() / 12)
-                        drawFitted(canvas, translatedLine, rect.left + inner, rect.top + inner,
-                            (rect.width() - inner * 2).coerceAtLeast(24),
-                            (rect.height() - inner * 2).coerceAtLeast(18), textPaint, stroke)
+                        val maxWidth = (sceneWidth - rectLeft - 6).coerceAtLeast(24)
+                        val maxHeight = (min(sceneHeight, nextTop - 2) - rectTop - 4)
+                            .coerceAtLeast(box.height() + 8)
+                        drawCompactGlassText(
+                            canvas, softenedFrame, translatedLine, rectLeft, rectTop,
+                            maxWidth, maxHeight, glassAlpha, textPaint, stroke
+                        )
                     }
                     TranslatorDisplayMode.BESIDE_ORIGINAL -> {
                         val rightSpace = sceneWidth - box.right - margin
@@ -536,6 +531,71 @@ object GameTranslator {
         }
         bitmap.recycle()
         WaylandCompositor.nativeSetTranslatorOverlay(rgba, sceneWidth, sceneHeight)
+    }
+
+    /**
+     * Draws a tight glass chip around the actual translated text, not around an
+     * arbitrary fraction of the source line width. Long translations wrap only
+     * when they need to and the panel grows by the measured glyph width/height.
+     */
+    private fun drawCompactGlassText(
+        canvas: Canvas,
+        blurredScene: Bitmap,
+        text: String,
+        left: Int,
+        top: Int,
+        maxWidth: Int,
+        maxHeight: Int,
+        opacity: Int,
+        paint: TextPaint,
+        stroke: TextPaint
+    ) {
+        if (text.isBlank() || maxWidth <= 12 || maxHeight <= 12) return
+        val horizontalPadding = 7
+        val verticalPadding = 5
+        val contentWidthLimit = (maxWidth - horizontalPadding * 2).coerceAtLeast(8)
+        val originalSize = paint.textSize
+        var size = originalSize
+        var layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidthLimit)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setIncludePad(false)
+            .setMaxLines(4)
+            .setEllipsize(TextUtils.TruncateAt.END)
+            .build()
+
+        while (layout.height + verticalPadding * 2 > maxHeight && size > 10f) {
+            size = (size - 1f).coerceAtLeast(10f)
+            paint.textSize = size
+            stroke.textSize = size
+            layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidthLimit)
+                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                .setIncludePad(false)
+                .setMaxLines(4)
+                .setEllipsize(TextUtils.TruncateAt.END)
+                .build()
+        }
+
+        val measuredTextWidth = (0 until layout.lineCount)
+            .maxOfOrNull { kotlin.math.ceil(layout.getLineWidth(it).toDouble()).toInt() } ?: 0
+        val panelWidth = (measuredTextWidth + horizontalPadding * 2).coerceIn(1, maxWidth)
+        val panelHeight = (layout.height + verticalPadding * 2).coerceAtMost(maxHeight)
+        val rect = Rect(left, top, left + panelWidth, top + panelHeight)
+        drawFrostedGlass(canvas, blurredScene, rect, canvas.width, canvas.height, opacity)
+
+        val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidthLimit)
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setIncludePad(false)
+            .setMaxLines(4)
+            .setEllipsize(TextUtils.TruncateAt.END)
+            .build()
+        canvas.save()
+        canvas.translate((left + horizontalPadding).toFloat(), (top + verticalPadding).toFloat())
+        strokeLayout.draw(canvas)
+        layout.draw(canvas)
+        canvas.restore()
+
+        paint.textSize = originalSize
+        stroke.textSize = originalSize
     }
 
     private fun drawFrostedGlass(
