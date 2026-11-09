@@ -203,6 +203,7 @@ object GameTranslator {
                                         lastRenderedGeometry = geometry
                                     } else if (lastTranslatedText.isBlank() &&
                                         now - lastTranslationFailureAt >= 2500L) {
+                                        lastRenderedGeometry = geometry
                                         bitmapTransferred = translateAsync(context, frameBitmap, width, height,
                                             clean, text, normalized, geometry)
                                     }
@@ -254,7 +255,7 @@ object GameTranslator {
                 val result = runCatching { TranslationProvider.translate(context, text) }
                 val translated = result.getOrNull().orEmpty()
                 lastTranslationAt = System.currentTimeMillis()
-                if (!enabledState.value || lastSource != normalized) return@execute
+                if (!enabledState.value || lastSource != normalized || lastRenderedGeometry != geometry) return@execute
                 if (result.isFailure || translated.isBlank()) {
                     lastTranslationFailureAt = System.currentTimeMillis()
                     statusState.value = "Перевод временно недоступен; повтор через 2,5 секунды"
