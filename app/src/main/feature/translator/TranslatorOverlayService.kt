@@ -111,7 +111,7 @@ class TranslatorOverlayService : Service() {
                 lastText = text
                 handler.post { output?.text = "Распознано. Перевожу…\n$text" }
                 executor.execute {
-                    val translated = runCatching { translate(text) }.getOrElse { "Ошибка перевода: " + (it.message ?: "API") }
+                    val translated = runCatching { TranslationProvider.translate(this@TranslatorOverlayService, text) }.getOrElse { "Ошибка перевода: " + (it.message ?: "API") }
                     handler.post {
                         lastTranslation = translated
                         output?.text = "ОРИГИНАЛ\n$text\n\nПЕРЕВОД\n$translated"
@@ -121,65 +121,6 @@ class TranslatorOverlayService : Service() {
         }.addOnFailureListener { e -> handler.post { output?.text = "OCR: " + (e.message ?: "ошибка") } }
             .addOnCompleteListener { image.close() }
     }
-
-    private fun translate(text: String): String {
-        val prefs = getSharedPreferences("wintranslator", MODE_PRIVATE)
-        val provider = prefs.getString("provider", "deepl") ?: "deepl"
-        val endpoint = prefs.getString("endpoint", "") ?: ""
-        val key = prefs.getString("api_key", "") ?: ""
-        val source = prefs.getString("source", "AUTO") ?: "AUTO"
-        val target = prefs.getString("target", "RU") ?: "RU"
-        val model = prefs.getString("model", "gpt-4o-mini") ?: "gpt-4o-mini"
-        require(endpoint.startsWith("https://")) { "Endpoint должен использовать HTTPS" }
-        require(key.isNotBlank() || provider == "libre") { "Укажи API key в настройках" }
-        val connection = URL(endpoint).openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"; connection.connectTimeout = 9000; connection.readTimeout = 15000; connection.doOutput = true
-        when (provider) {
-            "deepl" -> {
-                connection.setRequestProperty("Authorization", "DeepL-Auth-Key $key")
-                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-                val fields = mutableListOf("text=" + enc(text), "target_lang=" + enc(target))
-                if (source != "AUTO") fields += "source_lang=" + enc(source)
-                connection.outputStream.use { it.write(fields.joinToString("&").toByteArray(Charsets.UTF_8)) }
-            }
-            "libre" -> {
-                connection.setRequestProperty("Content-Type", "application/json")
-                val json = JSONObject().put("q", text).put("source", if (source == "AUTO") "auto" else source.lowercase())
-                    .put("target", target.lowercase()).put("format", "text")
-                if (key.isNotBlank()) json.put("api_key", key)
-                connection.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
-            }
-            "google" -> {
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.setRequestProperty("X-Goog-Api-Key", key)
-                val json = JSONObject().put("q", text).put("target", target.lowercase())
-                if (source != "AUTO") json.put("source", source.lowercase())
-                connection.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
-            }
-            else -> {
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.setRequestProperty("Authorization", "Bearer $key")
-                val prompt = "Translate game dialogue to language code $target. Preserve names, placeholders and line breaks. Return only the translation:\n$text"
-                val json = JSONObject().put("model", model).put("temperature", 0.1)
-                    .put("messages", org.json.JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
-                connection.outputStream.use { it.write(json.toString().toByteArray(Charsets.UTF_8)) }
-            }
-        }
-        val code = connection.responseCode
-        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        val response = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-        connection.disconnect()
-        if (code !in 200..299) error("HTTP $code: " + response.take(240))
-        val json = JSONObject(response)
-        return when (provider) {
-            "deepl" -> json.getJSONArray("translations").getJSONObject(0).getString("text")
-            "libre" -> json.getString("translatedText")
-            "google" -> json.getJSONObject("data").getJSONArray("translations").getJSONObject(0).getString("translatedText")
-            else -> json.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
-        }
-    }
-
-    private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 
     private fun createOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
