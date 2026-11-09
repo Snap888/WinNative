@@ -17,8 +17,29 @@ import java.net.URLEncoder
  */
 internal object TranslationProvider {
     private const val PREFS = "wintranslator"
+    private const val CACHE_LIMIT = 64
+    private val translationCache = object : LinkedHashMap<String, String>(CACHE_LIMIT, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+            size > CACHE_LIMIT
+    }
 
+    /** Small in-memory LRU: revisited dialogue lines do not trigger another network request. */
     fun translate(context: Context, text: String): String {
+        require(text.isNotBlank()) { "Пустой текст" }
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val provider = prefs.getString("provider", "auto") ?: "auto"
+        val source = (prefs.getString("source", "AUTO") ?: "AUTO").lowercase()
+        val target = (prefs.getString("target", "RU") ?: "RU").lowercase()
+        val endpoint = prefs.getString("endpoint", "") ?: ""
+        val keyFingerprint = (prefs.getString("api_key", "") ?: "").hashCode()
+        val cacheKey = "$provider|$source|$target|$endpoint|$keyFingerprint|$text"
+        synchronized(translationCache) { translationCache[cacheKey]?.let { return it } }
+        val translated = translateUncached(context, text)
+        synchronized(translationCache) { translationCache[cacheKey] = translated }
+        return translated
+    }
+
+    private fun translateUncached(context: Context, text: String): String {
         require(text.isNotBlank()) { "Пустой текст" }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val provider = prefs.getString("provider", "auto") ?: "auto"
