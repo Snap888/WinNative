@@ -205,7 +205,7 @@ object GameTranslator {
                                         now - lastTranslationFailureAt >= 2500L) {
                                         bitmapTransferred = translateAsync(context, frameBitmap, width, height,
                                             clean, text, normalized, geometry)
-                                    }               }
+                                    }
                                 } else {
                                     lastSource = normalized
                                     lastRenderedGeometry = geometry
