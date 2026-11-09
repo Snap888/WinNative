@@ -155,7 +155,7 @@ object GameTranslator {
                                 val frameKey = "$normalized#$geometry"
                                 val now = System.currentTimeMillis()
                                 val retryAllowed = now - lastTranslationFailureAt >= 5000L
-                                if ((frameKey != lastSource && retryAllowed) || now - lastTranslationAt > 30000L) {
+                                if (((frameKey != lastSource || lastTranslationFailureAt > 0L) && retryAllowed) || now - lastTranslationAt > 30000L) {
                                     lastSource = frameKey
                                     // A changed dialogue line invalidates the previous overlay while
                                     // the network translation is pending.
@@ -172,11 +172,9 @@ object GameTranslator {
                                         WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
                                         statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
                                     } else if (enabledState.value) {
+                                        lastTranslationFailureAt = 0L
                                         drawModeOverlay(frameBitmap, width, height, clean, translated, displayModeState.value)
                                         statusState.value = "Перевод готов • ${displayModeState.value.title}"
-                                    } else if (enabledState.value) {
-                                        WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
-                                        statusState.value = "OCR работает; ошибка сервиса перевода"
                                     }
                                 }
                             }
