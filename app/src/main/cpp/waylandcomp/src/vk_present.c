@@ -1685,10 +1685,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * blit filter follows the scaling mode. */
     const int fx = !g_plain_frame && vkp_effects_active();
     const int fg = !g_plain_frame && vkp_framegen_active();
+    const int translator = g_translator_enabled != 0 && g_translator_capture_suspended == 0;
     /* HDR frames with frame generation through an HDR10 swapchain: the scene, the effects and the
      * engine's frames in FP16 (FG_HDR_FMT) where the engine can take that format - more than 8 bits of
      * PQ through interpolation - else the 8-bit scene, as before. */
-    const int deep = hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
+    const int deep = !translator && hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
                      ensure_img(&g_fgscene, scene_w, scene_h, FG_HDR_FMT,
                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -1702,6 +1703,8 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             if (deep)
                 wnc_log("color", "frame generation runs on the HDR picture in FP16 (RGBA16F): more than 8 bits of PQ "
                            "through interpolation, into the HDR10 swapchain (%s)", sw);
+            else if (translator)
+                wnc_log("translator", "HDR frame generation uses the 8-bit scene while Vulkan OCR readback is enabled");
             else
                 wnc_log("color", "frame generation runs on the HDR picture in 8 bits (the engine cannot take FP16 here), "
                            "into the HDR10 swapchain (%s): banding possible in smooth gradients", sw);

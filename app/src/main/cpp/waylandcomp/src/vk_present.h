@@ -76,6 +76,7 @@ void vkp_image_destroy(struct vkp_image *img);
 /* Game translator: request scene readback and a compositor-owned RGBA overlay. */
 void vkp_set_translator_enabled(int enabled);
 int vkp_translator_enabled(void);
+void vkp_set_translator_capture_suspended(int suspended);
 void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height);
 
 // One scene draw: the src rectangle of an image (image pixels) scaled into the dst
