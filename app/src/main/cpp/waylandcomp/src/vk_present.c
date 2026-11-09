@@ -140,6 +140,7 @@ static struct vkp_image *g_translator_overlay;
 static int g_translator_overlay_visible;
 static pthread_mutex_t g_translator_overlay_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *g_translator_overlay_pending;
+static int g_translator_overlay_pending_set;
 static int g_translator_overlay_pending_w, g_translator_overlay_pending_h;
 extern void wnc_on_translator_frame(const uint8_t *rgba, int width, int height);
 
@@ -164,6 +165,7 @@ void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height)
     g_translator_overlay_pending = copy;
     g_translator_overlay_pending_w = copy ? width : 0;
     g_translator_overlay_pending_h = copy ? height : 0;
+    g_translator_overlay_pending_set = 1;
     pthread_mutex_unlock(&g_translator_overlay_lock);
 }
 
@@ -171,16 +173,18 @@ void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height)
  * to the BGRA byte order of vkp_image_create_shm's linear image. */
 static void translator_overlay_apply(void) {
     uint8_t *rgba;
-    int w, h;
+    int w, h, pending;
     pthread_mutex_lock(&g_translator_overlay_lock);
+    pending = g_translator_overlay_pending_set;
+    g_translator_overlay_pending_set = 0;
     rgba = g_translator_overlay_pending;
     w = g_translator_overlay_pending_w;
     h = g_translator_overlay_pending_h;
     g_translator_overlay_pending = NULL;
     g_translator_overlay_pending_w = g_translator_overlay_pending_h = 0;
     pthread_mutex_unlock(&g_translator_overlay_lock);
-    if (!rgba) return;
-    if (w <= 0 || h <= 0) {
+    if (!pending) return;
+    if (!rgba || w <= 0 || h <= 0) {
         g_translator_overlay_visible = 0;
         free(rgba);
         return;
