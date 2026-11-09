@@ -209,6 +209,9 @@ object GameTranslator {
                                     }
                                 } else {
                                     lastSource = normalized
+                                    // Keep the submitted Vulkan overlay visible, but do not reuse
+                                    // its text as if it belonged to the newly detected dialogue.
+                                    lastTranslatedText = ""
                                     lastRenderedGeometry = geometry
                                     lastTranslationFailureAt = 0L
                                     statusState.value = "OCR: ${clean.size} строк, перевожу…"
