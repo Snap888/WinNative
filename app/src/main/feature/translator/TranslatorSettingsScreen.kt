@@ -71,10 +71,11 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     }
 
     val providers = listOf(
-        "auto" to "Авто: Google → MyMemory → Apertium (без ключей)",
+        "auto" to "Авто: Google → Yandex → MyMemory → Apertium (без ключей)",
         "google_free" to "Google Translate (без ключа, неофициальный endpoint)",
         "mymemory" to "MyMemory (без ключа, лимит запросов)",
         "apertium" to "Apertium (без ключа, ограниченные языковые пары)",
+        "yandex_free" to "Yandex Translate Web (без ключа, экспериментально)",
         "yandex" to "Yandex Translate API (нужен ключ)",
         "google_cloud" to "Google Cloud Translation (нужен ключ)",
         "deepl" to "DeepL API (нужен ключ)",
@@ -161,7 +162,7 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
         }
 
         Text(
-            "Примечание: Google Translate без ключа использует неофициальный веб-endpoint и может ограничивать запросы. MyMemory имеет дневные лимиты; Apertium поддерживает не все языковые пары. Официальный Yandex API требует ключ, поэтому в автоматический бесплатный режим он не включён. Распознанный текст отправляется выбранному внешнему сервису перевода.",
+            "Примечание: Google Translate без ключа использует неофициальный веб-endpoint и может ограничивать запросы. MyMemory имеет дневные лимиты; Apertium поддерживает не все языковые пары. Yandex Web работает без ключа через неофициальный виджет и может блокировать запросы CAPTCHA; официальный Yandex API требует ключ. Распознанный текст отправляется выбранному внешнему сервису перевода.",
             style = MaterialTheme.typography.bodySmall
         )
     }
