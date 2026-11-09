@@ -30,13 +30,20 @@ private const val MODEL = "model"
 fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
-    var provider by remember { mutableStateOf(prefs.getString(PROVIDER, "libre") ?: "libre") }
-    var endpoint by remember { mutableStateOf(prefs.getString(ENDPOINT, "https://libretranslate.com/translate") ?: "") }
+    var provider by remember {
+        mutableStateOf(
+            when (prefs.getString(PROVIDER, "auto") ?: "auto") {
+                "google" -> "google_cloud"
+                else -> prefs.getString(PROVIDER, "auto") ?: "auto"
+            }
+        )
+    }
+    var endpoint by remember { mutableStateOf(prefs.getString(ENDPOINT, "https://translate.terraprint.co/translate") ?: "") }
     var apiKey by remember { mutableStateOf(prefs.getString(API_KEY, "") ?: "") }
     var source by remember { mutableStateOf(prefs.getString(SOURCE, "AUTO") ?: "AUTO") }
     var target by remember { mutableStateOf(prefs.getString(TARGET, "RU") ?: "RU") }
     var model by remember { mutableStateOf(prefs.getString(MODEL, "gpt-4o-mini") ?: "gpt-4o-mini") }
-    var status by remember { mutableStateOf("Переводчик выключен") }
+    var status by remember { mutableStateOf("Бесплатный автоматический перевод готов") }
     var pendingCapture by remember { mutableStateOf(false) }
 
     fun save() {
@@ -49,8 +56,8 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     val captureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             TranslatorOverlayService.start(context, result.resultCode, result.data!!)
-            status = "Захват активен. Вернись в игру и нажми плавающую кнопку «ПЕРЕВОД»."
-        } else status = "Захват не разрешён. Нажми «Запустить переводчик» и подтверди запрос Android."
+            status = "Разрешение на захват получено. Вернись в игру."
+        } else status = "Захват не разрешён Android."
     }
     val overlayPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.canDrawOverlays(context) && pendingCapture) {
@@ -59,21 +66,40 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
             captureLauncher.launch(manager.createScreenCaptureIntent())
         } else if (!Settings.canDrawOverlays(context)) {
             pendingCapture = false
-            status = "Нет разрешения «Поверх других приложений». Без него игровая панель не появится."
+            status = "Нет разрешения «Поверх других приложений»."
         }
     }
+
+    val providers = listOf(
+        "auto" to "Авто: Google → MyMemory → Apertium (без ключей)",
+        "google_free" to "Google Translate (без ключа, неофициальный endpoint)",
+        "mymemory" to "MyMemory (без ключа, лимит запросов)",
+        "apertium" to "Apertium (без ключа, ограниченные языковые пары)",
+        "yandex" to "Yandex Translate API (нужен ключ)",
+        "google_cloud" to "Google Cloud Translation (нужен ключ)",
+        "deepl" to "DeepL API (нужен ключ)",
+        "libre" to "LibreTranslate (сервер может требовать ключ)",
+        "openai" to "OpenAI-compatible API (нужен ключ)"
+    )
+    val needsCredentials = provider in setOf("yandex", "google_cloud", "deepl", "libre", "openai")
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Игровой переводчик", style = MaterialTheme.typography.headlineMedium)
-        Text("Захватывает изображение игры, распознаёт надписи на устройстве и показывает перевод поверх игры. Файлы игры не изменяются.", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Перевод распознанных игровых фраз. По умолчанию используется бесплатный режим без регистрации, API-ключей и ручной настройки endpoint.",
+            style = MaterialTheme.typography.bodyMedium
+        )
 
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Быстрый запуск", style = MaterialTheme.typography.titleMedium)
-                Text("1. Сохрани провайдера и языки. 2. Разреши отображение поверх приложений. 3. Подтверди системный захват экрана. 4. В игре нажми плавающую кнопку «ПЕРЕВОД».", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Сохрани язык и провайдера, затем запусти переводчик. Android запросит разрешение на захват изображения.",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 Button(onClick = {
                     save()
                     if (!Settings.canDrawOverlays(context)) {
@@ -95,29 +121,33 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
 
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Служба перевода", style = MaterialTheme.typography.titleMedium)
-                listOf(
-                    "libre" to "LibreTranslate (может требовать ключ)",
-                    "deepl" to "DeepL",
-                    "google" to "Google Cloud Translation",
-                    "openai" to "OpenAI-compatible AI"
-                ).forEach { (id, label) ->
+                Text("Сервис перевода", style = MaterialTheme.typography.titleMedium)
+                providers.forEach { (id, label) ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(label, modifier = Modifier.weight(1f))
+                        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         RadioButton(selected = provider == id, onClick = {
                             provider = id
                             endpoint = when (id) {
                                 "deepl" -> "https://api-free.deepl.com/v2/translate"
-                                "libre" -> "https://libretranslate.com/translate"
-                                "google" -> "https://translation.googleapis.com/language/translate/v2"
-                                else -> "https://api.openai.com/v1/chat/completions"
+                                "libre" -> "https://translate.terraprint.co/translate"
+                                "google_cloud" -> "https://translation.googleapis.com/language/translate/v2"
+                                "yandex" -> "https://translate.yandex.net/api/v1/tr.json/translate"
+                                else -> endpoint
                             }
                         })
                     }
                 }
-                OutlinedTextField(endpoint, { endpoint = it }, label = { Text("HTTPS API endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key (если требуется)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                if (provider == "openai") OutlinedTextField(model, { model = it }, label = { Text("AI model") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                if (needsCredentials) {
+                    if (provider in setOf("libre", "openai")) {
+                        OutlinedTextField(endpoint, { endpoint = it }, label = { Text("HTTPS API endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    }
+                    OutlinedTextField(apiKey, { apiKey = it }, label = { Text("API key") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    if (provider == "openai") {
+                        OutlinedTextField(model, { model = it }, label = { Text("AI model") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    }
+                } else {
+                    Text("Ключи и endpoint не нужны. В режиме «Авто» приложение само переключится на следующий сервис при ошибке.", style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
 
@@ -130,6 +160,9 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
             }
         }
 
-        Text("Важно: распознавание выполняется на устройстве. В сеть отправляется только распознанный текст. Для DeepL, Google и большинства AI API нужен собственный ключ и доступ в интернет. Перевод отображается отдельной панелью, он не подменяет текст внутри Windows-процесса.", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "Примечание: Google Translate без ключа использует неофициальный веб-endpoint и может ограничивать запросы. MyMemory имеет дневные лимиты; Apertium поддерживает не все языковые пары. Официальный Yandex API требует ключ, поэтому в автоматический бесплатный режим он не включён. Распознанный текст отправляется выбранному внешнему сервису перевода.",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
