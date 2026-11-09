@@ -197,6 +197,22 @@ object GameTranslator {
                                         drawModeOverlay(frameBitmap, width, height, clean,
                                             lastTranslatedText, displayModeState.value)
                                         lastRenderedGeometry = geometry
+                                    } else if (lastTranslatedText.isBlank() && lastTranslationFailureAt > 0L &&
+                                        now - lastTranslationFailureAt >= 5000L) {
+                                        // Retry a failed provider for the same stable dialogue.
+                                        val retry = runCatching { TranslationProvider.translate(context, text) }
+                                        val translated = retry.getOrNull().orEmpty()
+                                        if (retry.isSuccess && translated.isNotBlank() && enabledState.value) {
+                                            lastTranslationFailureAt = 0L
+                                            lastTranslatedText = translated
+                                            drawModeOverlay(frameBitmap, width, height, clean,
+                                                translated, displayModeState.value)
+                                            lastRenderedGeometry = geometry
+                                            statusState.value = "Перевод готов • ${displayModeState.value.title}"
+                                        } else {
+                                            lastTranslationFailureAt = now
+                                            statusState.value = "Перевод временно недоступен; повтор через 5 секунд"
+                                        }
                                     }
                                 } else {
                                     val retryAllowed = now - lastTranslationFailureAt >= 5000L
@@ -334,8 +350,8 @@ object GameTranslator {
         }
         val softenedFrame = Bitmap.createScaledBitmap(
             sourceFrame,
-            max(1, sceneWidth / 10),
-            max(1, sceneHeight / 10),
+            max(1, sceneWidth / 8),
+            max(1, sceneHeight / 8),
             true
         )
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -464,7 +480,7 @@ object GameTranslator {
         canvas.save()
         canvas.clipPath(path)
         canvas.drawBitmap(blurredScene, src, android.graphics.RectF(rect),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 205 })
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 190 })
         canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x705b7188; style = Paint.Style.FILL })
         canvas.restore()
