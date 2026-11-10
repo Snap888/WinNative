@@ -59,8 +59,8 @@ internal object TranslationProvider {
             for ((name, action) in attempts) {
                 try {
                     val result = action().trim()
-                    if (result.isNotBlank()) return result
-                    last = IllegalStateException("$name вернул пустой перевод")
+                    if (result.isNotBlank() && !isUnchangedSource(text, result)) return result
+                    last = IllegalStateException("$name вернул исходный текст или пустой перевод")
                 } catch (failure: Throwable) {
                     last = failure
                 }
@@ -69,7 +69,9 @@ internal object TranslationProvider {
         }
 
         return when (provider) {
-            "google_free" -> googleFree(text, source, target)
+            "google_free" -> googleFree(text, source, target).also {
+                if (isUnchangedSource(text, it)) error("Google вернул исходный текст вместо перевода на $target")
+            }
             "mymemory" -> myMemory(text, source, target)
             "apertium" -> {
                 require(source != "auto") { "Для Apertium укажи исходный язык (например EN)" }
@@ -92,6 +94,12 @@ internal object TranslationProvider {
             "openai" -> openAi(text, target, endpoint, key, model)
             else -> throw IllegalArgumentException("Неизвестный переводчик: $provider")
         }
+    }
+
+    private fun isUnchangedSource(source: String, translated: String): Boolean {
+        fun normalize(value: String) = value.lowercase().replace(Regex("[\\p{Punct}\\s]+"), "").trim()
+        val a = normalize(source); val b = normalize(translated)
+        return a.isNotEmpty() && a == b
     }
 
     private fun googleFree(text: String, source: String, target: String): String {
