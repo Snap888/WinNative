@@ -631,26 +631,10 @@ object GameTranslator {
         val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
         val originalSize = paint.textSize
         // The shared group size may shrink by at most 30%; it is never enlarged per row.
-        var size = groupFontSize
-        val minimumSize = groupFontSize * 0.70f
-        var layout: StaticLayout
-        var low = minimumSize
-        var high = groupFontSize
-        repeat(8) {
-            val candidate = (low + high) * 0.5f
-            paint.textSize = candidate
-            val candidateLayout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
-                .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
-            if (candidateLayout.height <= contentHeight) {
-                low = candidate
-                layout = candidateLayout
-            } else high = candidate
-        }
-        size = low.coerceIn(minimumSize, groupFontSize)
+        val size = groupFontSize
         paint.textSize = size
         stroke.textSize = size
-        layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
             .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
 
@@ -660,7 +644,7 @@ object GameTranslator {
         val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
-            .setMaxLines(3)
+            .setMaxLines(2)
             .setEllipsize(TextUtils.TruncateAt.END)
             .build()
 
