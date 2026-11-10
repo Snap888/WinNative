@@ -190,6 +190,8 @@ object GameTranslator {
         val context = appContext ?: return
         if (!enabledState.value || width <= 0 || height <= 0 || rgba.size < width * height * 4) return
         if (!busy.compareAndSet(false, true)) return
+        // Callback runs on the compositor thread, so this snapshot reads the live g_map safely.
+        val nativeDebugInfo = if (debugState.value) WaylandCompositor.nativeGetTranslatorDebugInfo() else ""
         worker.execute {
             var bitmap: Bitmap? = null
             try {
@@ -214,7 +216,7 @@ object GameTranslator {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
                             val clean = lines.take(MAX_LINES)
-                            if (debugState.value && lastTranslatedText.isBlank()) renderDebugOverlay(width, height, clean)
+                            if (debugState.value && lastTranslatedText.isBlank()) renderDebugOverlay(width, height, clean, nativeDebugInfo)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             val now = System.currentTimeMillis()
@@ -674,13 +676,12 @@ object GameTranslator {
      * frame dimensions but not the Android output viewport; identity below is only the
      * scene-pixel -> overlay-pixel mapping (both Vulkan textures use the callback extent).
      */
-    private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>) {
-        Log.d(TAG, "frame=${width}x${height} viewport=scene[0,0,$width,$height] outputViewport=not-exported " +
-            "overlay=${width}x${height} matrix=identity(scene_px->overlay_px)")
+    private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>, nativeInfo: String) {
+        Log.d(TAG, "frame=${width}x${height} native=$nativeInfo")
         lines.forEachIndexed { index, line ->
             val b = line.bounds
             Log.d(TAG, "ocr[$index] frameRect=(${b.left},${b.top},${b.right},${b.bottom}) " +
-                "overlayRect=(${b.left},${b.top},${b.right},${b.bottom}) text=${line.text.take(120)}")
+                "overlaySceneRect=(${b.left + 20},${b.top - 20},${b.right + 20},${b.bottom - 20}) text=${line.text.take(120)}")
         }
         if (lines.isEmpty()) {
             WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
