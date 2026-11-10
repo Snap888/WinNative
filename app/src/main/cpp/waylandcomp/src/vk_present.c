@@ -503,8 +503,8 @@ void vkp_translator_debug_info(char *out, size_t out_size) {
                  g_scene.w, g_scene.h, g_extent.width, g_extent.height);
         return;
     }
-    const float overlay_dx = 20.0f;
-    const float overlay_dy = -20.0f;
+    const float overlay_dx = 0.0f;
+    const float overlay_dy = 0.0f;
     snprintf(out, out_size,
         "scene=%dx%d output=%dx%d viewport=(%d,%d,%d,%d) scale=(%.5f,%.5f) offset=(%.2f,%.2f) "
         "content=(%.2f,%.2f,%.2f,%.2f) overlayOffset=(%.1f,%.1f) "
