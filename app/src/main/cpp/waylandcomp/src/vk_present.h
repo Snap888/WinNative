@@ -1,6 +1,7 @@
 #ifndef VK_PRESENT_H
 #define VK_PRESENT_H
 #include <stdint.h>
+#include <stddef.h>
 #include <android/native_window.h>
 /*
  * Android-surface render backend for the embedded Wayland compositor.
