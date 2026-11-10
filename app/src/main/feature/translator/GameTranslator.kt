@@ -692,8 +692,8 @@ object GameTranslator {
         val originalSize = paint.textSize
         var size = groupFontSize
         var measuredWidth: Float
-        var layout: StaticLayout
-        var strokeLayout: StaticLayout
+        var layout: StaticLayout? = null
+        var strokeLayout: StaticLayout? = null
         var contentWidth: Int
         var plaque: Rect
         val maxSize = groupFontSize
@@ -793,6 +793,8 @@ object GameTranslator {
         }
 
         val rect = bestRect!!
+        val finalLayout = layout ?: return null
+        val finalStrokeLayout = strokeLayout ?: return null
         val sampled = sampleBorderColor(sourceFrame, anchor, (3f * density).toInt().coerceAtLeast(2))
         val variance = borderLuminanceVariance(sourceFrame, anchor, (3f * density).toInt().coerceAtLeast(2))
         val resolvedMode = when (plaqueMode) {
@@ -852,12 +854,12 @@ object GameTranslator {
         stroke.strokeWidth = max(1f, 1.1f * density)
         stroke.setShadowLayer(1f * density, 0f, 0f, if (textColor == Color.WHITE) Color.BLACK else Color.WHITE)
 
-        val textTop = rect.top + ((rect.height() - layout.height) / 2f).coerceAtLeast(0f)
+        val textTop = rect.top + ((rect.height() - finalLayout.height) / 2f).coerceAtLeast(0f)
         canvas.save()
         canvas.clipRect(rect)
         canvas.translate((rect.left + padX).toFloat(), textTop)
-        strokeLayout.draw(canvas)
-        layout.draw(canvas)
+        finalStrokeLayout.draw(canvas)
+        finalLayout.draw(canvas)
         canvas.restore()
         paint.clearShadowLayer()
         stroke.clearShadowLayer()
@@ -1037,9 +1039,11 @@ object GameTranslator {
     }
 
     private fun expandedOverlayBounds(source: Rect, width: Int, height: Int): Rect {
-        val pad = ((appContext?.resources?.displayMetrics?.density ?: 1f) * 5f).toInt().coerceAtLeast(4)
-        return Rect((source.left - pad).coerceAtLeast(0), (source.top - pad).coerceAtLeast(0),
-            (source.right + pad).coerceAtMost(width), (source.bottom + pad).coerceAtMost(height))
+        val density = appContext?.resources?.displayMetrics?.density ?: 1f
+        val padX = (5f * density).toInt().coerceAtLeast(4)
+        val padY = (2.5f * density).toInt().coerceAtLeast(2)
+        return Rect((source.left - padX).coerceAtLeast(0), (source.top - padY).coerceAtLeast(0),
+            (source.right + padX).coerceAtMost(width), (source.bottom + padY).coerceAtMost(height))
     }
 
     private fun drawDebugBounds(canvas: Canvas, width: Int, height: Int, lines: List<OcrLine>) {
@@ -1076,7 +1080,13 @@ object GameTranslator {
             if (b.width() <= 0 || b.height() <= 0) return@forEachIndexed
             canvas.drawRect(b, original)
             canvas.drawRect(expandedOverlayBounds(b, width, height), plaque)
-            val caption = "OCR $index"
+            line.protectedZones.forEach { zone ->
+                val iconZone = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.YELLOW; style = Paint.Style.STROKE; strokeWidth = 2f
+                }
+                canvas.drawRect(zone, iconZone)
+            }
+            val caption = "OCR $index h=${b.height()} p=${expandedOverlayBounds(b, width, height).height()}"
             val captionWidth = label.measureText(caption) + 10f
             val top = (b.top - label.textSize - 8f).coerceAtLeast(0f)
             canvas.drawRect(b.left.toFloat(), top, b.left + captionWidth, top + label.textSize + 6f, background)
@@ -1170,7 +1180,7 @@ internal fun GameTranslatorPanel(paneScale: Float) {
                 Text("Прозрачность стекла: $glassAlpha%", color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = (10f * paneScale).sp)
                 Slider(value = glassAlpha.toFloat(), onValueChange = { GameTranslator.setGlassAlpha(context, it.toInt()) },
-                    valueRange = 20f..95f)
+                    valueRange = 40f..100f)
             }
         }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

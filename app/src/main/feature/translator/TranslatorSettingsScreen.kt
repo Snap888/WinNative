@@ -46,7 +46,7 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     var testing by remember { mutableStateOf(false) }
     var plaqueMode by remember {
         mutableStateOf(runCatching {
-            TranslatorPlaqueMode.valueOf(prefs.getString("plaque_mode", "AUTO") ?: "AUTO")
+            TranslatorPlaqueMode.valueOf(prefs.getString("plaque_mode", "GLASS") ?: "GLASS")
         }.getOrDefault(TranslatorPlaqueMode.AUTO))
     }
     var plaqueOpacity by remember { mutableStateOf(prefs.getInt("glass_alpha", 90).coerceIn(40, 100).toFloat()) }
