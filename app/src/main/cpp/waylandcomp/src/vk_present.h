@@ -1,6 +1,7 @@
 #ifndef VK_PRESENT_H
 #define VK_PRESENT_H
 #include <stdint.h>
+#include <stddef.h>
 #include <android/native_window.h>
 /*
  * Android-surface render backend for the embedded Wayland compositor.
@@ -72,6 +73,14 @@ void vkp_image_upload_shm(struct vkp_image *img, const void *data, int stride);
 int vkp_image_width(const struct vkp_image *img);
 int vkp_image_height(const struct vkp_image *img);
 void vkp_image_destroy(struct vkp_image *img);
+
+/* Game translator: request scene readback and a compositor-owned RGBA overlay. */
+void vkp_set_translator_enabled(int enabled);
+int vkp_translator_enabled(void);
+void vkp_set_translator_capture_suspended(int suspended);
+void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height);
+/* Compositor-thread diagnostic snapshot: scene/output sizes, viewport, scale, offsets and rotation. */
+void vkp_translator_debug_info(char *out, size_t out_size);
 
 // One scene draw: the src rectangle of an image (image pixels) scaled into the dst
 // rectangle (scene pixels). The scene is mapped onto the output by the scale mode.

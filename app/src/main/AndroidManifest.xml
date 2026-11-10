@@ -36,6 +36,7 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission
@@ -179,6 +180,11 @@
                 <action android:name="${applicationId}.PIN_SHORTCUT_RESULT" />
             </intent-filter>
         </receiver>
+
+        <activity
+            android:name="com.winlator.cmod.feature.translator.TranslatorConfigActivity"
+            android:theme="@style/AppThemeUnifiedDarkNoAnimation"
+            android:exported="false" />
 
         <service
             android:name="com.winlator.cmod.feature.stores.steam.service.SteamService"

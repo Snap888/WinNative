@@ -140,6 +140,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -207,6 +208,7 @@ internal fun HUDPaneContent(
     val elementOrder = listOf(1, 2, 3, 8, 4, 5, 6, 0, 7)
     val active =
         state.items.firstOrNull { it.itemId == R.id.main_menu_fps_monitor }?.active ?: false
+    val context = LocalContext.current
 
     activeEditor?.let { editor ->
         HUDMetricInputDialog(

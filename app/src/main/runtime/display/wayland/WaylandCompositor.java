@@ -106,6 +106,11 @@ public final class WaylandCompositor {
     }
 
     @SuppressWarnings("unused")
+    static void onTranslatorFrame(int width, int height, byte[] rgba) {
+        com.winlator.cmod.feature.translator.GameTranslator.onNativeFrame(width, height, rgba);
+    }
+
+    @SuppressWarnings("unused")
     static void onTextInput(boolean enabled, String program, int x, int y, int w, int h) {
         TextInputListener l = textInputListener;
         if (l != null) l.onTextInput(enabled, program, x, y, w, h);
@@ -159,6 +164,11 @@ public final class WaylandCompositor {
     public static native void nativeSetScaleMode(int scaleMode, int alignment);
     public static native void nativeSetFpsLimit(int fps);
     public static native void nativeSetLayerFrameRate(float hz);
+
+    // Vulkan-native game translator. Captured frames are copied from the Turnip scene, never MediaProjection.
+    public static native void nativeSetTranslatorEnabled(boolean enabled);
+    public static native void nativeSetTranslatorOverlay(byte[] rgba, int width, int height);
+    public static native String nativeGetTranslatorDebugInfo();
 
     // Zero-copy display layer and buffer layout.
     public static native void nativeSetZeroCopy(boolean on);

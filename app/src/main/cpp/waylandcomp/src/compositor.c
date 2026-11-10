@@ -2136,10 +2136,16 @@ static void render_scene(void) {
     int rendered = 0;
     int fx_on = vkp_effects_active();
     int framegen = vkp_framegen_active();
+    const int translator_requested = vkp_translator_enabled();
     /* HDR (see hdr_plan): route 0 = the old paths below; 1 / 2 = composed; 3 = layer only, effects and
      * frame generation skipped. Always 0 while the HDR gate is closed: nothing changes for that session. */
     struct hdr_scene hs;
-    int hdr_route = hdr_plan(&dl, w, h, fx_on, framegen, &hs);
+    int hdr_route = hdr_plan(&dl, w, h, fx_on || translator_requested, framegen, &hs);
+    /* An importable HDR scene must use the Turnip swapchain while OCR is active. An unimportable
+     * HDR surface remains on its protected display-layer route and is explicitly not captured. */
+    if (translator_requested && hdr_route == 1) hdr_route = 2;
+    int translator_on = translator_requested && hdr_route != 3;
+    vkp_set_translator_capture_suspended(translator_requested && hdr_route == 3);
     const char *hdr_copy = NULL;           /* why this scene's HDR frames (if any) took the copy path */
     if (wnc_color_hdr_open()) {
         hdr_note_route(hdr_route, &hs);
@@ -2181,8 +2187,8 @@ static void render_scene(void) {
      *     game keeps its layer and the display does the scene -> output mapping;
      *   - screen effects DO when a window is drawn above the game: the chain has to see the whole
      *     scene to look the way it does on the copy path, and here the game is only part of it. */
-    const int pass_on = fx_on || framegen;
-    int li = (g_zero_copy && !framegen) ? layer_candidate(&dl, w, h) : -1;
+    int pass_on = fx_on || framegen || translator_on;
+    int li = (g_zero_copy && !framegen && !translator_on) ? layer_candidate(&dl, w, h) : -1;
     int over = li >= 0 ? dl.n - 1 - li : 0; /* draws above the fullscreen game (0 or 1) */
     const int fx_blocks = (li >= 0 && fx_on && over > 0);
     if (fx_blocks) { li = -1; over = 0; }
@@ -2193,7 +2199,7 @@ static void render_scene(void) {
      * show the game layer and hide it again on every frame. */
     const int ov_blocks = (li >= 0 && over > 0 && !fx_blocks && !sc_layer_overlay_affordable());
     if (ov_blocks) { li = -1; over = 0; }
-    const int blocked = framegen ? 1 : (fx_blocks ? 2 : (ov_blocks ? 3 : 0));
+    const int blocked = translator_on ? 4 : (framegen ? 1 : (fx_blocks ? 2 : (ov_blocks ? 3 : 0)));
     if (g_zero_copy && blocked != g_zero_copy_paused) {
         g_zero_copy_paused = blocked;
         if (blocked == 1)
@@ -2203,15 +2209,27 @@ static void render_scene(void) {
         else if (blocked == 3)
             wnc_log("layer", "zero-copy paused: a window above the game would need a second display layer, "
                                 "which this display cannot compose in hardware - whole scene on the copy path");
+        else if (blocked == 4)
+            wnc_log("translator", "zero-copy paused only while game translation is enabled: Turnip scene readback required");
         else
             wnc_log("effects", "zero-copy resumed: the game is back on its own display layer");
     }
-    struct surface *ls = li >= 0 ? surface_for_image(dl.d[li].img) : NULL;
-    /* A frame this renderer could not import can only be shown on the layer, effects or not. */
-    if (li < 0) ls = ahb_layer_only_candidate(w, h);
-    /* HDR: the same, for a game's SUBSURFACE swapchain whose 10-bit frame the compositor could not
-     * import (NULL whenever the HDR gate is closed - nothing is ever noted then). */
-    if (li < 0 && !ls) ls = hdr_unimported_fullscreen(&dl, w, h);
+    struct surface *layer_only = li >= 0 ? NULL : ahb_layer_only_candidate(w, h);
+    /* HDR frames the compositor could not import also have to remain on their display layer. */
+    if (li < 0 && !layer_only) layer_only = hdr_unimported_fullscreen(&dl, w, h);
+    if (translator_on && layer_only) {
+        /* Do not black out a game whose buffers cannot be imported for the compositor readback. Keep
+         * its original hardware layer and suspend OCR only for this frame. */
+        static int said_layer_only;
+        translator_on = 0;
+        pass_on = fx_on || framegen;
+        vkp_set_translator_capture_suspended(1);
+        if (!said_layer_only) {
+            said_layer_only = 1;
+            wnc_log("translator", "OCR paused for a non-importable display-layer frame; original game presentation is preserved");
+        }
+    }
+    struct surface *ls = li >= 0 ? surface_for_image(dl.d[li].img) : layer_only;
     if (ls && pass_on && li < 0 && !g_zero_copy_fx_skip_said) {
         g_zero_copy_fx_skip_said = 1;
         wnc_log(framegen ? "framegen" : "effects",
@@ -2281,6 +2299,7 @@ static void render_scene(void) {
     }
     } /* routes 0 and 3 */
     free(hs.is_hdr);
+    vkp_set_translator_capture_suspended(0);
     if (hdr_copy && rendered && wnc_color_hdr_open()) hdr_count_copied(&dl, hdr_copy);
     if (rendered) {
         int64_t t = now_ns();

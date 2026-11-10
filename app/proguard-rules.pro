@@ -106,3 +106,7 @@
 -dontwarn androidx.window.sidecar.SidecarInterface
 -dontwarn androidx.window.sidecar.SidecarProvider
 -dontwarn androidx.window.sidecar.SidecarWindowLayoutInfo
+
+# Wayland compositor JNI callbacks: C resolves these methods by their exact class/member names.
+-keep class com.winlator.cmod.runtime.display.wayland.WaylandCompositor { *; }
+-keep class com.winlator.cmod.feature.translator.GameTranslator { *; }

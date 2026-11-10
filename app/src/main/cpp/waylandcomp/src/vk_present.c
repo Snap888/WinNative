@@ -125,6 +125,142 @@ static VkResult timed_wait(VkFence fence, uint64_t timeout) {
  * scene size change; frames are fenced, so never while the GPU reads it. */
 static struct { VkImage img; VkDeviceMemory mem; int w, h; } g_scene;
 
+/* Optional in-game translation capture. Readback is throttled and uses host-coherent
+ * staging memory; the compositor already waits its frame fence before handing bytes to OCR. */
+static volatile int g_translator_enabled;
+static volatile int g_translator_capture_suspended;
+static VkBuffer g_translator_readback;
+static VkDeviceMemory g_translator_readback_mem;
+static void *g_translator_readback_map;
+static VkDeviceSize g_translator_readback_size;
+static int g_translator_readback_w, g_translator_readback_h;
+static int g_translator_capture_ready;
+static int64_t g_translator_last_capture_ns;
+static struct vkp_image *g_translator_overlay;
+static int g_translator_overlay_visible;
+static pthread_mutex_t g_translator_overlay_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint8_t *g_translator_overlay_pending;
+static int g_translator_overlay_pending_set;
+static int g_translator_overlay_pending_w, g_translator_overlay_pending_h;
+extern void wnc_on_translator_frame(const uint8_t *rgba, int width, int height);
+
+void vkp_set_translator_enabled(int enabled) {
+    g_translator_enabled = enabled ? 1 : 0;
+}
+int vkp_translator_enabled(void) { return g_translator_enabled != 0; }
+void vkp_set_translator_capture_suspended(int suspended) {
+    g_translator_capture_suspended = suspended ? 1 : 0;
+}
+
+/* UI/OCR worker only copies bytes here. Vulkan image creation/upload happens on the compositor thread. */
+void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height) {
+    uint8_t *copy = NULL;
+    if (rgba && width > 0 && height > 0 && width <= 4096 && height <= 2160) {
+        size_t bytes = (size_t)width * (size_t)height * 4u;
+        copy = malloc(bytes);
+        if (copy) memcpy(copy, rgba, bytes);
+    }
+    pthread_mutex_lock(&g_translator_overlay_lock);
+    free(g_translator_overlay_pending);
+    g_translator_overlay_pending = copy;
+    g_translator_overlay_pending_w = copy ? width : 0;
+    g_translator_overlay_pending_h = copy ? height : 0;
+    g_translator_overlay_pending_set = 1;
+    pthread_mutex_unlock(&g_translator_overlay_lock);
+}
+
+/* Vulkan-owned image is touched only on the compositor thread. Incoming Android RGBA is converted
+ * to the BGRA byte order of vkp_image_create_shm's linear image. */
+static void translator_overlay_apply(void) {
+    uint8_t *rgba;
+    int w, h, pending;
+    pthread_mutex_lock(&g_translator_overlay_lock);
+    pending = g_translator_overlay_pending_set;
+    g_translator_overlay_pending_set = 0;
+    rgba = g_translator_overlay_pending;
+    w = g_translator_overlay_pending_w;
+    h = g_translator_overlay_pending_h;
+    g_translator_overlay_pending = NULL;
+    g_translator_overlay_pending_w = g_translator_overlay_pending_h = 0;
+    pthread_mutex_unlock(&g_translator_overlay_lock);
+    if (!pending) return;
+    if (!rgba || w <= 0 || h <= 0) {
+        g_translator_overlay_visible = 0;
+        free(rgba);
+        return;
+    }
+    if (!g_translator_overlay || vkp_image_width(g_translator_overlay) != w ||
+        vkp_image_height(g_translator_overlay) != h) {
+        if (g_translator_overlay) vkp_image_destroy(g_translator_overlay);
+        g_translator_overlay = vkp_image_create_shm(w, h);
+    }
+    if (g_translator_overlay) {
+        size_t bytes = (size_t)w * (size_t)h * 4u;
+        uint8_t *bgra = malloc(bytes);
+        if (bgra) {
+            for (size_t i = 0; i < bytes; i += 4) {
+                bgra[i] = rgba[i + 2]; bgra[i + 1] = rgba[i + 1];
+                bgra[i + 2] = rgba[i]; bgra[i + 3] = rgba[i + 3];
+            }
+            vkp_image_upload_shm(g_translator_overlay, bgra, w * 4);
+            free(bgra);
+            g_translator_overlay_visible = 1;
+        }
+    }
+    free(rgba);
+}
+
+static void translator_readback_destroy(void) {
+    if (g_translator_readback_map) g_vk.UnmapMemory(g_dev, g_translator_readback_mem);
+    if (g_translator_readback) g_vk.DestroyBuffer(g_dev, g_translator_readback, NULL);
+    if (g_translator_readback_mem) g_vk.FreeMemory(g_dev, g_translator_readback_mem, NULL);
+    g_translator_readback = VK_NULL_HANDLE;
+    g_translator_readback_mem = VK_NULL_HANDLE;
+    g_translator_readback_map = NULL;
+    g_translator_readback_size = 0;
+    g_translator_readback_w = g_translator_readback_h = 0;
+}
+
+static int memory_type(uint32_t bits, VkMemoryPropertyFlags want);
+
+static int translator_readback_ensure(int w, int h) {
+    VkDeviceSize bytes = (VkDeviceSize)w * (VkDeviceSize)h * 4u;
+    if (g_translator_readback && g_translator_readback_w == w && g_translator_readback_h == h)
+        return 0;
+    translator_readback_destroy();
+    VkBufferCreateInfo bci = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = bytes, .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+    if (g_vk.CreateBuffer(g_dev, &bci, NULL, &g_translator_readback) != VK_SUCCESS) return -1;
+    VkMemoryRequirements req;
+    g_vk.GetBufferMemoryRequirements(g_dev, g_translator_readback, &req);
+    int idx = memory_type(req.memoryTypeBits,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (idx < 0) { translator_readback_destroy(); return -1; }
+    VkMemoryAllocateInfo mai = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = req.size, .memoryTypeIndex = (uint32_t)idx};
+    if (g_vk.AllocateMemory(g_dev, &mai, NULL, &g_translator_readback_mem) != VK_SUCCESS) {
+        translator_readback_destroy(); return -1;
+    }
+    if (g_vk.BindBufferMemory(g_dev, g_translator_readback, g_translator_readback_mem, 0) != VK_SUCCESS ||
+        g_vk.MapMemory(g_dev, g_translator_readback_mem, 0, req.size, 0, &g_translator_readback_map) != VK_SUCCESS) {
+        translator_readback_destroy(); return -1;
+    }
+    g_translator_readback_size = req.size;
+    g_translator_readback_w = w; g_translator_readback_h = h;
+    wnc_log("translator", "Turnip staging readback ready: %dx%d RGBA", w, h);
+    return 0;
+}
+
+static int translator_capture_due(void) {
+    if (!g_translator_enabled) return 0;
+    int64_t now = perf_now();
+    if (now - g_translator_last_capture_ns < 250000000LL) return 0;
+    g_translator_last_capture_ns = now;
+    return 1;
+}
+
+
 /* HDR composition (hdr_compose.h): the 10-bit image every draw is blitted into 1:1 in its own encoding
  * ("mixed"), and the 10-bit HDR picture the encode pass makes of it for the game's display layer. Only
  * ever created while an HDR game shares the scene with something the display layer cannot show alone. */
@@ -357,6 +493,28 @@ static void update_map(int scene_w, int scene_h) {
                mode_name(mode), align_name(align), scene_w, scene_h,
                (int)(scene_w * g_map.kx + 0.5f), (int)(scene_h * g_map.ky + 0.5f),
                (int)g_map.off_x, (int)g_map.off_y, W, H);
+}
+
+/* Called synchronously from the translator frame callback on this compositor thread. */
+void vkp_translator_debug_info(char *out, size_t out_size) {
+    if (!out || out_size == 0) return;
+    if (!g_map.valid) {
+        snprintf(out, out_size, "map=invalid scene=%dx%d output=%ux%u",
+                 g_scene.w, g_scene.h, g_extent.width, g_extent.height);
+        return;
+    }
+    const float overlay_dx = 0.0f;
+    const float overlay_dy = 0.0f;
+    snprintf(out, out_size,
+        "scene=%dx%d output=%dx%d viewport=(%d,%d,%d,%d) scale=(%.5f,%.5f) offset=(%.2f,%.2f) "
+        "content=(%.2f,%.2f,%.2f,%.2f) overlayOffset=(%.1f,%.1f) "
+        "matrix=[%.5f,0,%.2f;0,%.5f,%.2f;0,0,1] rotation=%d",
+        g_map.scene_w, g_map.scene_h, g_map.out_w, g_map.out_h,
+        g_map.rx, g_map.ry, g_map.rw, g_map.rh, g_map.kx, g_map.ky, g_map.off_x, g_map.off_y,
+        g_map.off_x, g_map.off_y, g_map.off_x + g_map.scene_w * g_map.kx,
+        g_map.off_y + g_map.scene_h * g_map.ky, overlay_dx, overlay_dy,
+        g_map.kx, g_map.off_x + overlay_dx * g_map.kx,
+        g_map.ky, g_map.off_y + overlay_dy * g_map.ky, vkp_surface_rotation_degrees());
 }
 
 int vkp_output_to_scene(double ox, double oy, double *sx, double *sy) {
@@ -1520,6 +1678,8 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     vkp_apply_window_request();
     if (g_dev_state == -2) return -1;
     if (dev_init() != 0 || !g_window || scene_w <= 0 || scene_h <= 0) return -1;
+    translator_overlay_apply();
+    g_translator_capture_ready = 0;
 
     /* Frame generation queues several presents per scene frame and needs swapchain images for
      * them: rebuild when that changes (armed, disarmed, another multiplier). */
@@ -1557,10 +1717,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * blit filter follows the scaling mode. */
     const int fx = !g_plain_frame && vkp_effects_active();
     const int fg = !g_plain_frame && vkp_framegen_active();
+    const int translator = g_translator_enabled != 0 && g_translator_capture_suspended == 0;
     /* HDR frames with frame generation through an HDR10 swapchain: the scene, the effects and the
      * engine's frames in FP16 (FG_HDR_FMT) where the engine can take that format - more than 8 bits of
      * PQ through interpolation - else the 8-bit scene, as before. */
-    const int deep = hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
+    const int deep = !translator && hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
                      ensure_img(&g_fgscene, scene_w, scene_h, FG_HDR_FMT,
                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -1574,13 +1735,17 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             if (deep)
                 wnc_log("color", "frame generation runs on the HDR picture in FP16 (RGBA16F): more than 8 bits of PQ "
                            "through interpolation, into the HDR10 swapchain (%s)", sw);
+            else if (translator)
+                wnc_log("translator", "HDR frame generation uses the 8-bit scene while Vulkan OCR readback is enabled");
             else
                 wnc_log("color", "frame generation runs on the HDR picture in 8 bits (the engine cannot take FP16 here), "
                            "into the HDR10 swapchain (%s): banding possible in smooth gradients", sw);
         }
     }
     /* An HDR scene always takes the pass: its draws are composed into one encoding first. */
-    const int pass = deep || ((fx || fg || (hf && n > 0)) && ensure_scene_image(scene_w, scene_h) == 0);
+    const int pass = deep || ((fx || fg || translator || (hf && n > 0)) && ensure_scene_image(scene_w, scene_h) == 0);
+    const int capture_now = translator && !deep && pass && translator_capture_due() &&
+                            translator_readback_ensure(scene_w, scene_h) == 0;
     VkImage scene_img = deep ? g_fgscene.img : g_scene.img;
     const VkFormat scene_fmt = deep ? FG_HDR_FMT : SCENE_FMT;
     const VkFilter blit_filter = vkp_effects_blit_filter();
@@ -1598,7 +1763,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * frame is a new submission). One barrier per distinct image. The destination joins them:
      * the swapchain image on the direct path, the scene image on the compositor pass (the
      * per-present blits transition the swapchain images themselves there). */
-    VkImageMemoryBarrier *bars = calloc((size_t)n + 1, sizeof(*bars));
+    VkImageMemoryBarrier *bars = calloc((size_t)n + 2, sizeof(*bars));
     int nb = 0;
     bars[nb++] = (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1626,6 +1791,15 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                 .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT};
             im->in_general = 1;
         }
+    }
+    if (translator && g_translator_overlay_visible && g_translator_overlay && !g_translator_overlay->in_general) {
+        bars[nb++] = (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .oldLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
+            .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = g_translator_overlay->image, .subresourceRange = range,
+            .srcAccessMask = VK_ACCESS_HOST_WRITE_BIT, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT};
+        g_translator_overlay->in_general = 1;
     }
     g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT |
                                  (pass ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : 0),
@@ -1681,6 +1855,50 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                     pass ? scene_w : (int)g_extent.width, pass ? scene_h : (int)g_extent.height,
                     pass ? VK_FILTER_LINEAR : blit_filter);
         drawn++;
+    }
+
+    /* Copy the unannotated scene to host-visible memory at a low cadence. The normal frame fence
+     * below covers this transfer; OCR runs later on its own Android worker and never stalls this loop. */
+    if (capture_now && scene_img == g_scene.img) {
+        VkImageMemoryBarrier to_src = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = scene_img, .subresourceRange = range,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT};
+        g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                0, 0, NULL, 0, NULL, 1, &to_src);
+        VkBufferImageCopy copy = {.bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0,
+            .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+            .imageOffset = {0, 0, 0}, .imageExtent = {(uint32_t)scene_w, (uint32_t)scene_h, 1}};
+        g_vk.CmdCopyImageToBuffer(cmd, scene_img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                  g_translator_readback, 1, &copy);
+        VkBufferMemoryBarrier host_ready = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, .dstAccessMask = VK_ACCESS_HOST_READ_BIT,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .buffer = g_translator_readback, .offset = 0, .size = g_translator_readback_size};
+        VkImageMemoryBarrier back_dst = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = scene_img, .subresourceRange = range,
+            .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT, .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT};
+        g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 1, &host_ready, 1, &back_dst);
+        g_translator_capture_ready = 1;
+    }
+
+    /* The translation is a normal compositor draw, not an Android system overlay. It is inserted
+     * after readback so the OCR never recognizes its own previous translation. */
+    if (translator && g_translator_overlay_visible && g_translator_overlay) {
+        struct vkp_draw overlay = {g_translator_overlay, 0, 0,
+            (float)g_translator_overlay->w, (float)g_translator_overlay->h,
+            0, 0,
+            g_translator_overlay->w, g_translator_overlay->h, 1};
+        VkImageBlit overlay_blit;
+        if (draw_to_scene_blit(&overlay, scene_w, scene_h, &overlay_blit)) {
+            record_draw(cmd, &overlay, &overlay_blit, scene_img, scene_fmt,
+                        scene_w, scene_h, VK_FILTER_LINEAR);
+            drawn++;
+        }
     }
 
     int ngen = 0;
@@ -1788,6 +2006,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         g_vk.QueueSubmit(g_queue, 1, &si, g_fence);
     }
     VkResult fr = timed_wait(g_fence, UINT64_MAX);
+    if (fr == VK_SUCCESS && g_translator_capture_ready && g_translator_readback_map) {
+        g_translator_capture_ready = 0;
+        wnc_on_translator_frame((const uint8_t *)g_translator_readback_map,
+                                g_translator_readback_w, g_translator_readback_h);
+    }
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
     vkp_framegen_presented(presented_gen);

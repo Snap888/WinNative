@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.winlator.cmod.R
+import com.winlator.cmod.feature.translator.GameTranslatorPanel
 import com.winlator.cmod.shared.framegen.DisFlowPreset
 import com.winlator.cmod.shared.framegen.FrameGenEngine
 import com.winlator.cmod.shared.framegen.FrameGenPreset
@@ -129,6 +130,9 @@ internal fun FrameGenPaneContent(
                         )
                     }
                 }
+
+                ThinDivider()
+                GameTranslatorPanel(paneScale = paneScale)
             }
         }
     }
