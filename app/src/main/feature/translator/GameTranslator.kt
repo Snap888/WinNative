@@ -217,7 +217,12 @@ object GameTranslator {
                         try {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
-                            val clean = lines.take(MAX_LINES)
+                            val groupedLines = OcrLineGrouper.group(lines.map {
+                                OcrLineGrouper.Line(it.text, it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom)
+                            }).take(MAX_LINES)
+                            val clean = groupedLines.map {
+                                OcrLine(it.text, Rect(it.left, it.top, it.right, it.bottom))
+                            }
                             if (debugState.value && lastTranslatedText.isBlank()) renderDebugOverlay(width, height, clean, nativeDebugInfo)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
