@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.util.Log
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -60,6 +61,8 @@ object GameTranslator {
     private const val GLASS_ALPHA_KEY = "glass_alpha"
     private const val FONT_AUTO_KEY = "font_auto"
     private const val FONT_SIZE_KEY = "font_size"
+    private const val DEBUG_KEY = "debug_overlay"
+    private const val TAG = "GameTranslatorDebug"
     private const val EMPTY_CLEAR_AFTER_MS = 550L
     private const val MAX_LINES = 18
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "GameTranslator-OCR") }
@@ -72,6 +75,7 @@ object GameTranslator {
     private val glassAlphaState = mutableStateOf(72)
     private val fontAutoState = mutableStateOf(true)
     private val fontSizeState = mutableStateOf(22f)
+    private val debugState = mutableStateOf(false)
     @Volatile private var appContext: Context? = null
     @Volatile private var lastSource = ""
     @Volatile private var lastTranslationAt = 0L
@@ -96,6 +100,7 @@ object GameTranslator {
     val glassAlpha: Int get() = glassAlphaState.value
     val fontAuto: Boolean get() = fontAutoState.value
     val fontSize: Float get() = fontSizeState.value
+    val debugEnabled: Boolean get() = debugState.value
 
     fun setGlassAlpha(context: Context, value: Int) {
         val safe = value.coerceIn(20, 95)
@@ -103,6 +108,17 @@ object GameTranslator {
         lastRenderedGeometry = "" // Repaint the current translation with the new glass opacity.
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putInt(GLASS_ALPHA_KEY, safe).apply()
+    }
+
+    fun setDebugEnabled(context: Context, enabled: Boolean) {
+        debugState.value = enabled
+        lastRenderedGeometry = ""
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(DEBUG_KEY, enabled).apply()
+        if (!enabled) {
+            lastSource = ""
+            WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+        }
     }
 
     fun setFontAuto(context: Context, enabled: Boolean) {
@@ -142,6 +158,7 @@ object GameTranslator {
         glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 72).coerceIn(20, 95)
         fontAutoState.value = prefs.getBoolean(FONT_AUTO_KEY, true)
         fontSizeState.value = prefs.getFloat(FONT_SIZE_KEY, 22f).coerceIn(12f, 36f)
+        debugState.value = prefs.getBoolean(DEBUG_KEY, false)
         lastSource = ""
         candidateText = ""
         candidateHits = 0
@@ -197,6 +214,7 @@ object GameTranslator {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
                             val clean = lines.take(MAX_LINES)
+                            if (debugState.value) renderDebugOverlay(width, height, clean)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             val now = System.currentTimeMillis()
@@ -516,6 +534,7 @@ object GameTranslator {
             }
         }
         softenedFrame.recycle()
+        if (debugState.value) drawDebugBounds(canvas, sceneWidth, sceneHeight, lines)
 
         val argb = IntArray(sceneWidth * sceneHeight)
         bitmap.getPixels(argb, 0, sceneWidth, 0, 0, sceneWidth, sceneHeight)
@@ -650,6 +669,66 @@ object GameTranslator {
             Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x80ffffff.toInt(); strokeWidth = 1f })
     }
 
+    /**
+     * Diagnostics are expressed in compositor-scene pixels. The JNI callback currently exports
+     * frame dimensions but not the Android output viewport; identity below is only the
+     * scene-pixel -> overlay-pixel mapping (both Vulkan textures use the callback extent).
+     */
+    private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>) {
+        Log.d(TAG, "frame=\u0024{width}x\u0024{height} viewport=scene[0,0,\u0024width,\u0024height] " +
+            "overlay=\u0024{width}x\u0024{height} matrix=identity(scene_px->overlay_px)")
+        lines.forEachIndexed { index, line ->
+            val b = line.bounds
+            Log.d(TAG, "ocr[\u0024index] frameRect=(\u0024{b.left},\u0024{b.top},\u0024{b.right},\u0024{b.bottom}) " +
+                "overlayRect=(\u0024{b.left},\u0024{b.top},\u0024{b.right},\u0024{b.bottom}) text=\u0024{line.text.take(120)}")
+        }
+        if (lines.isEmpty()) {
+            WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
+            return
+        }
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        drawDebugBounds(Canvas(bitmap), width, height, lines)
+        val pixels = IntArray(width * height)
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val rgba = ByteArray(pixels.size * 4)
+        var offset = 0
+        for (pixel in pixels) {
+            rgba[offset++] = ((pixel shr 16) and 0xff).toByte()
+            rgba[offset++] = ((pixel shr 8) and 0xff).toByte()
+            rgba[offset++] = (pixel and 0xff).toByte()
+            rgba[offset++] = ((pixel ushr 24) and 0xff).toByte()
+        }
+        bitmap.recycle()
+        WaylandCompositor.nativeSetTranslatorOverlay(rgba, width, height)
+    }
+
+    private fun drawDebugBounds(canvas: Canvas, width: Int, height: Int, lines: List<OcrLine>) {
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(0, 230, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = (width / 540f).coerceIn(2f, 5f)
+        }
+        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = (width / 48f).coerceIn(14f, 28f)
+            style = Paint.Style.FILL
+        }
+        val background = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xcc003344.toInt()
+            style = Paint.Style.FILL
+        }
+        lines.forEachIndexed { index, line ->
+            val b = Rect(line.bounds)
+            b.intersect(0, 0, width, height)
+            if (b.width() <= 0 || b.height() <= 0) return@forEachIndexed
+            canvas.drawRect(b, stroke)
+            val caption = "OCR \u0024index"
+            val captionWidth = label.measureText(caption) + 10f
+            val top = (b.top - label.textSize - 8f).coerceAtLeast(0f)
+            canvas.drawRect(b.left.toFloat(), top, b.left + captionWidth, top + label.textSize + 6f, background)
+            canvas.drawText(caption, b.left + 5f, top + label.textSize, label)
+        }
+    }
     private fun drawTextBlock(
         canvas: Canvas, text: String, width: Int, height: Int,
         paint: TextPaint, stroke: TextPaint
@@ -708,6 +787,7 @@ internal fun GameTranslatorPanel(paneScale: Float) {
     val glassAlpha = GameTranslator.glassAlpha
     val fontAuto = GameTranslator.fontAuto
     val fontSize = GameTranslator.fontSize
+    val debugEnabled = GameTranslator.debugEnabled
     var menuExpanded by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
         Text("Игровой переводчик", color = MaterialTheme.colorScheme.onSurface, fontSize = (13f * paneScale).sp)
@@ -738,6 +818,11 @@ internal fun GameTranslatorPanel(paneScale: Float) {
                 Slider(value = glassAlpha.toFloat(), onValueChange = { GameTranslator.setGlassAlpha(context, it.toInt()) },
                     valueRange = 20f..95f)
             }
+        }
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Debug OCR: рамки и координаты", modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = (10f * paneScale).sp)
+            Switch(checked = debugEnabled, onCheckedChange = { GameTranslator.setDebugEnabled(context, it) })
         }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text("Размер шрифта: ${if (fontAuto) "Авто" else "Ручной"}", modifier = Modifier.weight(1f),
