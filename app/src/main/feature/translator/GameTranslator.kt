@@ -673,8 +673,8 @@ object GameTranslator {
 
     /**
      * Diagnostics are expressed in compositor-scene pixels. The JNI callback currently exports
-     * frame dimensions but not the Android output viewport; identity below is only the
-     * scene-pixel -> overlay-pixel mapping (both Vulkan textures use the callback extent).
+     * frame dimensions plus the native output viewport and the actual scene-to-output matrix.
+     * The overlay is a full-scene texture positioned by the compositor at (+20,-20) scene pixels.
      */
     private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>, nativeInfo: String) {
         Log.d(TAG, "frame=${width}x${height} native=$nativeInfo")
