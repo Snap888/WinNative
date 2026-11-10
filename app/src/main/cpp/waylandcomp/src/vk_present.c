@@ -1891,7 +1891,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     if (translator && g_translator_overlay_visible && g_translator_overlay) {
         struct vkp_draw overlay = {g_translator_overlay, 0, 0,
             (float)g_translator_overlay->w, (float)g_translator_overlay->h,
-            20, scene_h - g_translator_overlay->h - 20,
+            0, 0,
             g_translator_overlay->w, g_translator_overlay->h, 1};
         VkImageBlit overlay_blit;
         if (draw_to_scene_blit(&overlay, scene_w, scene_h, &overlay_blit)) {
