@@ -214,7 +214,7 @@ object GameTranslator {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
                             val clean = lines.take(MAX_LINES)
-                            if (debugState.value) renderDebugOverlay(width, height, clean)
+                            if (debugState.value && lastTranslatedText.isBlank()) renderDebugOverlay(width, height, clean)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
                             val normalized = text.lowercase().replace(Regex("\\s+"), " ").trim()
                             val now = System.currentTimeMillis()
@@ -675,12 +675,12 @@ object GameTranslator {
      * scene-pixel -> overlay-pixel mapping (both Vulkan textures use the callback extent).
      */
     private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>) {
-        Log.d(TAG, "frame=\u0024{width}x\u0024{height} viewport=scene[0,0,\u0024width,\u0024height] " +
-            "overlay=\u0024{width}x\u0024{height} matrix=identity(scene_px->overlay_px)")
+        Log.d(TAG, "frame=${width}x${height} viewport=scene[0,0,$width,$height] outputViewport=not-exported " +
+            "overlay=${width}x${height} matrix=identity(scene_px->overlay_px)")
         lines.forEachIndexed { index, line ->
             val b = line.bounds
-            Log.d(TAG, "ocr[\u0024index] frameRect=(\u0024{b.left},\u0024{b.top},\u0024{b.right},\u0024{b.bottom}) " +
-                "overlayRect=(\u0024{b.left},\u0024{b.top},\u0024{b.right},\u0024{b.bottom}) text=\u0024{line.text.take(120)}")
+            Log.d(TAG, "ocr[$index] frameRect=(${b.left},${b.top},${b.right},${b.bottom}) " +
+                "overlayRect=(${b.left},${b.top},${b.right},${b.bottom}) text=${line.text.take(120)}")
         }
         if (lines.isEmpty()) {
             WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
@@ -722,7 +722,7 @@ object GameTranslator {
             b.intersect(0, 0, width, height)
             if (b.width() <= 0 || b.height() <= 0) return@forEachIndexed
             canvas.drawRect(b, stroke)
-            val caption = "OCR \u0024index"
+            val caption = "OCR $index"
             val captionWidth = label.measureText(caption) + 10f
             val top = (b.top - label.textSize - 8f).coerceAtLeast(0f)
             canvas.drawRect(b.left.toFloat(), top, b.left + captionWidth, top + label.textSize + 6f, background)
