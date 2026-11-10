@@ -48,6 +48,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
 
+enum class TranslatorPlaqueMode(val title: String) { AUTO("Авто"), DENSE("Плотная"), GLASS("Стекло") }
+
 enum class TranslatorDisplayMode(val title: String, val description: String) {
     ORIGINAL_AND_TRANSLATION("A • Оригинал + перевод", "Перевод под исходной строкой"),
     REPLACE_TEXT("B • Замена текста", "Перевод на месте оригинала • матовое стекло"),
@@ -59,6 +61,7 @@ object GameTranslator {
     private const val PREFS = "wintranslator"
     private const val MODE_KEY = "display_mode"
     private const val GLASS_ALPHA_KEY = "glass_alpha"
+    private const val PLAQUE_MODE_KEY = "plaque_mode"
     private const val FONT_AUTO_KEY = "font_auto"
     private const val FONT_SIZE_KEY = "font_size"
     private const val DEBUG_KEY = "debug_overlay"
@@ -72,7 +75,8 @@ object GameTranslator {
     private val enabledState = mutableStateOf(false)
     private val statusState = mutableStateOf("Выключен")
     private val displayModeState = mutableStateOf(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
-    private val glassAlphaState = mutableStateOf(72)
+    private val glassAlphaState = mutableStateOf(90)
+    private val plaqueModeState = mutableStateOf(TranslatorPlaqueMode.AUTO)
     private val fontAutoState = mutableStateOf(true)
     private val fontSizeState = mutableStateOf(22f)
     private val debugState = mutableStateOf(false)
@@ -98,12 +102,20 @@ object GameTranslator {
     val status: String get() = statusState.value
     val displayMode: TranslatorDisplayMode get() = displayModeState.value
     val glassAlpha: Int get() = glassAlphaState.value
+    val plaqueMode: TranslatorPlaqueMode get() = plaqueModeState.value
     val fontAuto: Boolean get() = fontAutoState.value
     val fontSize: Float get() = fontSizeState.value
     val debugEnabled: Boolean get() = debugState.value
 
+    fun setPlaqueMode(context: Context, mode: TranslatorPlaqueMode) {
+        plaqueModeState.value = mode
+        lastRenderedGeometry = ""
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(PLAQUE_MODE_KEY, mode.name).apply()
+    }
+
     fun setGlassAlpha(context: Context, value: Int) {
-        val safe = value.coerceIn(20, 95)
+        val safe = value.coerceIn(40, 100)
         glassAlphaState.value = safe
         lastRenderedGeometry = "" // Repaint the current translation with the new glass opacity.
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -157,7 +169,8 @@ object GameTranslator {
         displayModeState.value = runCatching {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
-        glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 72).coerceIn(20, 95)
+        glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 90).coerceIn(40, 100)
+        plaqueModeState.value = runCatching { TranslatorPlaqueMode.valueOf(prefs.getString(PLAQUE_MODE_KEY, "AUTO") ?: "AUTO") }.getOrDefault(TranslatorPlaqueMode.AUTO)
         fontAutoState.value = prefs.getBoolean(FONT_AUTO_KEY, true)
         fontSizeState.value = prefs.getFloat(FONT_SIZE_KEY, 22f).coerceIn(12f, 36f)
         debugState.value = prefs.getBoolean(DEBUG_KEY, false)
@@ -272,7 +285,7 @@ object GameTranslator {
                                     // the OCR anchor moved by a meaningful amount.
                                     if (geometry != lastRenderedGeometry && lastTranslatedText.isNotBlank()) {
                                         drawModeOverlay(frameBitmap, width, height, clean,
-                                            lastTranslatedText, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value)
+                                            lastTranslatedText, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value, plaqueModeState.value)
                                         lastRenderedGeometry = geometry
                                     } else if (lastTranslatedText.isBlank() &&
                                         now - lastTranslationFailureAt >= 2500L) {
@@ -339,7 +352,7 @@ object GameTranslator {
                 }
                 lastTranslationFailureAt = 0L
                 lastTranslatedText = translated
-                drawModeOverlay(frameBitmap, width, height, lines, translated, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value)
+                drawModeOverlay(frameBitmap, width, height, lines, translated, displayModeState.value, glassAlphaState.value, fontAutoState.value, fontSizeState.value, plaqueModeState.value)
                 lastRenderedGeometry = geometry
                 statusState.value = "Перевод готов • ${displayModeState.value.title}"
             } finally {
@@ -461,7 +474,8 @@ object GameTranslator {
         mode: TranslatorDisplayMode,
         glassAlpha: Int,
         fontAuto: Boolean,
-        manualFontSize: Float
+        manualFontSize: Float,
+        plaqueMode: TranslatorPlaqueMode
     ) {
         // A full-scene transparent layer keeps each label anchored to its OCR rectangle.
         // Vulkan alpha blending is enabled for this draw; B paints only the original text boxes.
@@ -544,7 +558,7 @@ object GameTranslator {
                             .coerceAtLeast(box.height() + 8)
                         drawCompactGlassText(
                             canvas, softenedFrame, translatedLine, box,
-                            maxWidth, maxHeight, glassAlpha, groupFontSize, textPaint, stroke
+                            maxWidth, maxHeight, glassAlpha, groupFontSize, textPaint, stroke, plaqueMode
                         )
                     }
                     TranslatorDisplayMode.BESIDE_ORIGINAL -> {
@@ -614,7 +628,8 @@ object GameTranslator {
         opacity: Int,
         groupFontSize: Float,
         paint: TextPaint,
-        stroke: TextPaint
+        stroke: TextPaint,
+        plaqueMode: TranslatorPlaqueMode
     ) {
         if (text.isBlank() || anchor.width() <= 2 || anchor.height() <= 2) return
 
@@ -638,8 +653,52 @@ object GameTranslator {
             .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
             .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
 
-        // Use the expanded OCR rectangle for both the opaque mask and glass panel.
-        drawFrostedGlass(canvas, blurredScene, rect, canvas.width, canvas.height, opacity)
+        // The previous full-scene blur retained the original glyphs in its pixels.
+        // Select glass only on calm backgrounds; animated/high-variance HUDs use dense fill.
+        val sampled = sampleBorderColor(blurredScene, anchor, pad)
+        val variance = borderLuminanceVariance(blurredScene, anchor, pad)
+        val resolvedMode = when (plaqueMode) {
+            TranslatorPlaqueMode.DENSE -> TranslatorPlaqueMode.DENSE
+            TranslatorPlaqueMode.GLASS, TranslatorPlaqueMode.AUTO ->
+                if (variance <= 0.035f) TranslatorPlaqueMode.GLASS else TranslatorPlaqueMode.DENSE
+        }
+        val darkBase = blendColors(sampled, Color.rgb(30, 34, 40), 0.72f)
+        val radius = (rect.height() * 0.16f).coerceIn(4f, 12f)
+        val rounded = android.graphics.RectF(rect)
+        if (resolvedMode == TranslatorPlaqueMode.GLASS) {
+            drawBlurredCrop(canvas, blurredScene, rect)
+        } else {
+            canvas.drawRoundRect(rounded, radius, radius,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = darkBase; style = Paint.Style.FILL })
+        }
+        val maskPad = (pad * 1.15f).toInt().coerceAtLeast(4)
+        val mask = android.graphics.RectF(
+            (anchor.left - maskPad).coerceAtLeast(0).toFloat(),
+            (anchor.top - maskPad).coerceAtLeast(0).toFloat(),
+            (anchor.right + maskPad).coerceAtMost(canvas.width).toFloat(),
+            (anchor.bottom + maskPad).coerceAtMost(canvas.height).toFloat()
+        )
+        // Opaque base always hides original pixels. Opacity affects only the upper tint.
+        canvas.drawRoundRect(mask, (mask.height() * 0.18f).coerceIn(3f, 12f), (mask.height() * 0.18f).coerceIn(3f, 12f),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = darkBase; alpha = 255; style = Paint.Style.FILL })
+        val tintAlpha = opacity.coerceIn(40, 100) * 255 / 100
+        val finalBase = blendColors(darkBase, Color.rgb(24, 29, 36), tintAlpha / 255f)
+        val textColor = if (contrastRatio(finalBase, Color.WHITE) >= contrastRatio(finalBase, Color.BLACK)) Color.WHITE else Color.BLACK
+        canvas.drawRoundRect(rounded, radius, radius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(tintAlpha, 24, 29, 36)
+                style = Paint.Style.FILL
+            })
+        canvas.drawRoundRect(rounded, radius, radius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x40ffffff
+                style = Paint.Style.STROKE
+                strokeWidth = max(1f, appContext?.resources?.displayMetrics?.density ?: 1f)
+            })
+        paint.color = textColor
+        stroke.color = if (textColor == Color.WHITE) Color.BLACK else Color.WHITE
+        stroke.strokeWidth = max(1f, (appContext?.resources?.displayMetrics?.density ?: 1f) * 1.25f)
+        paint.letterSpacing = 0.015f
 
         val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidth)
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
@@ -659,6 +718,78 @@ object GameTranslator {
 
         paint.textSize = originalSize
         stroke.textSize = originalSize
+    }
+
+    private fun sampleBorderColor(frame: Bitmap, box: Rect, radius: Int): Int {
+        val values = ArrayList<Int>(128)
+        val r = radius.coerceIn(2, 6)
+        val left = (box.left - r).coerceAtLeast(0)
+        val top = (box.top - r).coerceAtLeast(0)
+        val right = (box.right + r).coerceAtMost(frame.width - 1)
+        val bottom = (box.bottom + r).coerceAtMost(frame.height - 1)
+        for (y in top..bottom step 2) for (x in left..right step 2) {
+            if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) continue
+            val color = frame.getPixel(x, y)
+            if (Color.alpha(color) > 180) values += color
+        }
+        if (values.isEmpty()) return Color.rgb(30, 34, 40)
+        fun median(channel: (Int) -> Int): Int {
+            val sorted = values.map(channel).sorted()
+            return sorted[sorted.size / 2]
+        }
+        return Color.rgb(median(Color::red), median(Color::green), median(Color::blue))
+    }
+
+    private fun borderLuminanceVariance(frame: Bitmap, box: Rect, radius: Int): Float {
+        val samples = ArrayList<Float>(128)
+        val r = radius.coerceIn(2, 6)
+        val left = (box.left - r).coerceAtLeast(0)
+        val top = (box.top - r).coerceAtLeast(0)
+        val right = (box.right + r).coerceAtMost(frame.width - 1)
+        val bottom = (box.bottom + r).coerceAtMost(frame.height - 1)
+        for (y in top..bottom step 2) for (x in left..right step 2) {
+            if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) continue
+            val color = frame.getPixel(x, y)
+            val lum = (0.2126f * Color.red(color) + 0.7152f * Color.green(color) + 0.0722f * Color.blue(color)) / 255f
+            samples += lum
+        }
+        if (samples.size < 2) return 1f
+        val mean = samples.average().toFloat()
+        return samples.sumOf { ((it - mean) * (it - mean)).toDouble() }.toFloat() / samples.size
+    }
+
+    private fun blendColors(a: Int, b: Int, amount: Float): Int {
+        val t = amount.coerceIn(0f, 1f)
+        return Color.rgb(
+            (Color.red(a) * (1f - t) + Color.red(b) * t).toInt(),
+            (Color.green(a) * (1f - t) + Color.green(b) * t).toInt(),
+            (Color.blue(a) * (1f - t) + Color.blue(b) * t).toInt()
+        )
+    }
+
+    private fun linearChannel(value: Int): Float {
+        val c = value / 255f
+        return if (c <= 0.04045f) c / 12.92f else Math.pow(((c + 0.055f) / 1.055f).toDouble(), 2.4).toFloat()
+    }
+
+    private fun contrastRatio(background: Int, foreground: Int): Float {
+        fun luminance(c: Int) = 0.2126f * linearChannel(Color.red(c)) +
+            0.7152f * linearChannel(Color.green(c)) + 0.0722f * linearChannel(Color.blue(c))
+        val l1 = luminance(background)
+        val l2 = luminance(foreground)
+        return (max(l1, l2) + 0.05f) / (min(l1, l2) + 0.05f)
+    }
+
+    private fun drawBlurredCrop(canvas: Canvas, frame: Bitmap, rect: Rect) {
+        val safe = Rect(rect)
+        if (!safe.intersect(0, 0, frame.width, frame.height) || safe.width() <= 1 || safe.height() <= 1) return
+        val crop = Bitmap.createBitmap(frame, safe.left, safe.top, safe.width(), safe.height())
+        val small = Bitmap.createScaledBitmap(crop, max(1, crop.width / 6), max(1, crop.height / 6), true)
+        val blurred = Bitmap.createScaledBitmap(small, crop.width, crop.height, true)
+        canvas.drawBitmap(blurred, null, android.graphics.RectF(safe), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        crop.recycle()
+        small.recycle()
+        blurred.recycle()
     }
 
     private fun drawFrostedGlass(
