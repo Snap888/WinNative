@@ -217,6 +217,7 @@ object GameTranslator {
                         try {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
+                            // Convert OCR rows to paragraph-sized translation units before building the request.
                             val groupedLines = OcrLineGrouper.group(lines.map {
                                 OcrLineGrouper.Line(it.text, it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom)
                             }).take(MAX_LINES)
