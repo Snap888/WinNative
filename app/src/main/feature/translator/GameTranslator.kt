@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.util.Log
@@ -76,7 +78,7 @@ object GameTranslator {
     private val statusState = mutableStateOf("Выключен")
     private val displayModeState = mutableStateOf(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
     private val glassAlphaState = mutableStateOf(90)
-    private val plaqueModeState = mutableStateOf(TranslatorPlaqueMode.AUTO)
+    private val plaqueModeState = mutableStateOf(TranslatorPlaqueMode.GLASS)
     private val fontAutoState = mutableStateOf(true)
     private val fontSizeState = mutableStateOf(22f)
     private val debugState = mutableStateOf(false)
@@ -96,7 +98,7 @@ object GameTranslator {
     private val chinese by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
     private val korean by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
 
-    private data class OcrLine(val text: String, val bounds: Rect)
+    private data class OcrLine(val text: String, val bounds: Rect, val sourceLineCount: Int = 1, val protectedZones: List<Rect> = emptyList())
 
     val enabled: Boolean get() = enabledState.value
     val status: String get() = statusState.value
@@ -170,7 +172,7 @@ object GameTranslator {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
         glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 90).coerceIn(40, 100)
-        plaqueModeState.value = runCatching { TranslatorPlaqueMode.valueOf(prefs.getString(PLAQUE_MODE_KEY, "AUTO") ?: "AUTO") }.getOrDefault(TranslatorPlaqueMode.AUTO)
+        plaqueModeState.value = runCatching { TranslatorPlaqueMode.valueOf(prefs.getString(PLAQUE_MODE_KEY, "GLASS") ?: "GLASS") }.getOrDefault(TranslatorPlaqueMode.AUTO)
         fontAutoState.value = prefs.getBoolean(FONT_AUTO_KEY, true)
         fontSizeState.value = prefs.getFloat(FONT_SIZE_KEY, 22f).coerceIn(12f, 36f)
         debugState.value = prefs.getBoolean(DEBUG_KEY, false)
@@ -231,11 +233,25 @@ object GameTranslator {
                             // Keep identical labels in different HUD locations: they are distinct
                             // visible strings and must retain their own OCR anchors.
                             // Convert OCR rows to paragraph-sized translation units before building the request.
-                            val groupedLines = OcrLineGrouper.group(lines.map {
+                            val rawOcrLines = lines.map {
                                 OcrLineGrouper.Line(it.text, it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom)
-                            }).take(MAX_LINES)
+                            }
+                            if (debugState.value) {
+                                OcrLineGrouper.debugDecisions(rawOcrLines).forEach { Log.d(TAG, "paragraph: $it") }
+                            }
+                            val density = context.resources.displayMetrics.density
+                            val iconZones = OcrLineGrouper.buttonGlyphZones(rawOcrLines).map { glyph ->
+                                val guard = (8f * density).toInt().coerceAtLeast(6)
+                                Rect(
+                                    (glyph.left - guard).coerceAtLeast(0),
+                                    (glyph.top - guard).coerceAtLeast(0),
+                                    glyph.right + guard,
+                                    glyph.bottom + guard
+                                )
+                            }
+                            val groupedLines = OcrLineGrouper.group(rawOcrLines).take(MAX_LINES)
                             val clean = groupedLines.map {
-                                OcrLine(it.text, Rect(it.left, it.top, it.right, it.bottom))
+                                OcrLine(it.text, Rect(it.left, it.top, it.right, it.bottom), it.lineCount, iconZones)
                             }
                             if (debugState.value && lastTranslatedText.isBlank()) renderDebugOverlay(width, height, clean, nativeDebugInfo)
                             val text = clean.joinToString("\n") { it.text }.take(1400)
@@ -438,27 +454,51 @@ object GameTranslator {
     }
 
     private fun resolveGroupFontSize(
-        translations: List<String>, lines: List<OcrLine>, sceneWidth: Int, sceneHeight: Int, baseSize: Float
+        translations: List<String>,
+        lines: List<OcrLine>,
+        sceneWidth: Int,
+        sceneHeight: Int,
+        baseSize: Float,
+        protectedZones: List<Rect>
     ): Float {
         if (translations.isEmpty() || lines.isEmpty()) return baseSize
-        val minHeight = lines.minOf { it.bounds.height() }.coerceAtLeast(1)
-        val maxWidth = (sceneWidth - 24).coerceAtLeast(24)
-        val targetHeight = (minHeight + 10).coerceAtLeast(12)
+        val density = appContext?.resources?.displayMetrics?.density ?: 1f
+        fun availableWidth(line: OcrLine): Int {
+            val box = line.bounds
+            val center = box.centerX()
+            val isCentered = kotlin.math.abs(center - sceneWidth / 2f) <= sceneWidth * 0.10f
+            val isRight = !isCentered && box.right >= sceneWidth * 0.68f
+            var leftLimit = 0
+            var rightLimit = sceneWidth
+            protectedZones.forEach { zone ->
+                if (zone.bottom > box.top - box.height() * 0.25f && zone.top < box.bottom + box.height() * 0.25f) {
+                    if (zone.right <= box.left) leftLimit = max(leftLimit, zone.right)
+                    if (zone.left >= box.right) rightLimit = min(rightLimit, zone.left)
+                }
+            }
+            return when {
+                isCentered -> (2 * min(center - leftLimit, rightLimit - center)).toInt()
+                isRight -> box.right - leftLimit
+                else -> rightLimit - box.left
+            }.coerceAtLeast(box.width())
+        }
+        val minLineHeight = lines.minOf { (it.bounds.height() / it.sourceLineCount.coerceAtLeast(1)).coerceAtLeast(1) }
+        val verticalLimit = minLineHeight + (5f * density).toInt()
         var low = baseSize * 0.70f
         var high = baseSize
-        // Binary search a common size that can render the longest translation in a bounded
-        // two-line layout. Every row then uses this exact same value.
-        repeat(9) {
+        repeat(10) {
             val candidate = (low + high) * 0.5f
-            val fits = translations.all { value ->
+            val fits = translations.indices.all { index ->
                 val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                     textSize = candidate
                     typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 }
-                val layout = StaticLayout.Builder.obtain(value, 0, value.length, p, maxWidth)
-                    .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
-                    .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
-                layout.height <= targetHeight
+                val fm = p.fontMetrics
+                val heightFits = (fm.descent - fm.ascent) * lines[index].sourceLineCount <=
+                    lines[index].bounds.height() + (5f * density)
+                val widthFits = lines[index].sourceLineCount > 1 ||
+                    p.measureText(translations[index]) <= availableWidth(lines[index]) - 2f * 5f * density
+                heightFits && widthFits && (fm.descent - fm.ascent) <= verticalLimit
             }
             if (fits) low = candidate else high = candidate
         }
@@ -494,9 +534,10 @@ object GameTranslator {
         // A single baseline font size is shared by the entire OCR group (especially menu rows).
         // It is derived from the shortest source row, never independently fitted per translation.
         val groupBaseSize = if (fontAuto) {
-            (lines.minOfOrNull { it.bounds.height() }?.toFloat()?.times(0.78f) ?: 22f).coerceIn(12f, 42f)
+            (lines.minOfOrNull { it.bounds.height().toFloat() / it.sourceLineCount.coerceAtLeast(1) }?.times(0.90f) ?: 22f).coerceIn(9.5f, 42f)
         } else (manualFontSize * sceneWidth / 1080f).coerceIn(10f, 72f)
-        val groupFontSize = resolveGroupFontSize(translations, lines, sceneWidth, sceneHeight, groupBaseSize)
+        val protectedZones = lines.flatMap { it.protectedZones }.distinct()
+        val groupFontSize = resolveGroupFontSize(translations, lines, sceneWidth, sceneHeight, groupBaseSize, protectedZones)
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = groupFontSize
@@ -510,6 +551,7 @@ object GameTranslator {
             clearShadowLayer()
         }
 
+        val occupiedPlaques = ArrayList<Rect>()
         run {
             lines.forEachIndexed { index, line ->
                 val box = line.bounds
@@ -545,15 +587,13 @@ object GameTranslator {
                         // a translucent cool tint and fine highlight create a glass-like surface.
                         // Size the glass strictly from the translated glyph bounds. The old
                         // 2.6x source-width heuristic created oversized empty panels.
-                        val nextTop = lines.filter { it !== line && it.bounds.top >= box.bottom }
-                            .minOfOrNull { it.bounds.top } ?: sceneHeight
-                        val maxWidth = (sceneWidth - max(2, box.left) - 6).coerceAtLeast(24)
-                        val maxHeight = (min(sceneHeight, nextTop - 2) - max(0, box.top - box.height()))
-                            .coerceAtLeast(box.height() + 8)
-                        drawCompactGlassText(
+                        val occupiedRects = occupiedPlaques
+                        val drawn = drawCompactGlassText(
                             canvas, sourceFrame, translatedLine, box,
-                            maxWidth, maxHeight, glassAlpha, groupFontSize, textPaint, stroke, plaqueMode
+                            glassAlpha, groupFontSize, textPaint, stroke, plaqueMode,
+                            line.sourceLineCount, protectedZones, occupiedRects
                         )
+                        if (drawn != null) occupiedPlaques += drawn
                     }
                     TranslatorDisplayMode.BESIDE_ORIGINAL -> {
                         val rightSpace = sceneWidth - box.right - margin
@@ -613,105 +653,230 @@ object GameTranslator {
      */
     private fun drawCompactGlassText(
         canvas: Canvas,
-        blurredScene: Bitmap,
+        sourceFrame: Bitmap,
         text: String,
         anchor: Rect,
-        maxWidth: Int,
-        maxHeight: Int,
         opacity: Int,
         groupFontSize: Float,
         paint: TextPaint,
         stroke: TextPaint,
-        plaqueMode: TranslatorPlaqueMode
-    ) {
-        if (text.isBlank() || anchor.width() <= 2 || anchor.height() <= 2) return
+        plaqueMode: TranslatorPlaqueMode,
+        sourceLineCount: Int,
+        protectedZones: List<Rect>,
+        occupied: List<Rect>
+    ): Rect? {
+        if (text.isBlank() || anchor.width() <= 2 || anchor.height() <= 2) return null
 
-        val pad = ((appContext?.resources?.displayMetrics?.density ?: 1f) * 5f).toInt().coerceAtLeast(4)
-        // Expand outwards: never move the left/top edges inward while adding padding.
-        val plaquePad = pad + 2
-        val left = (anchor.left - plaquePad).coerceAtLeast(0)
-        val top = (anchor.top - plaquePad).coerceAtLeast(0)
-        val right = (anchor.right + plaquePad).coerceAtMost(canvas.width)
-        val bottom = (anchor.bottom + plaquePad).coerceAtMost(canvas.height)
-        val rect = Rect(left, top, right, bottom)
-        val innerPadX = min(3, max(0, pad / 2))
-        val innerPadY = min(3, max(0, pad / 2))
-        val contentWidth = (rect.width() - innerPadX * 2).coerceAtLeast(1)
-        val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
+        val density = appContext?.resources?.displayMetrics?.density ?: 1f
+        val padX = (5f * density).toInt().coerceAtLeast(4)
+        val padY = (2.5f * density).toInt().coerceAtLeast(2)
+        val innerMaskPad = (1.5f * density).toInt().coerceAtLeast(1)
+        val centered = kotlin.math.abs(anchor.centerX() - canvas.width / 2f) <= canvas.width * 0.10f
+        val rightAligned = !centered && anchor.right >= canvas.width * 0.68f
+
+        var leftLimit = 0
+        var rightLimit = canvas.width
+        protectedZones.forEach { zone ->
+            if (zone.bottom > anchor.top - anchor.height() * 0.25f &&
+                zone.top < anchor.bottom + anchor.height() * 0.25f) {
+                if (zone.right <= anchor.left) leftLimit = max(leftLimit, zone.right)
+                if (zone.left >= anchor.right) rightLimit = min(rightLimit, zone.left)
+            }
+        }
+        val available = when {
+            centered -> (2f * min(anchor.centerX() - leftLimit, rightLimit - anchor.centerX())).toInt()
+            rightAligned -> anchor.right - leftLimit
+            else -> rightLimit - anchor.left
+        }.coerceAtLeast(anchor.width())
+
         val originalSize = paint.textSize
-        // The shared group size may shrink by at most 30%; it is never enlarged per row.
-        val size = groupFontSize
-        paint.textSize = size
-        stroke.textSize = size
-        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
-            .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
+        var size = groupFontSize
+        var measuredWidth: Float
+        var layout: StaticLayout
+        var strokeLayout: StaticLayout
+        var contentWidth: Int
+        var plaque: Rect
+        val maxSize = groupFontSize
+        val minSize = groupFontSize * 0.70f
+        val allowWrap = sourceLineCount > 1
+        val alignment = when {
+            centered -> Layout.Alignment.ALIGN_CENTER
+            rightAligned -> Layout.Alignment.ALIGN_OPPOSITE
+            else -> Layout.Alignment.ALIGN_NORMAL
+        }
 
-        // The previous full-scene blur retained the original glyphs in its pixels.
-        // Select glass only on calm backgrounds; animated/high-variance HUDs use dense fill.
-        val sampled = sampleBorderColor(blurredScene, anchor, pad)
-        val variance = borderLuminanceVariance(blurredScene, anchor, pad)
+        fun buildLayout(candidate: Float, width: Int): Pair<StaticLayout, StaticLayout> {
+            paint.textSize = candidate
+            stroke.textSize = candidate
+            val safeText = if (!allowWrap && paint.measureText(text) > width) {
+                ellipsizeAtWord(text, paint, width)
+            } else text
+            val maxLines = if (allowWrap) sourceLineCount.coerceIn(2, 4) else 1
+            val main = StaticLayout.Builder.obtain(safeText, 0, safeText.length, paint, width)
+                .setAlignment(alignment).setIncludePad(false).setMaxLines(maxLines)
+                .setEllipsize(TextUtils.TruncateAt.END).setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY).build()
+            val outline = StaticLayout.Builder.obtain(safeText, 0, safeText.length, stroke, width)
+                .setAlignment(alignment).setIncludePad(false).setMaxLines(maxLines)
+                .setEllipsize(TextUtils.TruncateAt.END).setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY).build()
+            return main to outline
+        }
+
+        var chosen = false
+        var bestRect: Rect? = null
+        while (size >= minSize - 0.01f) {
+            paint.textSize = size
+            stroke.textSize = size
+            measuredWidth = if (allowWrap) min(available.toFloat(), paint.measureText(text)) else paint.measureText(text)
+            val content = max(anchor.width(), measuredWidth.toInt())
+            val width = min(available - padX * 2, content).coerceAtLeast(anchor.width() - 2)
+            contentWidth = width
+            val outerWidth = contentWidth + padX * 2
+            val left = when {
+                centered -> anchor.centerX() - outerWidth / 2
+                rightAligned -> anchor.right - contentWidth - padX
+                else -> anchor.left - padX
+            }.coerceAtLeast(0)
+            val right = (left + outerWidth).coerceAtMost(canvas.width)
+            plaque = Rect(left, (anchor.top - padY).coerceAtLeast(0), right,
+                (anchor.bottom + padY).coerceAtMost(canvas.height))
+            if (plaque.width() < outerWidth) {
+                if (rightAligned) plaque.left = (plaque.right - outerWidth).coerceAtLeast(0)
+                else if (centered) {
+                    plaque.left = (anchor.centerX() - outerWidth / 2).coerceAtLeast(0)
+                    plaque.right = (plaque.left + outerWidth).coerceAtMost(canvas.width)
+                }
+            }
+            val iconCollision = protectedZones.any { Rect.intersects(plaque, it) }
+            val plaqueCollision = occupied.any { Rect.intersects(plaque, it) }
+            val (candidateLayout, candidateStroke) = buildLayout(size, contentWidth)
+            val maxTextHeight = anchor.height() + padY * 2
+            val heightFits = candidateLayout.height <= maxTextHeight
+            if (!iconCollision && !plaqueCollision && heightFits &&
+                (allowWrap || paint.measureText(text) <= contentWidth + 1f)) {
+                layout = candidateLayout
+                strokeLayout = candidateStroke
+                bestRect = plaque
+                chosen = true
+                break
+            }
+            size -= max(0.5f, groupFontSize * 0.035f)
+        }
+
+        if (!chosen || bestRect == null) {
+            // Preserve a one-line label rather than wrapping a word or painting over an icon.
+            size = minSize
+            paint.textSize = size
+            stroke.textSize = size
+            contentWidth = (available - padX * 2).coerceAtLeast(anchor.width() - 2)
+            val fallbackWidth = max(anchor.width(), min(contentWidth, paint.measureText(text).toInt()))
+            val outerWidth = fallbackWidth + padX * 2
+            val left = when {
+                centered -> (anchor.centerX() - outerWidth / 2).coerceAtLeast(0)
+                rightAligned -> (anchor.right - fallbackWidth - padX).coerceAtLeast(0)
+                else -> (anchor.left - padX).coerceAtLeast(0)
+            }
+            bestRect = Rect(left, (anchor.top - padY).coerceAtLeast(0),
+                min(canvas.width, left + outerWidth), (anchor.bottom + padY).coerceAtMost(canvas.height))
+            if (protectedZones.any { Rect.intersects(bestRect!!, it) } || occupied.any { Rect.intersects(bestRect!!, it) }) {
+                paint.textSize = originalSize
+                stroke.textSize = originalSize
+                return null
+            }
+            contentWidth = (bestRect!!.width() - padX * 2).coerceAtLeast(1)
+            val safeText = if (allowWrap) text else ellipsizeAtWord(text, paint, contentWidth)
+            layout = StaticLayout.Builder.obtain(safeText, 0, safeText.length, paint, contentWidth)
+                .setAlignment(alignment).setIncludePad(false).setMaxLines(if (allowWrap) sourceLineCount.coerceIn(2, 4) else 1)
+                .setEllipsize(TextUtils.TruncateAt.END).build()
+            strokeLayout = StaticLayout.Builder.obtain(safeText, 0, safeText.length, stroke, contentWidth)
+                .setAlignment(alignment).setIncludePad(false).setMaxLines(if (allowWrap) sourceLineCount.coerceIn(2, 4) else 1)
+                .setEllipsize(TextUtils.TruncateAt.END).build()
+        }
+
+        val rect = bestRect!!
+        val sampled = sampleBorderColor(sourceFrame, anchor, (3f * density).toInt().coerceAtLeast(2))
+        val variance = borderLuminanceVariance(sourceFrame, anchor, (3f * density).toInt().coerceAtLeast(2))
         val resolvedMode = when (plaqueMode) {
             TranslatorPlaqueMode.DENSE -> TranslatorPlaqueMode.DENSE
             TranslatorPlaqueMode.GLASS, TranslatorPlaqueMode.AUTO ->
                 if (variance <= 0.035f) TranslatorPlaqueMode.GLASS else TranslatorPlaqueMode.DENSE
         }
-        val darkBase = blendColors(sampled, Color.rgb(30, 34, 40), 0.72f)
-        val radius = (rect.height() * 0.16f).coerceIn(4f, 12f)
+        val base = if (resolvedMode == TranslatorPlaqueMode.DENSE)
+            blendColors(sampled, Color.rgb(30, 34, 40), 0.82f)
+        else blendColors(sampled, Color.rgb(30, 34, 40), 0.42f)
+        val corner = (rect.height() * 0.30f).coerceAtLeast(3f)
         val rounded = android.graphics.RectF(rect)
+
         if (resolvedMode == TranslatorPlaqueMode.GLASS) {
-            drawBlurredCrop(canvas, blurredScene, rect)
+            // Frosted live backdrop. The original glyph area is then repainted opaquely.
+            drawBlurredCrop(canvas, sourceFrame, rect)
+            val mask = android.graphics.RectF(
+                (anchor.left - innerMaskPad).coerceAtLeast(rect.left).toFloat(),
+                (anchor.top - innerMaskPad).coerceAtLeast(rect.top).toFloat(),
+                (anchor.right + innerMaskPad).coerceAtMost(rect.right).toFloat(),
+                (anchor.bottom + innerMaskPad).coerceAtMost(rect.bottom).toFloat()
+            )
+            canvas.drawRoundRect(mask, (mask.height() * 0.30f).coerceAtLeast(2f),
+                (mask.height() * 0.30f).coerceAtLeast(2f),
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = base; alpha = 255; style = Paint.Style.FILL })
         } else {
-            canvas.drawRoundRect(rounded, radius, radius,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = darkBase; style = Paint.Style.FILL })
+            canvas.drawRoundRect(rounded, corner, corner,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 34, 40); alpha = 255; style = Paint.Style.FILL })
         }
-        val maskPad = (pad * 1.15f).toInt().coerceAtLeast(4)
-        val mask = android.graphics.RectF(
-            (anchor.left - maskPad).coerceAtLeast(0).toFloat(),
-            (anchor.top - maskPad).coerceAtLeast(0).toFloat(),
-            (anchor.right + maskPad).coerceAtMost(canvas.width).toFloat(),
-            (anchor.bottom + maskPad).coerceAtMost(canvas.height).toFloat()
-        )
-        // Opaque base always hides original pixels. Opacity affects only the upper tint.
-        canvas.drawRoundRect(mask, (mask.height() * 0.18f).coerceIn(3f, 12f), (mask.height() * 0.18f).coerceIn(3f, 12f),
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = darkBase; alpha = 255; style = Paint.Style.FILL })
+
         val tintAlpha = opacity.coerceIn(40, 100) * 255 / 100
-        val finalBase = blendColors(darkBase, Color.rgb(24, 29, 36), tintAlpha / 255f)
-        val textColor = if (contrastRatio(finalBase, Color.WHITE) >= contrastRatio(finalBase, Color.BLACK)) Color.WHITE else Color.BLACK
-        canvas.drawRoundRect(rounded, radius, radius,
+        val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, rect.top.toFloat(), 0f, rect.bottom.toFloat(),
+                Color.argb(tintAlpha, 24, 29, 36),
+                Color.argb((tintAlpha * 0.72f).toInt(), 52, 62, 76),
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRoundRect(rounded, corner, corner, tint)
+        val finalBase = blendColors(base, Color.rgb(24, 29, 36), tintAlpha / 255f)
+        val whiteContrast = contrastRatio(finalBase, Color.WHITE)
+        val blackContrast = contrastRatio(finalBase, Color.BLACK)
+        val textColor = if (whiteContrast >= blackContrast) Color.WHITE else Color.BLACK
+        val borderColor = if (textColor == Color.WHITE) Color.argb(82, 170, 190, 205) else Color.argb(82, 50, 60, 70)
+        canvas.drawRoundRect(rounded, corner, corner,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(tintAlpha, 24, 29, 36)
-                style = Paint.Style.FILL
-            })
-        canvas.drawRoundRect(rounded, radius, radius,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0x40ffffff
+                color = borderColor
                 style = Paint.Style.STROKE
-                strokeWidth = max(1f, appContext?.resources?.displayMetrics?.density ?: 1f)
+                strokeWidth = density
             })
         paint.color = textColor
+        paint.letterSpacing = 0.012f
+        paint.setShadowLayer(1.2f * density, 0f, 0.6f * density,
+            if (textColor == Color.WHITE) Color.BLACK else Color.WHITE)
         stroke.color = if (textColor == Color.WHITE) Color.BLACK else Color.WHITE
-        stroke.strokeWidth = max(1f, (appContext?.resources?.displayMetrics?.density ?: 1f) * 1.25f)
-        paint.letterSpacing = 0.015f
+        stroke.strokeWidth = max(1f, 1.1f * density)
+        stroke.setShadowLayer(1f * density, 0f, 0f, if (textColor == Color.WHITE) Color.BLACK else Color.WHITE)
 
-        val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidth)
-            .setAlignment(Layout.Alignment.ALIGN_CENTER)
-            .setIncludePad(false)
-            .setMaxLines(2)
-            .setEllipsize(TextUtils.TruncateAt.END)
-            .build()
-
-        // Center the actual glyph block inside the exact original label bounds.
-        val textTop = top + ((rect.height() - layout.height) / 2f).coerceAtLeast(0f)
+        val textTop = rect.top + ((rect.height() - layout.height) / 2f).coerceAtLeast(0f)
         canvas.save()
         canvas.clipRect(rect)
-        canvas.translate((left + innerPadX).toFloat(), textTop)
+        canvas.translate((rect.left + padX).toFloat(), textTop)
         strokeLayout.draw(canvas)
         layout.draw(canvas)
         canvas.restore()
-
+        paint.clearShadowLayer()
+        stroke.clearShadowLayer()
         paint.textSize = originalSize
         stroke.textSize = originalSize
+        Log.d(TAG, "plaque sourceH=${anchor.height()} plaqueH=${rect.height()} mode=$resolvedMode variance=$variance font=$size contrast=${max(whiteContrast, blackContrast)}")
+        return rect
+    }
+
+    private fun ellipsizeAtWord(text: String, paint: TextPaint, width: Int): String {
+        val ellipsis = "…"
+        if (paint.measureText(text) <= width) return text
+        val words = text.trim().split(Regex("\\s+")).toMutableList()
+        while (words.isNotEmpty()) {
+            val candidate = words.joinToString(" ") + ellipsis
+            if (paint.measureText(candidate) <= width) return candidate
+            words.removeAt(words.lastIndex)
+        }
+        return ellipsis
     }
 
     private fun sampleBorderColor(frame: Bitmap, box: Rect, radius: Int): Int {
