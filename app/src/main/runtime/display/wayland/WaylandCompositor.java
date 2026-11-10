@@ -168,6 +168,7 @@ public final class WaylandCompositor {
     // Vulkan-native game translator. Captured frames are copied from the Turnip scene, never MediaProjection.
     public static native void nativeSetTranslatorEnabled(boolean enabled);
     public static native void nativeSetTranslatorOverlay(byte[] rgba, int width, int height);
+    public static native String nativeGetTranslatorDebugInfo();
 
     // Zero-copy display layer and buffer layout.
     public static native void nativeSetZeroCopy(boolean on);
