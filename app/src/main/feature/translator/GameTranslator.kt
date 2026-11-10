@@ -1048,7 +1048,7 @@ object GameTranslator {
 
     private fun drawDebugBounds(canvas: Canvas, width: Int, height: Int, lines: List<OcrLine>) {
         val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.RED
+            color = Color.GREEN
             style = Paint.Style.STROKE
             strokeWidth = (width / 540f).coerceIn(2f, 5f)
         }

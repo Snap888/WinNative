@@ -25,8 +25,9 @@ internal object OcrLineGrouper {
 
     fun cleanText(raw: String): String {
         var value = raw.replace("@", " ")
-        value = value.replace(Regex("(?i)^\\s*(X|Y|L|R|B|A|LT|RT|□|○|▼|▶)(?=\\s|$)"), "")
-        value = value.replace(Regex("(?i)(?<=\\s)(X|Y|L|R|B|A|LT|RT|□|○|▼|▶)\\s*$"), "")
+        value = value.replace(Regex("(?i)^\\s*(X|Y|L|R|B|A|LT|RT)(?:▼|▶)?(?=\\s|$)"), "")
+        value = value.replace(Regex("(?i)\\[(X|Y|L|R|B|A|LT|RT|@|□|○|▼|▶)\\]"), " ")
+        value = value.replace(Regex("(?i)(?<=\\s)(X|Y|L|R|B|A|LT|RT)(?:▼|▶)?\\s*$"), "")
         return value.replace(Regex("\\s+"), " ").trim()
     }
 
