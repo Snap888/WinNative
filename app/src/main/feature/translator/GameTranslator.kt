@@ -50,7 +50,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.max
 import kotlin.math.min
 
-enum class TranslatorPlaqueMode(val title: String) { AUTO("Авто"), DENSE("Плотная"), GLASS("Стекло") }
+enum class TranslatorPlaqueMode(val title: String) {
+    GLASS("Жидкое стекло"),
+    DENSE("Серый фон"),
+    AUTO("Авто")
+}
 
 enum class TranslatorDisplayMode(val title: String, val description: String) {
     ORIGINAL_AND_TRANSLATION("A • Оригинал + перевод", "Перевод под исходной строкой"),
@@ -172,7 +176,7 @@ object GameTranslator {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
         glassAlphaState.value = prefs.getInt(GLASS_ALPHA_KEY, 90).coerceIn(40, 100)
-        plaqueModeState.value = runCatching { TranslatorPlaqueMode.valueOf(prefs.getString(PLAQUE_MODE_KEY, "GLASS") ?: "GLASS") }.getOrDefault(TranslatorPlaqueMode.AUTO)
+        plaqueModeState.value = runCatching { TranslatorPlaqueMode.valueOf(prefs.getString(PLAQUE_MODE_KEY, "GLASS") ?: "GLASS") }.getOrDefault(TranslatorPlaqueMode.GLASS)
         fontAutoState.value = prefs.getBoolean(FONT_AUTO_KEY, true)
         fontSizeState.value = prefs.getFloat(FONT_SIZE_KEY, 22f).coerceIn(12f, 36f)
         debugState.value = prefs.getBoolean(DEBUG_KEY, false)
@@ -798,7 +802,8 @@ object GameTranslator {
         val variance = borderLuminanceVariance(sourceFrame, anchor, (3f * density).toInt().coerceAtLeast(2))
         val resolvedMode = when (plaqueMode) {
             TranslatorPlaqueMode.DENSE -> TranslatorPlaqueMode.DENSE
-            TranslatorPlaqueMode.GLASS, TranslatorPlaqueMode.AUTO ->
+            TranslatorPlaqueMode.GLASS -> TranslatorPlaqueMode.GLASS
+            TranslatorPlaqueMode.AUTO ->
                 if (variance <= 0.035f) TranslatorPlaqueMode.GLASS else TranslatorPlaqueMode.DENSE
         }
         val base = if (resolvedMode == TranslatorPlaqueMode.DENSE)
