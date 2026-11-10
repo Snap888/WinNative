@@ -491,12 +491,6 @@ object GameTranslator {
             statusState.value = "Перевод скрыт: сервис изменил структуру строк"
             return
         }
-        val softenedFrame = Bitmap.createScaledBitmap(
-            sourceFrame,
-            max(1, sceneWidth / 8),
-            max(1, sceneHeight / 8),
-            true
-        )
         // A single baseline font size is shared by the entire OCR group (especially menu rows).
         // It is derived from the shortest source row, never independently fitted per translation.
         val groupBaseSize = if (fontAuto) {
@@ -557,7 +551,7 @@ object GameTranslator {
                         val maxHeight = (min(sceneHeight, nextTop - 2) - max(0, box.top - box.height()))
                             .coerceAtLeast(box.height() + 8)
                         drawCompactGlassText(
-                            canvas, softenedFrame, translatedLine, box,
+                            canvas, sourceFrame, translatedLine, box,
                             maxWidth, maxHeight, glassAlpha, groupFontSize, textPaint, stroke, plaqueMode
                         )
                     }
@@ -590,7 +584,6 @@ object GameTranslator {
                 }
             }
         }
-        softenedFrame.recycle()
         if (debugState.value) drawDebugBounds(canvas, sceneWidth, sceneHeight, lines)
 
         val argb = IntArray(sceneWidth * sceneHeight)
@@ -635,10 +628,11 @@ object GameTranslator {
 
         val pad = ((appContext?.resources?.displayMetrics?.density ?: 1f) * 5f).toInt().coerceAtLeast(4)
         // Expand outwards: never move the left/top edges inward while adding padding.
-        val left = (anchor.left - pad).coerceAtLeast(0)
-        val top = (anchor.top - pad).coerceAtLeast(0)
-        val right = (anchor.right + pad).coerceAtMost(canvas.width)
-        val bottom = (anchor.bottom + pad).coerceAtMost(canvas.height)
+        val plaquePad = pad + 2
+        val left = (anchor.left - plaquePad).coerceAtLeast(0)
+        val top = (anchor.top - plaquePad).coerceAtLeast(0)
+        val right = (anchor.right + plaquePad).coerceAtMost(canvas.width)
+        val bottom = (anchor.bottom + plaquePad).coerceAtMost(canvas.height)
         val rect = Rect(left, top, right, bottom)
         val innerPadX = min(3, max(0, pad / 2))
         val innerPadY = min(3, max(0, pad / 2))
