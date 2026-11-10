@@ -590,8 +590,7 @@ object GameTranslator {
         val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
         val originalSize = paint.textSize
 
-        // Start from the glyph height measured by OCR, then shrink only as much
-        // as needed to fit the translated string into the original source box.
+        // The panel already includes the requested outer padding; fit text into that larger box.
         var size = if (fontAuto) (rect.height() * 0.88f).coerceIn(8f, 42f) else originalSize
         var layout: StaticLayout
         do {
@@ -607,7 +606,7 @@ object GameTranslator {
             size = (size - 1f).coerceAtLeast(7f)
         } while (true)
 
-        // Use the OCR rectangle itself, not text-measured dimensions, for glass.
+        // Use the expanded OCR rectangle for both the opaque mask and glass panel.
         drawFrostedGlass(canvas, blurredScene, rect, canvas.width, canvas.height, opacity)
 
         val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidth)
@@ -676,7 +675,7 @@ object GameTranslator {
     /**
      * Diagnostics are expressed in compositor-scene pixels. The JNI callback currently exports
      * frame dimensions plus the native output viewport and the actual scene-to-output matrix.
-     * The overlay is a full-scene texture positioned by the compositor at (+20,-20) scene pixels.
+     * The overlay is a full-scene texture positioned at the scene origin (0,0).
      */
     private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>, nativeInfo: String) {
         Log.d(TAG, "frame=${width}x${height} native=$nativeInfo")
