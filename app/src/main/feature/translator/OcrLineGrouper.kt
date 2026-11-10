@@ -19,8 +19,9 @@ internal object OcrLineGrouper {
         if (lines.isEmpty()) return emptyList()
         val result = ArrayList<Line>()
         var current = lines.first()
+        var previous = current
         for (next in lines.drop(1)) {
-            if (canJoin(current, next)) {
+            if (canJoin(previous, next)) {
                 current = Line(
                     joinText(current.text, next.text),
                     min(current.left, next.left), min(current.top, next.top),
@@ -30,6 +31,7 @@ internal object OcrLineGrouper {
                 result += current
                 current = next
             }
+            previous = next
         }
         result += current
         return result
