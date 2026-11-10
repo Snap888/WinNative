@@ -495,6 +495,28 @@ static void update_map(int scene_w, int scene_h) {
                (int)g_map.off_x, (int)g_map.off_y, W, H);
 }
 
+/* Called synchronously from the translator frame callback on this compositor thread. */
+void vkp_translator_debug_info(char *out, size_t out_size) {
+    if (!out || out_size == 0) return;
+    if (!g_map.valid) {
+        snprintf(out, out_size, "map=invalid scene=%dx%d output=%ux%u",
+                 g_scene.w, g_scene.h, g_extent.width, g_extent.height);
+        return;
+    }
+    const float overlay_dx = 20.0f;
+    const float overlay_dy = -20.0f;
+    snprintf(out, out_size,
+        "scene=%dx%d output=%dx%d viewport=(%d,%d,%d,%d) scale=(%.5f,%.5f) offset=(%.2f,%.2f) "
+        "content=(%.2f,%.2f,%.2f,%.2f) overlayOffset=(%.1f,%.1f) "
+        "matrix=[%.5f,0,%.2f;0,%.5f,%.2f;0,0,1] rotation=%d",
+        g_map.scene_w, g_map.scene_h, g_map.out_w, g_map.out_h,
+        g_map.rx, g_map.ry, g_map.rw, g_map.rh, g_map.kx, g_map.ky, g_map.off_x, g_map.off_y,
+        g_map.off_x, g_map.off_y, g_map.off_x + g_map.scene_w * g_map.kx,
+        g_map.off_y + g_map.scene_h * g_map.ky, overlay_dx, overlay_dy,
+        g_map.kx, g_map.off_x + overlay_dx * g_map.kx,
+        g_map.ky, g_map.off_y + overlay_dy * g_map.ky, vkp_surface_rotation_degrees());
+}
+
 int vkp_output_to_scene(double ox, double oy, double *sx, double *sy) {
     if (!g_map.valid || g_map.kx <= 0 || g_map.ky <= 0) return 0;
     *sx = (ox - g_map.off_x) / g_map.kx;
