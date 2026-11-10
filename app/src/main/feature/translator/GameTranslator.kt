@@ -536,6 +536,12 @@ object GameTranslator {
      * arbitrary fraction of the source line width. Long translations wrap only
      * when they need to and the panel grows by the measured glyph width/height.
      */
+    /**
+     * REPLACE_TEXT uses the OCR rectangle as a hard placement contract:
+     * the glass patch and translated glyph area stay inside the exact source
+     * label bounds. Never center a newly-sized panel around the anchor, since
+     * that makes the replacement drift when translation length changes.
+     */
     private fun drawCompactGlassText(
         canvas: Canvas,
         blurredScene: Bitmap,
@@ -548,50 +554,51 @@ object GameTranslator {
         paint: TextPaint,
         stroke: TextPaint
     ) {
-        if (text.isBlank() || maxWidth <= 12 || maxHeight <= 12) return
-        val horizontalPadding = 7
-        val verticalPadding = 5
-        val contentWidthLimit = (maxWidth - horizontalPadding * 2).coerceAtLeast(8)
-        val originalSize = paint.textSize
-        var size = if (fontAuto) (anchor.height() * 0.88f).coerceIn(12f, 42f) else originalSize
-        paint.textSize = size
-        stroke.textSize = size
-        var layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidthLimit)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-            .setIncludePad(false)
-            .setMaxLines(4)
-            .setEllipsize(TextUtils.TruncateAt.END)
-            .build()
+        if (text.isBlank() || anchor.width() <= 2 || anchor.height() <= 2) return
 
-        while (layout.height + verticalPadding * 2 > maxHeight && size > 10f) {
-            size = (size - 1f).coerceAtLeast(10f)
+        val left = anchor.left.coerceIn(0, canvas.width - 1)
+        val top = anchor.top.coerceIn(0, canvas.height - 1)
+        val right = anchor.right.coerceIn(left + 1, canvas.width)
+        val bottom = anchor.bottom.coerceIn(top + 1, canvas.height)
+        val rect = Rect(left, top, right, bottom)
+        val innerPadX = min(3, max(0, rect.width() / 24))
+        val innerPadY = min(2, max(0, rect.height() / 18))
+        val contentWidth = (rect.width() - innerPadX * 2).coerceAtLeast(1)
+        val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
+        val originalSize = paint.textSize
+
+        // Start from the glyph height measured by OCR, then shrink only as much
+        // as needed to fit the translated string into the original source box.
+        var size = if (fontAuto) (rect.height() * 0.88f).coerceIn(8f, 42f) else originalSize
+        var layout: StaticLayout
+        do {
             paint.textSize = size
             stroke.textSize = size
-            layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidthLimit)
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
                 .setIncludePad(false)
-                .setMaxLines(4)
+                .setMaxLines(3)
                 .setEllipsize(TextUtils.TruncateAt.END)
                 .build()
-        }
+            if (layout.height <= contentHeight || size <= 7f) break
+            size = (size - 1f).coerceAtLeast(7f)
+        } while (true)
 
-        val measuredTextWidth = (0 until layout.lineCount)
-            .maxOfOrNull { kotlin.math.ceil(layout.getLineWidth(it).toDouble()).toInt() } ?: 0
-        val panelWidth = (measuredTextWidth + horizontalPadding * 2).coerceIn(1, maxWidth)
-        val panelHeight = (layout.height + verticalPadding * 2).coerceAtMost(maxHeight)
-        val left = anchor.left.coerceIn(2, (canvas.width - panelWidth - 2).coerceAtLeast(2))
-        val top = (anchor.centerY() - panelHeight / 2).coerceIn(2, (canvas.height - panelHeight - 2).coerceAtLeast(2))
-        val rect = Rect(left, top, left + panelWidth, top + panelHeight)
+        // Use the OCR rectangle itself, not text-measured dimensions, for glass.
         drawFrostedGlass(canvas, blurredScene, rect, canvas.width, canvas.height, opacity)
 
-        val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidthLimit)
-            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+        val strokeLayout = StaticLayout.Builder.obtain(text, 0, text.length, stroke, contentWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
-            .setMaxLines(4)
+            .setMaxLines(3)
             .setEllipsize(TextUtils.TruncateAt.END)
             .build()
+
+        // Center the actual glyph block inside the exact original label bounds.
+        val textTop = top + ((rect.height() - layout.height) / 2f).coerceAtLeast(0f)
         canvas.save()
-        canvas.translate((left + horizontalPadding).toFloat(), (top + verticalPadding).toFloat())
+        canvas.clipRect(rect)
+        canvas.translate((left + innerPadX).toFloat(), textTop)
         strokeLayout.draw(canvas)
         layout.draw(canvas)
         canvas.restore()
