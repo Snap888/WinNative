@@ -47,7 +47,7 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     var plaqueMode by remember {
         mutableStateOf(runCatching {
             TranslatorPlaqueMode.valueOf(prefs.getString("plaque_mode", "GLASS") ?: "GLASS")
-        }.getOrDefault(TranslatorPlaqueMode.AUTO))
+        }.getOrDefault(TranslatorPlaqueMode.GLASS))
     }
     var plaqueOpacity by remember { mutableStateOf(prefs.getInt("glass_alpha", 90).coerceIn(40, 100).toFloat()) }
 
@@ -106,9 +106,10 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
                         })
                     }
                 }
-                Text("Прозрачность верхней тонировки: ${plaqueOpacity.toInt()}%")
+                Text("Прозрачность жидкого стекла: ${plaqueOpacity.toInt()}%")
                 Slider(
                     value = plaqueOpacity,
+                    enabled = plaqueMode != TranslatorPlaqueMode.DENSE,
                     onValueChange = {
                         plaqueOpacity = it
                         GameTranslator.setGlassAlpha(context, it.toInt())
@@ -117,7 +118,11 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
                 )
                 Surface(
                     modifier = Modifier.fillMaxWidth().height(72.dp),
-                    color = androidx.compose.ui.graphics.Color(0xFF1E2228),
+                    color = if (plaqueMode == TranslatorPlaqueMode.DENSE) {
+                        androidx.compose.ui.graphics.Color(0xFF1E2228)
+                    } else {
+                        androidx.compose.ui.graphics.Color(0xFF607D8B).copy(alpha = plaqueOpacity / 100f)
+                    },
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Box(Modifier.padding(12.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
@@ -128,7 +133,7 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
                         )
                     }
                 }
-                Text("В режиме «Авто» стекло включается только на спокойном фоне; на анимированной сетке выбирается плотная заливка.", style = MaterialTheme.typography.bodySmall)
+                Text("«Жидкое стекло» всегда использует размытие. «Авто» выбирает стекло на спокойном фоне и серую плашку на контрастном (например, сонар). Ползунок меняет прозрачность тонировки стекла.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
