@@ -11,7 +11,7 @@ class OcrLineGrouperTest {
             OcrLineGrouper.Line("CARTE DE CETTE ZONE", 101, 136, 390, 160)
         ))
         assertEquals(1, result.size)
-        assertEquals("APPUYEZ SUR [A] POUR VOIR LA CARTE DE CETTE ZONE", result.single().text)
+        assertEquals("APPUYEZ SUR POUR VOIR LA CARTE DE CETTE ZONE", result.single().text)
         assertEquals(2, result.single().lineCount)
         assertEquals(100, result.single().top)
         assertEquals(160, result.single().bottom)
