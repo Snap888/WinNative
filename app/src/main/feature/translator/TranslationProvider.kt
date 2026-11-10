@@ -35,6 +35,9 @@ internal object TranslationProvider {
         val cacheKey = "$provider|$source|$target|$endpoint|$keyFingerprint|$text"
         synchronized(translationCache) { translationCache[cacheKey]?.let { return it } }
         val translated = translateUncached(context, text)
+        if (isUnchangedSource(text, translated)) {
+            error("Сервис вернул исходный текст вместо перевода на ${target.uppercase()}")
+        }
         synchronized(translationCache) { translationCache[cacheKey] = translated }
         return translated
     }
