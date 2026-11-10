@@ -669,8 +669,8 @@ object GameTranslator {
 
         val density = appContext?.resources?.displayMetrics?.density ?: 1f
         val padX = (5f * density).toInt().coerceAtLeast(4)
-        val padY = (2.5f * density).toInt().coerceAtLeast(2)
-        val innerMaskPad = (1.5f * density).toInt().coerceAtLeast(1)
+        val padY = min((2.5f * density).toInt().coerceAtLeast(1), (anchor.height() * 0.12f).toInt().coerceAtLeast(1))
+        val innerMaskPad = min((1.5f * density).toInt().coerceAtLeast(1), padY)
         val centered = kotlin.math.abs(anchor.centerX() - canvas.width / 2f) <= canvas.width * 0.10f
         val rightAligned = !centered && anchor.right >= canvas.width * 0.68f
 
@@ -696,7 +696,6 @@ object GameTranslator {
         var strokeLayout: StaticLayout? = null
         var contentWidth: Int
         var plaque: Rect
-        val maxSize = groupFontSize
         val minSize = groupFontSize * 0.70f
         val allowWrap = sourceLineCount > 1
         val alignment = when {
@@ -1041,7 +1040,7 @@ object GameTranslator {
     private fun expandedOverlayBounds(source: Rect, width: Int, height: Int): Rect {
         val density = appContext?.resources?.displayMetrics?.density ?: 1f
         val padX = (5f * density).toInt().coerceAtLeast(4)
-        val padY = (2.5f * density).toInt().coerceAtLeast(2)
+        val padY = min((2.5f * density).toInt().coerceAtLeast(1), (source.height() * 0.12f).toInt().coerceAtLeast(1))
         return Rect((source.left - padX).coerceAtLeast(0), (source.top - padY).coerceAtLeast(0),
             (source.right + padX).coerceAtMost(width), (source.bottom + padY).coerceAtMost(height))
     }
