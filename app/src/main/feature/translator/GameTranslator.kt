@@ -692,6 +692,7 @@ object GameTranslator {
             Log.d(TAG, "ocr[$index] frameBBox=(${b.left},${b.top},${b.right},${b.bottom}) " +
                 "expandedOverlayBBox=(${expanded.left},${expanded.top},${expanded.right},${expanded.bottom}) " +
                 "outputBBox=(${ox + b.left * sx},${oy + b.top * sy},${ox + b.right * sx},${oy + b.bottom * sy}) " +
+                "outputExpandedBBox=(${ox + expanded.left * sx},${oy + expanded.top * sy},${ox + expanded.right * sx},${oy + expanded.bottom * sy}) " +
                 "text=${line.text.take(120)}")
         }
         if (lines.isEmpty()) {
@@ -739,11 +740,6 @@ object GameTranslator {
         val plaque = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.BLUE; style = Paint.Style.STROKE; strokeWidth = (width / 540f).coerceIn(2f, 5f)
         }
-        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.rgb(0, 230, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = (width / 540f).coerceIn(2f, 5f)
-        }
         val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = (width / 48f).coerceIn(14f, 28f)
@@ -759,7 +755,6 @@ object GameTranslator {
             if (b.width() <= 0 || b.height() <= 0) return@forEachIndexed
             canvas.drawRect(b, original)
             canvas.drawRect(expandedOverlayBounds(b, width, height), plaque)
-            canvas.drawRect(b, stroke)
             val caption = "OCR $index"
             val captionWidth = label.measureText(caption) + 10f
             val top = (b.top - label.textSize - 8f).coerceAtLeast(0f)
