@@ -44,6 +44,12 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
     var testText by remember { mutableStateOf("The door is locked. Find the key.") }
     var testResult by remember { mutableStateOf("") }
     var testing by remember { mutableStateOf(false) }
+    var plaqueMode by remember {
+        mutableStateOf(runCatching {
+            TranslatorPlaqueMode.valueOf(prefs.getString("plaque_mode", "AUTO") ?: "AUTO")
+        }.getOrDefault(TranslatorPlaqueMode.AUTO))
+    }
+    var plaqueOpacity by remember { mutableStateOf(prefs.getInt("glass_alpha", 90).coerceIn(40, 100).toFloat()) }
 
     fun save() {
         prefs.edit().putString(PROVIDER, provider).putString(ENDPOINT, endpoint.trim())
@@ -84,6 +90,45 @@ fun TranslatorSettingsScreen(bridge: SettingsNavBridge) {
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(status, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        Card {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Читаемость плашки", style = MaterialTheme.typography.titleMedium)
+                Text("Оригинальные пиксели под плашкой закрашиваются непрозрачно. Прозрачность меняет только верхнюю тонировку.", style = MaterialTheme.typography.bodySmall)
+                TranslatorPlaqueMode.values().forEach { mode ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(mode.title, modifier = Modifier.weight(1f))
+                        RadioButton(selected = plaqueMode == mode, onClick = {
+                            plaqueMode = mode
+                            GameTranslator.setPlaqueMode(context, mode)
+                        })
+                    }
+                }
+                Text("Прозрачность верхней тонировки: ${plaqueOpacity.toInt()}%")
+                Slider(
+                    value = plaqueOpacity,
+                    onValueChange = {
+                        plaqueOpacity = it
+                        GameTranslator.setGlassAlpha(context, it.toInt())
+                    },
+                    valueRange = 40f..100f
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height(72.dp),
+                    color = androidx.compose.ui.graphics.Color(0xFF1E2228),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Box(Modifier.padding(12.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Text(
+                            "ПРИМЕР ПЕРЕВОДА",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+                Text("В режиме «Авто» стекло включается только на спокойном фоне; на анимированной сетке выбирается плотная заливка.", style = MaterialTheme.typography.bodySmall)
             }
         }
 
