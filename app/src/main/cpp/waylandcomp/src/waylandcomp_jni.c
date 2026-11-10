@@ -388,6 +388,14 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetTransl
     __android_log_print(ANDROID_LOG_INFO, TAG, "Vulkan game translator %s", enabled ? "enabled" : "disabled");
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeGetTranslatorDebugInfo(
+        JNIEnv *env, jclass clazz) {
+    (void)clazz;
+    char info[512];
+    vkp_translator_debug_info(info, sizeof(info));
+    return (*env)->NewStringUTF(env, info);
+}
 JNIEXPORT void JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetTranslatorOverlay(
         JNIEnv *env, jclass clazz, jbyteArray rgba, jint width, jint height) {
