@@ -629,10 +629,16 @@ object GameTranslator {
         )
         canvas.save()
         canvas.clipPath(path)
+        // The blur layer is an opaque mask: the original glyphs must never show
+        // through, even when the user sets glass tint opacity to zero.
         canvas.drawBitmap(blurredScene, src, android.graphics.RectF(rect),
-            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = (opacity * 2.55f).toInt().coerceIn(0, 255) })
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 255 })
+        // Opacity controls only the glass tint/highlight, not the masking layer.
         canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ((opacity * 1.45f).toInt().coerceIn(0, 220) shl 24) or 0x005b7188; style = Paint.Style.FILL })
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = ((opacity * 2.0f).toInt().coerceIn(0, 200) shl 24) or 0x005b7188
+                style = Paint.Style.FILL
+            })
         canvas.restore()
         canvas.drawRoundRect(android.graphics.RectF(rect), radius, radius,
             Paint(Paint.ANTI_ALIAS_FLAG).apply {
