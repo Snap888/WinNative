@@ -152,6 +152,8 @@ object GameTranslator {
         }
         appContext = context.applicationContext
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // This game-translator build is configured to produce Russian output as requested.
+        prefs.edit().putString("target", "RU").apply()
         displayModeState.value = runCatching {
             TranslatorDisplayMode.valueOf(prefs.getString(MODE_KEY, null) ?: "")
         }.getOrDefault(TranslatorDisplayMode.ORIGINAL_AND_TRANSLATION)
