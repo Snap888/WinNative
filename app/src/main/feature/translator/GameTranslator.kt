@@ -577,13 +577,15 @@ object GameTranslator {
     ) {
         if (text.isBlank() || anchor.width() <= 2 || anchor.height() <= 2) return
 
-        val left = anchor.left.coerceIn(0, canvas.width - 1)
-        val top = anchor.top.coerceIn(0, canvas.height - 1)
-        val right = anchor.right.coerceIn(left + 1, canvas.width)
-        val bottom = anchor.bottom.coerceIn(top + 1, canvas.height)
+        val pad = ((appContext?.resources?.displayMetrics?.density ?: 1f) * 5f).toInt().coerceAtLeast(4)
+        // Expand outwards: never move the left/top edges inward while adding padding.
+        val left = (anchor.left - pad).coerceAtLeast(0)
+        val top = (anchor.top - pad).coerceAtLeast(0)
+        val right = (anchor.right + pad).coerceAtMost(canvas.width)
+        val bottom = (anchor.bottom + pad).coerceAtMost(canvas.height)
         val rect = Rect(left, top, right, bottom)
-        val innerPadX = min(3, max(0, rect.width() / 24))
-        val innerPadY = min(2, max(0, rect.height() / 18))
+        val innerPadX = min(3, max(0, pad / 2))
+        val innerPadY = min(3, max(0, pad / 2))
         val contentWidth = (rect.width() - innerPadX * 2).coerceAtLeast(1)
         val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
         val originalSize = paint.textSize
@@ -678,10 +680,19 @@ object GameTranslator {
      */
     private fun renderDebugOverlay(width: Int, height: Int, lines: List<OcrLine>, nativeInfo: String) {
         Log.d(TAG, "frame=${width}x${height} native=$nativeInfo")
+        val matrix = Regex("scale=\\(([0-9.]+),([0-9.]+)\\) offset=\\((-?[0-9.]+),(-?[0-9.]+)\\)")
+            .find(nativeInfo)?.groupValues
+        val sx = matrix?.get(1)?.toFloatOrNull() ?: 1f
+        val sy = matrix?.get(2)?.toFloatOrNull() ?: 1f
+        val ox = matrix?.get(3)?.toFloatOrNull() ?: 0f
+        val oy = matrix?.get(4)?.toFloatOrNull() ?: 0f
         lines.forEachIndexed { index, line ->
             val b = line.bounds
-            Log.d(TAG, "ocr[$index] frameRect=(${b.left},${b.top},${b.right},${b.bottom}) " +
-                "overlaySceneRect=(${b.left + 20},${b.top - 20},${b.right + 20},${b.bottom - 20}) text=${line.text.take(120)}")
+            val expanded = expandedOverlayBounds(b, width, height)
+            Log.d(TAG, "ocr[$index] frameBBox=(${b.left},${b.top},${b.right},${b.bottom}) " +
+                "expandedOverlayBBox=(${expanded.left},${expanded.top},${expanded.right},${expanded.bottom}) " +
+                "outputBBox=(${ox + b.left * sx},${oy + b.top * sy},${ox + b.right * sx},${oy + b.bottom * sy}) " +
+                "text=${line.text.take(120)}")
         }
         if (lines.isEmpty()) {
             WaylandCompositor.nativeSetTranslatorOverlay(byteArrayOf(), 0, 0)
@@ -703,7 +714,31 @@ object GameTranslator {
         WaylandCompositor.nativeSetTranslatorOverlay(rgba, width, height)
     }
 
+    private fun expandedOverlayBounds(source: Rect, width: Int, height: Int): Rect {
+        val pad = ((appContext?.resources?.displayMetrics?.density ?: 1f) * 5f).toInt().coerceAtLeast(4)
+        return Rect((source.left - pad).coerceAtLeast(0), (source.top - pad).coerceAtLeast(0),
+            (source.right + pad).coerceAtMost(width), (source.bottom + pad).coerceAtMost(height))
+    }
+
     private fun drawDebugBounds(canvas: Canvas, width: Int, height: Int, lines: List<OcrLine>) {
+        val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = (width / 540f).coerceIn(2f, 5f)
+        }
+        canvas.drawRect(1f, 1f, (width - 1).toFloat(), (height - 1).toFloat(), edge)
+        val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.YELLOW; strokeWidth = 2f }
+        fun mark(x: Float, y: Float) {
+            canvas.drawLine(x - 10f, y, x + 10f, y, cross)
+            canvas.drawLine(x, y - 10f, x, y + 10f, cross)
+        }
+        mark(0f, 0f); mark(width / 2f, height / 2f); mark(width.toFloat(), height.toFloat())
+        val original = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.GREEN; style = Paint.Style.STROKE; strokeWidth = (width / 540f).coerceIn(2f, 5f)
+        }
+        val plaque = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.BLUE; style = Paint.Style.STROKE; strokeWidth = (width / 540f).coerceIn(2f, 5f)
+        }
         val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.rgb(0, 230, 255)
             style = Paint.Style.STROKE
@@ -722,6 +757,8 @@ object GameTranslator {
             val b = Rect(line.bounds)
             b.intersect(0, 0, width, height)
             if (b.width() <= 0 || b.height() <= 0) return@forEachIndexed
+            canvas.drawRect(b, original)
+            canvas.drawRect(expandedOverlayBounds(b, width, height), plaque)
             canvas.drawRect(b, stroke)
             val caption = "OCR $index"
             val captionWidth = label.measureText(caption) + 10f
