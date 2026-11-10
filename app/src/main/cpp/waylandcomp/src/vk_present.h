@@ -78,6 +78,8 @@ void vkp_set_translator_enabled(int enabled);
 int vkp_translator_enabled(void);
 void vkp_set_translator_capture_suspended(int suspended);
 void vkp_translator_overlay_set_rgba(const uint8_t *rgba, int width, int height);
+/* Compositor-thread diagnostic snapshot: scene/output sizes, viewport, scale, offsets and rotation. */
+void vkp_translator_debug_info(char *out, size_t out_size);
 
 // One scene draw: the src rectangle of an image (image pixels) scaled into the dst
 // rectangle (scene pixels). The scene is mapped onto the output by the scale mode.
