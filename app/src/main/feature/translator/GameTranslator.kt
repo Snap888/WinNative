@@ -424,6 +424,34 @@ object GameTranslator {
         }
     }
 
+    private fun resolveGroupFontSize(
+        translations: List<String>, lines: List<OcrLine>, sceneWidth: Int, sceneHeight: Int, baseSize: Float
+    ): Float {
+        if (translations.isEmpty() || lines.isEmpty()) return baseSize
+        val minHeight = lines.minOf { it.bounds.height() }.coerceAtLeast(1)
+        val maxWidth = (sceneWidth - 24).coerceAtLeast(24)
+        val targetHeight = (minHeight + 10).coerceAtLeast(12)
+        var low = baseSize * 0.70f
+        var high = baseSize
+        // Binary search a common size that can render the longest translation in a bounded
+        // two-line layout. Every row then uses this exact same value.
+        repeat(9) {
+            val candidate = (low + high) * 0.5f
+            val fits = translations.all { value ->
+                val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                    textSize = candidate
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                }
+                val layout = StaticLayout.Builder.obtain(value, 0, value.length, p, maxWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
+                    .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
+                layout.height <= targetHeight
+            }
+            if (fits) low = candidate else high = candidate
+        }
+        return low.coerceIn(baseSize * 0.70f, baseSize)
+    }
+
     private fun drawModeOverlay(
         sourceFrame: Bitmap,
         sceneWidth: Int,
@@ -455,17 +483,22 @@ object GameTranslator {
             max(1, sceneHeight / 8),
             true
         )
+        // A single baseline font size is shared by the entire OCR group (especially menu rows).
+        // It is derived from the shortest source row, never independently fitted per translation.
+        val groupBaseSize = if (fontAuto) {
+            (lines.minOfOrNull { it.bounds.height() }?.toFloat()?.times(0.78f) ?: 22f).coerceIn(12f, 42f)
+        } else (manualFontSize * sceneWidth / 1080f).coerceIn(10f, 72f)
+        val groupFontSize = resolveGroupFontSize(translations, lines, sceneWidth, sceneHeight, groupBaseSize)
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = if (fontAuto) (sceneWidth / 58f).coerceIn(15f, 30f)
-                else (manualFontSize * sceneWidth / 1080f).coerceIn(10f, 72f)
+            textSize = groupFontSize
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setShadowLayer(3f, 1f, 2f, Color.BLACK)
+            setShadowLayer(2f, 0.5f, 1f, 0x99000000.toInt())
         }
         val stroke = TextPaint(textPaint).apply {
             color = Color.BLACK
             style = Paint.Style.STROKE
-            strokeWidth = max(2f, textPaint.textSize / 8f)
+            strokeWidth = max(1.2f, textPaint.textSize / 12f)
             clearShadowLayer()
         }
 
@@ -511,7 +544,7 @@ object GameTranslator {
                             .coerceAtLeast(box.height() + 8)
                         drawCompactGlassText(
                             canvas, softenedFrame, translatedLine, box,
-                            maxWidth, maxHeight, glassAlpha, fontAuto, textPaint, stroke
+                            maxWidth, maxHeight, glassAlpha, groupFontSize, textPaint, stroke
                         )
                     }
                     TranslatorDisplayMode.BESIDE_ORIGINAL -> {
@@ -579,7 +612,7 @@ object GameTranslator {
         maxWidth: Int,
         maxHeight: Int,
         opacity: Int,
-        fontAuto: Boolean,
+        groupFontSize: Float,
         paint: TextPaint,
         stroke: TextPaint
     ) {
@@ -597,22 +630,29 @@ object GameTranslator {
         val contentWidth = (rect.width() - innerPadX * 2).coerceAtLeast(1)
         val contentHeight = (rect.height() - innerPadY * 2).coerceAtLeast(1)
         val originalSize = paint.textSize
-
-        // The panel already includes the requested outer padding; fit text into that larger box.
-        var size = if (fontAuto) (rect.height() * 0.88f).coerceIn(8f, 42f) else originalSize
+        // The shared group size may shrink by at most 30%; it is never enlarged per row.
+        var size = groupFontSize
+        val minimumSize = groupFontSize * 0.70f
         var layout: StaticLayout
-        do {
-            paint.textSize = size
-            stroke.textSize = size
-            layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                .setIncludePad(false)
-                .setMaxLines(3)
-                .setEllipsize(TextUtils.TruncateAt.END)
-                .build()
-            if (layout.height <= contentHeight || size <= 7f) break
-            size = (size - 1f).coerceAtLeast(7f)
-        } while (true)
+        var low = minimumSize
+        var high = groupFontSize
+        repeat(8) {
+            val candidate = (low + high) * 0.5f
+            paint.textSize = candidate
+            val candidateLayout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
+                .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
+            if (candidateLayout.height <= contentHeight) {
+                low = candidate
+                layout = candidateLayout
+            } else high = candidate
+        }
+        size = low.coerceIn(minimumSize, groupFontSize)
+        paint.textSize = size
+        stroke.textSize = size
+        layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, contentWidth)
+            .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false)
+            .setMaxLines(2).setEllipsize(TextUtils.TruncateAt.END).build()
 
         // Use the expanded OCR rectangle for both the opaque mask and glass panel.
         drawFrostedGlass(canvas, blurredScene, rect, canvas.width, canvas.height, opacity)
