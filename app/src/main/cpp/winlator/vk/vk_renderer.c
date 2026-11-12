@@ -45,6 +45,7 @@
 #include "shaders/effect_colorblind_frag.spv.h"
 #include "shaders/effect_pixelate_frag.spv.h"
 #include "shaders/sgsr1_frag.spv.h"
+#include "shaders/anr_spatial_frag.spv.h"
 
 // ============================================================
 // Forward decls
@@ -972,12 +973,13 @@ static bool create_pipelines(VkRenderer* r) {
     VkShaderModule fs_colorblind = load_shader_module(r, effect_colorblind_frag, effect_colorblind_frag_size);
     VkShaderModule fs_pixelate = load_shader_module(r, effect_pixelate_frag, effect_pixelate_frag_size);
     VkShaderModule fs_sgsr1 = load_shader_module(r, sgsr1_frag, sgsr1_frag_size);
+    VkShaderModule fs_anr_spatial = load_shader_module(r, anr_spatial_frag, anr_spatial_frag_size);
     if (!vs_window || !fs_window || !fs_cursor || !vs_quad || !fs_blit
         || !fs_crt || !fs_vivid || !fs_hdr || !fs_natural
         || !fs_toon || !fs_ntsc || !fs_ntsc2 || !fs_coloradj
         || !fs_colorgrade || !fs_sharpen || !fs_scanlines
         || !fs_colorblind || !fs_pixelate
-        || !fs_sgsr1) {
+        || !fs_sgsr1 || !fs_anr_spatial) {
         return false;
     }
 
@@ -1004,6 +1006,9 @@ static bool create_pipelines(VkRenderer* r) {
         false, false, NULL);
     r->pipelines.effect_pipelines[VK_EFFECT_SGSR1] = create_graphics_pipeline(
         r, vs_quad, fs_sgsr1, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        false, false, NULL);
+    r->pipelines.effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
+        r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
     r->pipelines.effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
@@ -1056,6 +1061,9 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_SGSR1] = create_graphics_pipeline(
         r, vs_quad, fs_sgsr1, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
+    r->pipelines.offscreen_effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
+        r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        false, false, NULL);
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
@@ -1103,6 +1111,7 @@ static bool create_pipelines(VkRenderer* r) {
     vkDestroyShaderModule(r->device, fs_colorblind, NULL);
     vkDestroyShaderModule(r->device, fs_pixelate, NULL);
     vkDestroyShaderModule(r->device, fs_sgsr1, NULL);
+    vkDestroyShaderModule(r->device, fs_anr_spatial, NULL);
 
     if (!r->pipelines.window_pipeline || !r->pipelines.cursor_pipeline
         || !r->pipelines.blit_pipeline
@@ -2412,7 +2421,9 @@ static void run_effect(VkRenderer* r, VkCommandBuffer cmd, VkEffectSlot* eff,
 }
 
 static bool scene_starts_with_sgsr1(const VkScene* s) {
-    return s->effect_count > 0 && s->effects[0].type == VK_EFFECT_SGSR1;
+    if (s->effect_count == 0) return false;
+    return s->effects[0].type == VK_EFFECT_SGSR1
+        || s->effects[0].type == VK_EFFECT_ANR_SPATIAL;
 }
 
 static void wait_inflight_frames(VkRenderer* r) {
@@ -2444,6 +2455,14 @@ static VkExtent2D compute_sgsr1_source_extent(VkRenderer* r, const VkScene* s) {
         source_w < out.width ? source_w : out.width,
         source_h < out.height ? source_h : out.height,
     };
+    if (s->effect_count > 0 && s->effects[0].type == VK_EFFECT_ANR_SPATIAL) {
+        float scale = s->effects[0].param0;
+        if (!(scale > 0.0f)) scale = 0.75f;
+        if (scale < 0.50f) scale = 0.50f;
+        if (scale > 1.00f) scale = 1.00f;
+        source.width = (uint32_t)((float)source.width * scale + 0.5f);
+        source.height = (uint32_t)((float)source.height * scale + 0.5f);
+    }
     if (source.width < 1) source.width = 1;
     if (source.height < 1) source.height = 1;
     return source;
