@@ -43,23 +43,28 @@ void main() {
     vec2 texel = 1.0 / vec2(size);
     vec2 uv = clamp(vUV, texel * 0.5, vec2(1.0) - texel * 0.5);
     vec3 center = texture(sourceTexture, uv).rgb;
-    vec3 bicubic = sampleCatmullRom(uv, size);
     float quality = clamp(pc.quality / 4.0, 0.0, 1.0);
-    vec3 reconstructed = mix(center, bicubic, quality);
+    vec3 reconstructed = center;
+    if (quality > 0.001) {
+        reconstructed = mix(center, sampleCatmullRom(uv, size), quality);
+    }
 
-    ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
-    vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,-1), size), 0).rgb;
-    vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, 1), size), 0).rgb;
-    vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,0), size), 0).rgb;
-    vec3 e = texelFetch(sourceTexture, clampPixel(pixel + ivec2(1, 0), size), 0).rgb;
-    float edge = clamp(max(abs(luma(e)-luma(w)), abs(luma(s)-luma(n))) * 3.0, 0.0, 1.0);
-    vec3 detail = reconstructed - (n + s + w + e) * 0.25;
     float strength = clamp(pc.sharpness, 0.0, 2.0);
-    vec3 result = reconstructed + detail * strength * 0.55 * mix(1.0, 0.62, edge);
+    vec3 result = reconstructed;
+    if (strength > 0.001) {
+        ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
+        vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,-1), size), 0).rgb;
+        vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, 1), size), 0).rgb;
+        vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,0), size), 0).rgb;
+        vec3 e = texelFetch(sourceTexture, clampPixel(pixel + ivec2(1, 0), size), 0).rgb;
+        float edge = clamp(max(abs(luma(e)-luma(w)), abs(luma(s)-luma(n))) * 3.0, 0.0, 1.0);
+        vec3 detail = reconstructed - (n + s + w + e) * 0.25;
+        result += detail * strength * 0.55 * mix(1.0, 0.62, edge);
 
-    // Preserve real high-frequency detail; only limit extreme ringing.
-    vec3 lo = min(center, min(min(n,s), min(w,e)));
-    vec3 hi = max(center, max(max(n,s), max(w,e)));
-    result = clamp(result, lo - 0.10, hi + 0.10);
+        // Preserve real high-frequency detail; only limit extreme ringing.
+        vec3 lo = min(center, min(min(n,s), min(w,e)));
+        vec3 hi = max(center, max(max(n,s), max(w,e)));
+        result = clamp(result, lo - 0.10, hi + 0.10);
+    }
     outColor = vec4(clamp(result, 0.0, 1.0), 1.0);
 }
