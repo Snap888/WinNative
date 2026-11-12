@@ -71,6 +71,43 @@ vec3 sampleLanczos2(vec2 uv, ivec2 size) {
     return sum / max(total, 1.0e-5);
 }
 
+// Adaptive mode needs both kernels to classify edges. Fetch each source texel once
+// and accumulate Catmull-Rom and Lanczos2 together instead of issuing 32 fetches.
+void sampleAdaptiveKernels(vec2 uv, ivec2 size, out vec3 cubic, out vec3 lanczos) {
+    vec2 p = uv * vec2(size) - 0.5;
+    ivec2 base = ivec2(floor(p));
+    vec2 f = fract(p), f2 = f * f, f3 = f2 * f;
+    vec4 cx = vec4(-0.5*f.x + f2.x - 0.5*f3.x,
+                   1.0 - 2.5*f2.x + 1.5*f3.x,
+                   0.5*f.x + 2.0*f2.x - 1.5*f3.x,
+                   -0.5*f2.x + 0.5*f3.x);
+    vec4 cy = vec4(-0.5*f.y + f2.y - 0.5*f3.y,
+                   1.0 - 2.5*f2.y + 1.5*f3.y,
+                   0.5*f.y + 2.0*f2.y - 1.5*f3.y,
+                   -0.5*f2.y + 0.5*f3.y);
+    vec4 lx, ly;
+    for (int i = 0; i < 4; ++i) {
+        float d = float(i - 1);
+        lx[i] = lanczos2Weight(d - f.x);
+        ly[i] = lanczos2Weight(d - f.y);
+    }
+    cubic = vec3(0.0);
+    lanczos = vec3(0.0);
+    float lanczosTotal = 0.0;
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            vec3 tap = texelFetch(sourceTexture,
+                clampPixel(base + ivec2(x - 1, y - 1), size), 0).rgb;
+            float cw = cx[x] * cy[y];
+            float lw = lx[x] * ly[y];
+            cubic += tap * cw;
+            lanczos += tap * lw;
+            lanczosTotal += lw;
+        }
+    }
+    lanczos /= max(lanczosTotal, 1.0e-5);
+}
+
 float luma(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
@@ -88,8 +125,8 @@ void main() {
     } else if (quality == 2) {
         reconstructed = sampleLanczos2(uv, size);
     } else if (quality >= 3) {
-        vec3 cubic = sampleCatmullRom(uv, size);
-        vec3 lanczos = sampleLanczos2(uv, size);
+        vec3 cubic, lanczos;
+        sampleAdaptiveKernels(uv, size, cubic, lanczos);
 
         ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
         vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, -1), size), 0).rgb;
