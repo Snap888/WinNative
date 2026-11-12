@@ -536,9 +536,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int sgsrUpscaleMode = 1;
     private int sgsrSharpness = 100;
     private boolean anrEnabled = false;
-    private int anrRenderScale = 75;
-    private int anrSharpness = 45;
-    private int anrQuality = 2;
+    private int anrRenderScale = 90;
+    private int anrSharpness = 75;
+    private int anrQuality = 4;
     private String sgsrBaseScreenSize = Container.DEFAULT_SCREEN_SIZE;
     private boolean vividEnabled = false;
     private int vividStrength = 100;
@@ -2578,9 +2578,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
         sgsrBaseScreenSize = screenSize;
         anrEnabled = preferences.getBoolean("anr_enabled", false);
-        anrRenderScale = Math.max(50, Math.min(100, preferences.getInt("anr_render_scale", 75)));
-        anrSharpness = Math.max(0, Math.min(100, preferences.getInt("anr_sharpness", 45)));
-        anrQuality = Math.max(0, Math.min(3, preferences.getInt("anr_quality", 2)));
+        anrRenderScale = Math.max(25, Math.min(100, preferences.getInt("anr_render_scale", 90)));
+        anrSharpness = Math.max(0, Math.min(200, preferences.getInt("anr_sharpness", 75)));
+        anrQuality = Math.max(0, Math.min(4, preferences.getInt("anr_quality", 4)));
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
         if (!effectiveScreenSize.equals(screenSize)) {
@@ -6008,7 +6008,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onANRRenderScaleChanged(int scale) {
-                        anrRenderScale = Math.max(50, Math.min(100, scale));
+                        anrRenderScale = Math.max(25, Math.min(100, scale));
                         preferences.edit().putInt("anr_render_scale", anrRenderScale).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
@@ -6016,7 +6016,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onANRSharpnessChanged(int sharpness) {
-                        anrSharpness = Math.max(0, Math.min(100, sharpness));
+                        anrSharpness = Math.max(0, Math.min(200, sharpness));
                         preferences.edit().putInt("anr_sharpness", anrSharpness).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
@@ -6024,7 +6024,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onANRQualityChanged(int quality) {
-                        anrQuality = Math.max(0, Math.min(3, quality));
+                        anrQuality = Math.max(0, Math.min(4, quality));
                         preferences.edit().putInt("anr_quality", anrQuality).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
@@ -6828,6 +6828,16 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     }
 
     private void applyScreenEffects() {
+        // Wayland has its own Vulkan post chain; mode 9 selects its ANR-compatible EASU+RCAS path.
+        if (waylandMode) {
+            try {
+                WaylandCompositor.nativeSetUpscaler(anrEnabled ? 9 : 0);
+                WaylandCompositor.nativeSetUpscaleSharpness(anrSharpness);
+            } catch (Throwable t) {
+                Log.w("XServerDisplayActivity", "Failed to apply Wayland ANR settings", t);
+            }
+            return;
+        }
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         if (renderer == null) return;
         EffectComposer composer = renderer.getEffectComposer();
