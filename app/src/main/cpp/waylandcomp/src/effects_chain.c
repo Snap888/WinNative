@@ -25,6 +25,8 @@
 #include "ntsc_frag.h"
 #include "crt_frag.h"
 #include "deband_frag.h"
+#include "shaders/quad_vert.spv.h"
+#include "shaders/anr_spatial_frag.spv.h"
 
 #define FX_FORMAT VK_FORMAT_R8G8B8A8_UNORM /* the default: every SDR frame */
 /* The chain's target format and the scene's view format. R8G8B8A8 always, except while an HDR scene
@@ -38,6 +40,7 @@ static VkFormat g_fx_fmt = FX_FORMAT, g_scene_fmt = FX_FORMAT;
 
 struct fx_settings {
     int scaling;        /* 0..9 */
+    int anr_quality;    /* 0..4 */
     int sharp_pct;      /* 0..200 for ANR; legacy modes use 0..100 */
     int cas_on, cas_pct;
     int hdr_on;
@@ -51,7 +54,7 @@ struct fx_settings {
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct fx_settings g_set = {
-    .scaling = 0, .sharp_pct = 75, .cas_on = 0, .cas_pct = 60, .deband_pct = 100,
+    .scaling = 0, .sharp_pct = 75, .anr_quality = 4, .cas_on = 0, .cas_pct = 60, .deband_pct = 100,
     .gamma = 1.0f, .saturation = 1.0f, .s_raw = 100.0f, .look = "Off"};
 static volatile int g_changed;
 static struct fx_settings g_cur; /* the compositor thread's per-frame snapshot */
@@ -68,6 +71,11 @@ void vkp_effects_set_upscale_sharpness(int pct) {
     if (pct < 0) pct = 0;
     if (pct > 200) pct = 200;
     set_begin(); g_set.sharp_pct = pct; set_end();
+}
+void vkp_effects_set_anr_quality(int quality) {
+    if (quality < 0) quality = 0;
+    if (quality > 4) quality = 4;
+    set_begin(); g_set.anr_quality = quality; set_end();
 }
 void vkp_effects_set_cas(int enabled, int pct) {
     if (pct < 0) pct = 0;
@@ -102,7 +110,7 @@ void vkp_effects_set_look(const char *name) {
 }
 
 static const char *scaling_name(int m) {
-    static const char *n[] = {"None", "Linear", "Nearest", "SGSR", "FSR", "FSR Fit", "Sharpen", "NIS", "SGSR HQ", "ANR Spatial (EASU+RCAS)"};
+    static const char *n[] = {"None", "Linear", "Nearest", "SGSR", "FSR", "FSR Fit", "Sharpen", "NIS", "SGSR HQ", "ANR Spatial"};
     return (m >= 0 && m <= 9) ? n[m] : "?";
 }
 static int spatial_mode(int m) { return (m >= 3 && m <= 8) || m == 9; }
@@ -159,6 +167,7 @@ VkFilter vkp_effects_blit_filter(void) {
 
 /* ------------------------------------------------------------------ push constants
  * Byte-identical to VulkanRendererContext.h: vec4 ndc first (upscale.vert), the rest fragment-only. */
+struct pc_anr   { float resolution[2]; float renderScale, sharpness, quality, mode; };
 struct pc_sgsr  { float ndc[4]; float vp[4]; float edge; };        /* also NIS: vp + sharpness */
 struct pc_easu  { float ndc[4]; uint32_t con0[4], con1[4], con2[4], con3[4]; float outW, outH; };
 struct pc_rcas  { float ndc[4]; uint32_t con[4]; float outW, outH; };
@@ -199,7 +208,7 @@ static VkDescriptorSetLayout g_dsl;
 static VkPipelineLayout g_pl;
 static VkDescriptorPool g_dpool;
 static VkSampler g_sampler;  /* linear, clamp-to-edge: what the X11 chain samples its targets with */
-enum { P_SGSR, P_SGSR_HQ, P_NIS, P_EASU, P_RCAS, P_CAS, P_COLOR, P_FXAA, P_TOON, P_HDR, P_NTSC, P_CRT, P_DEBAND, P_COUNT };
+enum { P_SGSR, P_SGSR_HQ, P_NIS, P_EASU, P_RCAS, P_CAS, P_COLOR, P_FXAA, P_TOON, P_HDR, P_NTSC, P_CRT, P_DEBAND, P_ANR, P_COUNT };
 static VkPipeline g_pipe[P_COUNT];
 static struct fx_target g_t[2], g_mid; /* ping-pong pair + the EASU output (FSR only) */
 /* The scene image belongs to vk_present; only its view + descriptor live here. */
@@ -446,9 +455,14 @@ static int objects_ensure(void) {
     MK(P_CRT, crt_code, "crt");
     MK(P_DEBAND, deband_code, "deband");
 #undef MK
+    VkShaderModule quad = shader(quad_vert, sizeof(quad_vert));
+    if (!quad) { g_vk.DestroyShaderModule(g_dev, vert, NULL); goto fail; }
+    g_pipe[P_ANR] = post_pipeline(quad, anr_spatial_frag, sizeof(anr_spatial_frag), "anr_spatial");
+    g_vk.DestroyShaderModule(g_dev, quad, NULL);
+    if (!g_pipe[P_ANR]) { g_vk.DestroyShaderModule(g_dev, vert, NULL); goto fail; }
     g_vk.DestroyShaderModule(g_dev, vert, NULL);
     g_ready = 1;
-    wnc_log("effects", "chain ready: 13 passes (SGSR, SGSR HQ, NIS, FSR EASU+RCAS, CAS, colour, FXAA, Toon, HDR, NTSC, CRT, deband) on %s", vkp_gpu_name());
+    wnc_log("effects", "chain ready: 14 passes (ANR Spatial, SGSR, SGSR HQ, NIS, FSR EASU+RCAS, CAS, colour, FXAA, Toon, HDR, NTSC, CRT, deband) on %s", vkp_gpu_name());
     return 0;
 fail:
     objects_destroy();
@@ -517,13 +531,13 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
 
     if ((spatial || nfx) && objects_ensure() == 0 && scene_ensure(scene, scene_w, scene_h) == 0 &&
         target_ensure(&g_t[0], cw, ch, "chain") == 0 && (npasses < 2 || target_ensure(&g_t[1], cw, ch, "chain") == 0) &&
-        (!(spatial == 4 || spatial == 5 || spatial == 9) || target_ensure(&g_mid, cw, ch, "EASU") == 0)) {
+        (!(spatial == 4 || spatial == 5) || target_ensure(&g_mid, cw, ch, "EASU") == 0)) {
         /* `cur` = the image the next pass samples; `cur_ds` its descriptor. Every pass writes the
          * target that is not being read (the pair alternates; the scene is read only first). */
         VkDescriptorSet cur_ds;
         struct fx_target *cur = NULL;   /* NULL = the scene image */
 #define FREE_TARGET() ((cur == &g_t[0]) ? &g_t[1] : &g_t[0])
-        const float sharp01 = (float)s->sharp_pct / (s->scaling == 9 ? 200.0f : 100.0f);
+        const float sharp01 = (float)s->sharp_pct / 100.0f;
 
         /* ---- stage 1: scaling (scene -> chain res) */
         if (spatial) {
@@ -531,7 +545,15 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
                     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
             struct fx_target *dst = FREE_TARGET();
-            if (spatial == 3 || spatial == 8 || spatial == 7) {
+            if (spatial == 9) {
+                struct pc_anr pc = {0};
+                pc.resolution[0] = (float)cw;
+                pc.resolution[1] = (float)ch;
+                pc.renderScale = 1.0f;
+                pc.sharpness = sharp01;
+                pc.quality = (float)s->anr_quality;
+                pass(cmd, g_pipe[P_ANR], dst, g_scene.ds, &pc, sizeof(pc));
+            } else if (spatial == 3 || spatial == 8 || spatial == 7) {
                 struct pc_sgsr pc = {0};
                 SET_NDC(pc);
                 pc.vp[0] = 1.0f / (float)scene_w; pc.vp[1] = 1.0f / (float)scene_h;
@@ -547,7 +569,7 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
                 rcas_con(&pc, sharp01);
                 pc.outW = (float)scene_w; pc.outH = (float)scene_h;
                 pass(cmd, g_pipe[P_RCAS], dst, g_scene.ds, &pc, sizeof(pc));
-            } else { /* FSR (4) / FSR Fit (5) / ANR Wayland fallback (9): EASU -> RCAS at chain res.
+            } else { /* FSR (4) / FSR Fit (5): EASU -> RCAS at chain res.
                       * Fill vs fit is the Fullscreen Mode's business here (the mapping), so both
                       * run the same EASU+RCAS pair. */
                 struct pc_easu e = {0};
