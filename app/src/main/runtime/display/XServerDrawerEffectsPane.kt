@@ -272,8 +272,14 @@ internal fun ScreenEffectsPaneContent(
                                 onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 200)) },
                             )
                             NavSliderRow(
-                                label = "Quality (0–4)",
-                                valueText = state.anrQuality.toString(),
+                                label = "Reconstruction filter",
+                                valueText = when (state.anrQuality) {
+                                    0 -> "Bilinear"
+                                    1 -> "Catmull–Rom"
+                                    2 -> "Lanczos2"
+                                    3 -> "Edge Adaptive"
+                                    else -> "Edge Adaptive+"
+                                },
                                 value = state.anrQuality.toFloat(),
                                 valueRange = 0f..4f,
                                 steps = 3,
