@@ -228,9 +228,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = stringResource(R.string.session_drawer_sgsr_edge_sharpness),
                                 valueText = "${state.sgsrSharpness}%",
                                 value = state.sgsrSharpness.toFloat(),
-                                valueRange = 0f..200f,
-                                steps = 199,
-                                onValueChange = { listener.onSGSRSharpnessChanged(it.roundToInt().coerceIn(0, 200)) },
+                                valueRange = 0f..100f,
+                                steps = 99,
+                                onValueChange = { listener.onSGSRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
                             )
                         }
                     }
