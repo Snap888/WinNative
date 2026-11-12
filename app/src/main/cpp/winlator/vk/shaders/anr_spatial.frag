@@ -120,6 +120,9 @@ void main() {
     int quality = int(clamp(floor(pc.quality + 0.5), 0.0, 4.0));
 
     vec3 reconstructed = center;
+    vec3 neighborN = vec3(0.0), neighborS = vec3(0.0);
+    vec3 neighborW = vec3(0.0), neighborE = vec3(0.0);
+    bool neighborsReady = false;
     if (quality == 1) {
         reconstructed = sampleCatmullRom(uv, size);
     } else if (quality == 2) {
@@ -129,13 +132,14 @@ void main() {
         sampleAdaptiveKernels(uv, size, cubic, lanczos);
 
         ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
-        vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, -1), size), 0).rgb;
-        vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,  1), size), 0).rgb;
-        vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, 0), size), 0).rgb;
-        vec3 e = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, 0), size), 0).rgb;
+        neighborN = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, -1), size), 0).rgb;
+        neighborS = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,  1), size), 0).rgb;
+        neighborW = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, 0), size), 0).rgb;
+        neighborE = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, 0), size), 0).rgb;
+        neighborsReady = true;
 
-        float gx = abs(luma(e) - luma(w));
-        float gy = abs(luma(s) - luma(n));
+        float gx = abs(luma(neighborE) - luma(neighborW));
+        float gy = abs(luma(neighborS) - luma(neighborN));
         float edge = clamp(max(gx, gy) * 4.0, 0.0, 1.0);
         float anisotropy = abs(gx - gy) / max(gx + gy, 1.0e-4);
 
@@ -145,13 +149,13 @@ void main() {
         reconstructed = mix(lanczos, cubic, cubicWeight);
 
         // Anti-ringing clamp to the local 3x3 source neighborhood.
-        vec3 lo = min(center, min(min(n, s), min(w, e)));
-        vec3 hi = max(center, max(max(n, s), max(w, e)));
+        vec3 lo = min(center, min(min(neighborN, neighborS), min(neighborW, neighborE)));
+        vec3 hi = max(center, max(max(neighborN, neighborS), max(neighborW, neighborE)));
         reconstructed = clamp(reconstructed, lo - 0.035, hi + 0.035);
 
         if (quality == 4) {
             float localContrast = clamp((gx + gy) * 2.0, 0.0, 1.0);
-            vec3 crossAverage = (n + s + w + e) * 0.25;
+            vec3 crossAverage = (neighborN + neighborS + neighborW + neighborE) * 0.25;
             vec3 detail = center - crossAverage;
             reconstructed += detail * (0.12 * localContrast);
             reconstructed = clamp(reconstructed, lo - 0.035, hi + 0.035);
@@ -163,13 +167,16 @@ void main() {
     float strength = clamp(pc.sharpness, 0.0, 2.0);
     if (strength > 0.001) {
         ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
-        vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, -1), size), 0).rgb;
-        vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,  1), size), 0).rgb;
-        vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, 0), size), 0).rgb;
-        vec3 e = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, 0), size), 0).rgb;
-        float edge = clamp(max(abs(luma(e) - luma(w)),
-                               abs(luma(s) - luma(n))) * 3.0, 0.0, 1.0);
-        float detail = luma(reconstructed) - luma((n + s + w + e) * 0.25);
+        if (!neighborsReady) {
+            neighborN = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, -1), size), 0).rgb;
+            neighborS = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,  1), size), 0).rgb;
+            neighborW = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, 0), size), 0).rgb;
+            neighborE = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, 0), size), 0).rgb;
+        }
+        float edge = clamp(max(abs(luma(neighborE) - luma(neighborW)),
+                               abs(luma(neighborS) - luma(neighborN))) * 3.0, 0.0, 1.0);
+        float detail = luma(reconstructed)
+                     - luma((neighborN + neighborS + neighborW + neighborE) * 0.25);
         float sharpenedLuma = luma(reconstructed) + detail * strength * 0.42
                             * mix(1.0, 0.58, edge);
         float delta = sharpenedLuma - luma(reconstructed);
