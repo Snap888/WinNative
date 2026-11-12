@@ -39,7 +39,7 @@ vec3 sampleCatmullRom(vec2 uv, ivec2 size) {
                    -0.5*f2.x + 0.5*f3.x);
     vec4 wy = vec4(-0.5*f.y + f2.y - 0.5*f3.y,
                    1.0 - 2.5*f2.y + 1.5*f3.y,
-                   0.5*f.y + 2.0*f.y*f.y - 1.5*f3.y,
+                   0.5*f.y + 2.0*f2.y - 1.5*f3.y,
                    -0.5*f2.y + 0.5*f3.y);
     vec3 sum = vec3(0.0);
     for (int y = 0; y < 4; ++y) {
@@ -68,7 +68,7 @@ vec3 sampleLanczos2(vec2 uv, ivec2 size) {
             total += weight;
         }
     }
-    return sum / max(abs(total), 1.0e-5) * sign(total);
+    return sum / max(total, 1.0e-5);
 }
 
 float luma(vec3 c) {
