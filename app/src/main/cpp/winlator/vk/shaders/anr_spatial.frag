@@ -1,11 +1,9 @@
 #version 450
 precision highp float;
 precision highp int;
-
 layout(location = 0) in highp vec2 vUV;
 layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform sampler2D sourceTexture;
-
 layout(push_constant) uniform PC {
     vec2 resolution;
     float renderScale;
@@ -14,40 +12,54 @@ layout(push_constant) uniform PC {
     float mode;
 } pc;
 
-float luma(vec3 c) {
-    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+ivec2 clampPixel(ivec2 p, ivec2 size) {
+    return clamp(p, ivec2(0), size - ivec2(1));
 }
+vec3 sampleCatmullRom(vec2 uv, ivec2 size) {
+    vec2 p = uv * vec2(size) - 0.5;
+    ivec2 base = ivec2(floor(p));
+    vec2 f = fract(p), f2 = f * f, f3 = f2 * f;
+    vec4 wx = vec4(-0.5*f.x + f2.x - 0.5*f3.x,
+                   1.0 - 2.5*f2.x + 1.5*f3.x,
+                   0.5*f.x + 2.0*f2.x - 1.5*f3.x,
+                   -0.5*f2.x + 0.5*f3.x);
+    vec4 wy = vec4(-0.5*f.y + f2.y - 0.5*f3.y,
+                   1.0 - 2.5*f2.y + 1.5*f3.y,
+                   0.5*f.y + 2.0*f2.y - 1.5*f3.y,
+                   -0.5*f2.y + 0.5*f3.y);
+    vec3 sum = vec3(0.0);
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            vec3 tap = texelFetch(sourceTexture, clampPixel(base + ivec2(x-1, y-1), size), 0).rgb;
+            sum += tap * wx[x] * wy[y];
+        }
+    }
+    return sum;
+}
+float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
 
 void main() {
-    vec2 texel = 1.0 / vec2(textureSize(sourceTexture, 0));
+    ivec2 size = textureSize(sourceTexture, 0);
+    vec2 texel = 1.0 / vec2(size);
     vec2 uv = clamp(vUV, texel * 0.5, vec2(1.0) - texel * 0.5);
+    vec3 center = texture(sourceTexture, uv).rgb;
+    vec3 bicubic = sampleCatmullRom(uv, size);
+    float quality = clamp(pc.quality / 4.0, 0.0, 1.0);
+    vec3 reconstructed = mix(center, bicubic, quality);
 
-    vec3 c  = texture(sourceTexture, uv).rgb;
-    vec3 n  = texture(sourceTexture, uv + vec2(0.0, -texel.y)).rgb;
-    vec3 s  = texture(sourceTexture, uv + vec2(0.0,  texel.y)).rgb;
-    vec3 w  = texture(sourceTexture, uv + vec2(-texel.x, 0.0)).rgb;
-    vec3 e  = texture(sourceTexture, uv + vec2( texel.x, 0.0)).rgb;
-    vec3 nw = texture(sourceTexture, uv + vec2(-texel.x, -texel.y)).rgb;
-    vec3 ne = texture(sourceTexture, uv + vec2( texel.x, -texel.y)).rgb;
-    vec3 sw = texture(sourceTexture, uv + vec2(-texel.x,  texel.y)).rgb;
-    vec3 se = texture(sourceTexture, uv + vec2( texel.x,  texel.y)).rgb;
+    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,-1), size), 0).rgb;
+    vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, 1), size), 0).rgb;
+    vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,0), size), 0).rgb;
+    vec3 e = texelFetch(sourceTexture, clampPixel(pixel + ivec2(1, 0), size), 0).rgb;
+    float edge = clamp(max(abs(luma(e)-luma(w)), abs(luma(s)-luma(n))) * 3.0, 0.0, 1.0);
+    vec3 detail = reconstructed - (n + s + w + e) * 0.25;
+    float strength = clamp(pc.sharpness, 0.0, 2.0);
+    vec3 result = reconstructed + detail * strength * 0.55 * mix(1.0, 0.62, edge);
 
-    float gx = abs(luma(e) - luma(w)) + 0.5 * (abs(luma(ne) - luma(nw)) + abs(luma(se) - luma(sw)));
-    float gy = abs(luma(s) - luma(n)) + 0.5 * (abs(luma(sw) - luma(nw)) + abs(luma(se) - luma(ne)));
-
-    vec3 axisH = (c * 2.0 + n + s) * 0.25;
-    vec3 axisV = (c * 2.0 + w + e) * 0.25;
-    float edgeConfidence = clamp(abs(gx - gy) * 10.0, 0.0, 1.0);
-    vec3 reconstructed = mix((axisH + axisV) * 0.5, gx < gy ? axisH : axisV, edgeConfidence);
-
-    float edge = clamp(max(gx, gy) * 4.0, 0.0, 1.0);
-    float qualityRadius = mix(0.65, 1.0, clamp(pc.quality / 3.0, 0.0, 1.0));
-    float sharpen = clamp(pc.sharpness, 0.0, 1.0) * qualityRadius;
-    vec3 neighbourhood = (n + s + w + e) * 0.25;
-    vec3 result = reconstructed + (c - neighbourhood) * sharpen * (0.35 + edge * 0.65);
-
-    vec3 lo = min(c, min(min(n, s), min(w, e)));
-    vec3 hi = max(c, max(max(n, s), max(w, e)));
-    result = clamp(result, lo - 0.02, hi + 0.02);
+    // Preserve real high-frequency detail; only limit extreme ringing.
+    vec3 lo = min(center, min(min(n,s), min(w,e)));
+    vec3 hi = max(center, max(max(n,s), max(w,e)));
+    result = clamp(result, lo - 0.10, hi + 0.10);
     outColor = vec4(clamp(result, 0.0, 1.0), 1.0);
 }
