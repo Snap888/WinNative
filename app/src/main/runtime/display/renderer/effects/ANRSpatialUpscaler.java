@@ -7,20 +7,20 @@ package com.winlator.cmod.runtime.display.renderer.effects;
  * inference model. Temporal reconstruction is kept as a separate backend.
  */
 public final class ANRSpatialUpscaler extends Effect {
-    private float renderScale = 0.75f;
-    private float sharpness = 0.45f;
-    private int quality = 2;
+    private float renderScale = 0.90f;
+    private float sharpness = 0.75f;
+    private int quality = 4;
 
     public void setRenderScale(float value) {
-        renderScale = Math.max(0.50f, Math.min(1.0f, value));
+        renderScale = Math.max(0.25f, Math.min(1.0f, value));
     }
 
     public void setSharpness(float value) {
-        sharpness = Math.max(0.0f, Math.min(1.0f, value));
+        sharpness = Math.max(0.0f, Math.min(2.0f, value));
     }
 
     public void setQuality(int value) {
-        quality = Math.max(0, Math.min(3, value));
+        quality = Math.max(0, Math.min(4, value));
     }
 
     @Override
