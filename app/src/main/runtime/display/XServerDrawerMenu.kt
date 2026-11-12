@@ -633,6 +633,10 @@ data class XServerDrawerState(
     val screenEffectsCardExpanded: Boolean = false,
     val sgsrEnabled: Boolean = false,
     val sgsrSharpness: Int = 100,
+    val anrEnabled: Boolean = false,
+    val anrRenderScale: Int = 75,
+    val anrSharpness: Int = 45,
+    val anrQuality: Int = 2,
     val vividEnabled: Boolean = false,
     val vividStrength: Int = 100,
     val colorProfile: Int = 0,
@@ -1076,6 +1080,14 @@ interface XServerDrawerActionListener {
     fun onSGSREnabledChanged(enabled: Boolean)
 
     fun onSGSRSharpnessChanged(sharpness: Int)
+
+    fun onANREnabledChanged(enabled: Boolean)
+
+    fun onANRRenderScaleChanged(scale: Int)
+
+    fun onANRSharpnessChanged(sharpness: Int)
+
+    fun onANRQualityChanged(quality: Int)
 
     fun onVividEnabledChanged(enabled: Boolean)
 

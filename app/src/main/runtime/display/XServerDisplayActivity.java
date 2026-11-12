@@ -125,6 +125,7 @@ import com.winlator.cmod.runtime.display.renderer.effects.NTSCEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.PixelateEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ScanlinesEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.SGSRUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.ANRSpatialUpscaler;
 import com.winlator.cmod.runtime.display.renderer.effects.SharpenEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ToonEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.VividEffect;
@@ -534,6 +535,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
     private int sgsrSharpness = 100;
+    private boolean anrEnabled = false;
+    private int anrRenderScale = 75;
+    private int anrSharpness = 45;
+    private int anrQuality = 2;
     private String sgsrBaseScreenSize = Container.DEFAULT_SCREEN_SIZE;
     private boolean vividEnabled = false;
     private int vividStrength = 100;
@@ -2572,6 +2577,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             screenSize = sanitizedScreenSize;
         }
         sgsrBaseScreenSize = screenSize;
+        anrEnabled = preferences.getBoolean("anr_enabled", false);
+        anrRenderScale = Math.max(50, Math.min(100, preferences.getInt("anr_render_scale", 75)));
+        anrSharpness = Math.max(0, Math.min(100, preferences.getInt("anr_sharpness", 45)));
+        anrQuality = Math.max(0, Math.min(3, preferences.getInt("anr_quality", 2)));
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
         if (!effectiveScreenSize.equals(screenSize)) {
@@ -5446,6 +5455,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 screenEffectsCardExpanded,
                 sgsrEnabled,
                 sgsrSharpness,
+                anrEnabled,
+                anrRenderScale,
+                anrSharpness,
+                anrQuality,
                 vividEnabled,
                 vividStrength,
                 colorProfile,
@@ -5949,6 +5962,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onSGSREnabledChanged(boolean enabled) {
+                        if (enabled && anrEnabled) {
+                            anrEnabled = false;
+                            preferences.edit().putBoolean("anr_enabled", false).apply();
+                        }
                         boolean wasEnabled = sgsrEnabled;
                         boolean wasRuntimeEnabled = sgsrRuntimeEnabled;
                         sgsrEnabled = enabled;
@@ -5972,6 +5989,43 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     public void onSGSRSharpnessChanged(int sharpness) {
                         sgsrSharpness = Math.max(0, Math.min(100, sharpness));
                         saveSGSRShortcutSettings();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANREnabledChanged(boolean enabled) {
+                        anrEnabled = enabled;
+                        if (enabled && sgsrEnabled) {
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                        }
+                        preferences.edit().putBoolean("anr_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRRenderScaleChanged(int scale) {
+                        anrRenderScale = Math.max(50, Math.min(100, scale));
+                        preferences.edit().putInt("anr_render_scale", anrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRSharpnessChanged(int sharpness) {
+                        anrSharpness = Math.max(0, Math.min(100, sharpness));
+                        preferences.edit().putInt("anr_sharpness", anrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRQualityChanged(int quality) {
+                        anrQuality = Math.max(0, Math.min(3, quality));
+                        preferences.edit().putInt("anr_quality", anrQuality).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
                     }
@@ -6779,8 +6833,19 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         EffectComposer composer = renderer.getEffectComposer();
         if (composer == null) return;
 
+        ANRSpatialUpscaler anr = composer.getEffect(ANRSpatialUpscaler.class);
+        if (anrEnabled) {
+            if (anr == null) anr = new ANRSpatialUpscaler();
+            anr.setRenderScale(anrRenderScale / 100.0f);
+            anr.setSharpness(anrSharpness / 100.0f);
+            anr.setQuality(anrQuality);
+            composer.addEffectFirst(anr);
+        } else if (anr != null) {
+            composer.removeEffect(anr);
+        }
+
         SGSRUpscaler sgsr = composer.getEffect(SGSRUpscaler.class);
-        if (sgsrRuntimeEnabled) {
+        if (sgsrRuntimeEnabled && !anrEnabled) {
             if (sgsr == null) {
                 sgsr = new SGSRUpscaler();
             }

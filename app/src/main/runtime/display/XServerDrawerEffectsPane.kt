@@ -236,6 +236,53 @@ internal fun ScreenEffectsPaneContent(
                     }
                 }
 
+                Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                    PaneSectionLabel("WinNative ANR")
+                    NavBooleanRow(
+                        title = "Adaptive Neural Reconstruction (Spatial)",
+                        checked = state.anrEnabled,
+                        onCheckedChange = listener::onANREnabledChanged,
+                    )
+                    AnimatedVisibility(
+                        visible = state.anrEnabled,
+                        enter = expandVertically(
+                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Top,
+                        ) + fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+                        exit = shrinkVertically(
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Top,
+                        ) + fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                            NavSliderRow(
+                                label = "Render scale",
+                                valueText = "${state.anrRenderScale}%",
+                                value = state.anrRenderScale.toFloat(),
+                                valueRange = 50f..100f,
+                                steps = 49,
+                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(50, 100)) },
+                            )
+                            NavSliderRow(
+                                label = "Edge sharpness",
+                                valueText = "${state.anrSharpness}%",
+                                value = state.anrSharpness.toFloat(),
+                                valueRange = 0f..100f,
+                                steps = 99,
+                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
+                            )
+                            NavSliderRow(
+                                label = "Quality (0–3)",
+                                valueText = state.anrQuality.toString(),
+                                value = state.anrQuality.toFloat(),
+                                valueRange = 0f..3f,
+                                steps = 2,
+                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 3)) },
+                            )
+                        }
+                    }
+                }
+
                 ThinDivider()
 
                 Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
