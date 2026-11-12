@@ -6828,11 +6828,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     }
 
     private void applyScreenEffects() {
-        // Wayland has its own Vulkan post chain; mode 9 selects its ANR-compatible EASU+RCAS path.
+        // Wayland has its own Vulkan post chain; mode 9 runs the same ANR Spatial shader.
         if (waylandMode) {
             try {
                 WaylandCompositor.nativeSetUpscaler(anrEnabled ? 9 : 0);
                 WaylandCompositor.nativeSetUpscaleSharpness(anrSharpness);
+                WaylandCompositor.nativeSetANRQuality(anrQuality);
             } catch (Throwable t) {
                 Log.w("XServerDisplayActivity", "Failed to apply Wayland ANR settings", t);
             }
