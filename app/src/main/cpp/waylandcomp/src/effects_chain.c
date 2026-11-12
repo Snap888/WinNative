@@ -37,8 +37,8 @@ static VkFormat g_fx_fmt = FX_FORMAT, g_scene_fmt = FX_FORMAT;
 /* ------------------------------------------------------------------ settings */
 
 struct fx_settings {
-    int scaling;        /* 0..8 */
-    int sharp_pct;      /* 0..100, the upscaler's own slider */
+    int scaling;        /* 0..9 */
+    int sharp_pct;      /* 0..200 for ANR; legacy modes use 0..100 */
     int cas_on, cas_pct;
     int hdr_on;
     int deband_on, deband_pct; /* 0..200 */
@@ -61,12 +61,12 @@ static void set_begin(void) { pthread_mutex_lock(&g_lock); }
 static void set_end(void) { g_changed = 1; pthread_mutex_unlock(&g_lock); }
 
 void vkp_effects_set_scaling(int mode) {
-    if (mode < 0 || mode > 8) mode = 0;
+    if (mode < 0 || mode > 9) mode = 0;
     set_begin(); g_set.scaling = mode; set_end();
 }
 void vkp_effects_set_upscale_sharpness(int pct) {
     if (pct < 0) pct = 0;
-    if (pct > 100) pct = 100;
+    if (pct > 200) pct = 200;
     set_begin(); g_set.sharp_pct = pct; set_end();
 }
 void vkp_effects_set_cas(int enabled, int pct) {
@@ -102,10 +102,10 @@ void vkp_effects_set_look(const char *name) {
 }
 
 static const char *scaling_name(int m) {
-    static const char *n[] = {"None", "Linear", "Nearest", "SGSR", "FSR", "FSR Fit", "Sharpen", "NIS", "SGSR HQ"};
-    return (m >= 0 && m <= 8) ? n[m] : "?";
+    static const char *n[] = {"None", "Linear", "Nearest", "SGSR", "FSR", "FSR Fit", "Sharpen", "NIS", "SGSR HQ", "ANR Spatial (EASU+RCAS)"};
+    return (m >= 0 && m <= 9) ? n[m] : "?";
 }
-static int spatial_mode(int m) { return m >= 3 && m <= 8; }
+static int spatial_mode(int m) { return (m >= 3 && m <= 8) || m == 9; }
 static int cas_active(const struct fx_settings *s) { return s->cas_on && s->cas_pct > 0; }
 static int effect_count(const struct fx_settings *s) {
     return s->fxaa + s->toon + s->color_on + cas_active(s) + s->hdr_on + s->ntsc + s->crt + s->deband_on;
@@ -508,7 +508,7 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
      * renderer's "render below display" gate); Sharpen (RCAS) runs at any size. */
     const int upscaling = cw > scene_w || ch > scene_h;
     int spatial = 0;
-    if (spatial_mode(s->scaling) && (s->scaling == 6 || upscaling)) spatial = s->scaling;
+    if (spatial_mode(s->scaling) && (s->scaling == 6 || s->scaling == 9 || upscaling)) spatial = s->scaling;
     const int nfx = effect_count(s);
     const int resize = cw != scene_w || ch != scene_h;
     /* Passes that write the ping-pong pair: the scaling/resize stage (if any) + the effects.
@@ -517,13 +517,13 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
 
     if ((spatial || nfx) && objects_ensure() == 0 && scene_ensure(scene, scene_w, scene_h) == 0 &&
         target_ensure(&g_t[0], cw, ch, "chain") == 0 && (npasses < 2 || target_ensure(&g_t[1], cw, ch, "chain") == 0) &&
-        (!(spatial == 4 || spatial == 5) || target_ensure(&g_mid, cw, ch, "EASU") == 0)) {
+        (!(spatial == 4 || spatial == 5 || spatial == 9) || target_ensure(&g_mid, cw, ch, "EASU") == 0)) {
         /* `cur` = the image the next pass samples; `cur_ds` its descriptor. Every pass writes the
          * target that is not being read (the pair alternates; the scene is read only first). */
         VkDescriptorSet cur_ds;
         struct fx_target *cur = NULL;   /* NULL = the scene image */
 #define FREE_TARGET() ((cur == &g_t[0]) ? &g_t[1] : &g_t[0])
-        const float sharp01 = (float)s->sharp_pct / 100.0f;
+        const float sharp01 = (float)s->sharp_pct / (s->scaling == 9 ? 200.0f : 100.0f);
 
         /* ---- stage 1: scaling (scene -> chain res) */
         if (spatial) {
@@ -547,7 +547,7 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
                 rcas_con(&pc, sharp01);
                 pc.outW = (float)scene_w; pc.outH = (float)scene_h;
                 pass(cmd, g_pipe[P_RCAS], dst, g_scene.ds, &pc, sizeof(pc));
-            } else { /* FSR (4) / FSR Fit (5): EASU scene -> mid, RCAS mid -> dst, both at chain res.
+            } else { /* FSR (4) / FSR Fit (5) / ANR Wayland fallback (9): EASU -> RCAS at chain res.
                       * Fill vs fit is the Fullscreen Mode's business here (the mapping), so both
                       * run the same EASU+RCAS pair. */
                 struct pc_easu e = {0};
