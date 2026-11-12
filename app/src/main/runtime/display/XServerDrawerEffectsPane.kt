@@ -239,7 +239,7 @@ internal fun ScreenEffectsPaneContent(
                 Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
                     PaneSectionLabel("WinNative ANR")
                     NavBooleanRow(
-                        title = "Adaptive Neural Reconstruction (Spatial)",
+                        title = "WinNative ANR Spatial Reconstruction",
                         checked = state.anrEnabled,
                         onCheckedChange = listener::onANREnabledChanged,
                     )
