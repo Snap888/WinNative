@@ -196,7 +196,7 @@ public final class WaylandCompositor {
     public static native void nativeHdrNoteHeadroomRequest(float ratio);
 
     // Screen effects run by the compositor between the composed scene and the output blit.
-    public static native void nativeSetUpscaler(int mode);
+    public static native void nativeSetUpscaler(int mode); // mode 9 = ANR Spatial (EASU+RCAS fallback)
     public static native void nativeSetUpscaleSharpness(int sharpness);
     public static native void nativeSetCas(boolean enabled, int sharpness);
     public static native void nativeSetHdr(boolean enabled);
