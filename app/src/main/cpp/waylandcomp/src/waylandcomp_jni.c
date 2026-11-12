@@ -426,13 +426,13 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetScaleM
  * Any thread, any time; the compositor thread applies them on its next frame and logs one
  * `effects` line per change. Values are 1:1 with VulkanRenderer's setters. */
 
-/* Scaling mode: 0=None 1=Linear 2=Nearest 3=SGSR 4=FSR 5=FSR Fit 6=Sharpen 7=NIS 8=SGSR HQ. */
+/* Scaling mode: 0=None 1=Linear 2=Nearest 3=SGSR 4=FSR 5=FSR Fit 6=Sharpen 7=NIS 8=SGSR HQ 9=ANR EASU+RCAS fallback. */
 JNIEXPORT void JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetUpscaler(JNIEnv *env, jclass clazz, jint mode) {
     vkp_effects_set_scaling(mode);
 }
 
-/* The upscaler's sharpness slider 0..100 (RCAS lobe / SGSR edge / NIS sharpness). */
+/* The upscaler's sharpness slider 0..100 for legacy modes, 0..200 for ANR mode 9. */
 JNIEXPORT void JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetUpscaleSharpness(JNIEnv *env, jclass clazz, jint sharpness) {
     vkp_effects_set_upscale_sharpness(sharpness);
