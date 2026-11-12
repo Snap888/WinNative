@@ -267,9 +267,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = "Edge sharpness",
                                 valueText = "${state.anrSharpness}%",
                                 value = state.anrSharpness.toFloat(),
-                                valueRange = 0f..100f,
-                                steps = 99,
-                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
+                                valueRange = 0f..200f,
+                                steps = 199,
+                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 200)) },
                             )
                             NavSliderRow(
                                 label = "Quality (0–4)",
