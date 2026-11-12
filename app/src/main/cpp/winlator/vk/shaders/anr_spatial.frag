@@ -47,7 +47,7 @@ void main() {
     float quality = clamp(pc.quality / 4.0, 0.0, 1.0);
     vec3 reconstructed = mix(center, bicubic, quality);
 
-    ivec2 pixel = ivec2(gl_FragCoord.xy);
+    ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
     vec3 n = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0,-1), size), 0).rgb;
     vec3 s = texelFetch(sourceTexture, clampPixel(pixel + ivec2(0, 1), size), 0).rgb;
     vec3 w = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,0), size), 0).rgb;
