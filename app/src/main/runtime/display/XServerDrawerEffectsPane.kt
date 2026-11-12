@@ -228,9 +228,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = stringResource(R.string.session_drawer_sgsr_edge_sharpness),
                                 valueText = "${state.sgsrSharpness}%",
                                 value = state.sgsrSharpness.toFloat(),
-                                valueRange = 0f..100f,
-                                steps = 99,
-                                onValueChange = { listener.onSGSRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
+                                valueRange = 0f..200f,
+                                steps = 199,
+                                onValueChange = { listener.onSGSRSharpnessChanged(it.roundToInt().coerceIn(0, 200)) },
                             )
                         }
                     }
@@ -259,9 +259,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = "Render scale",
                                 valueText = "${state.anrRenderScale}%",
                                 value = state.anrRenderScale.toFloat(),
-                                valueRange = 50f..100f,
-                                steps = 49,
-                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(50, 100)) },
+                                valueRange = 25f..100f,
+                                steps = 74,
+                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(25, 100)) },
                             )
                             NavSliderRow(
                                 label = "Edge sharpness",
@@ -272,12 +272,12 @@ internal fun ScreenEffectsPaneContent(
                                 onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
                             )
                             NavSliderRow(
-                                label = "Quality (0–3)",
+                                label = "Quality (0–4)",
                                 valueText = state.anrQuality.toString(),
                                 value = state.anrQuality.toFloat(),
-                                valueRange = 0f..3f,
-                                steps = 2,
-                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 3)) },
+                                valueRange = 0f..4f,
+                                steps = 3,
+                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 4)) },
                             )
                         }
                     }
