@@ -677,3 +677,14 @@ VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int sce
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
     return scene;
 }
+
+
+/* Return the view owned by the effects chain for the image it just produced. The presenter
+ * borrows this view for SnapFrame/other frame-generation backends; ownership stays here. */
+VkImageView vkp_effects_view(VkImage image) {
+    if (image == g_t[0].img) return g_t[0].view;
+    if (image == g_t[1].img) return g_t[1].view;
+    if (image == g_mid.img) return g_mid.view;
+    if (image == g_scene.img) return g_scene.view;
+    return VK_NULL_HANDLE;
+}
