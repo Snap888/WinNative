@@ -633,6 +633,9 @@ data class XServerDrawerState(
     val screenEffectsCardExpanded: Boolean = false,
     val sgsrEnabled: Boolean = false,
     val sgsrSharpness: Int = 100,
+    val fsrEnabled: Boolean = false,
+    val fsrRenderScale: Int = 67,
+    val fsrSharpness: Int = 25,
     val anrEnabled: Boolean = false,
     val anrRenderScale: Int = 90,
     val anrSharpness: Int = 75,
@@ -1081,6 +1084,12 @@ interface XServerDrawerActionListener {
 
     fun onSGSRSharpnessChanged(sharpness: Int)
 
+    fun onFSREnabledChanged(enabled: Boolean)
+
+    fun onFSRRenderScaleChanged(scale: Int)
+
+    fun onFSRSharpnessChanged(sharpness: Int)
+
     fun onANREnabledChanged(enabled: Boolean)
 
     fun onANRRenderScaleChanged(scale: Int)
@@ -1231,6 +1240,9 @@ fun buildXServerDrawerState(
     screenEffectsCardExpanded: Boolean = false,
     sgsrEnabled: Boolean = false,
     sgsrSharpness: Int = 100,
+    fsrEnabled: Boolean = false,
+    fsrRenderScale: Int = 67,
+    fsrSharpness: Int = 25,
     anrEnabled: Boolean = false,
     anrRenderScale: Float = 90.0f,
     anrSharpness: Float = 75.0f,
@@ -1441,6 +1453,9 @@ fun buildXServerDrawerState(
         screenEffectsCardExpanded = screenEffectsCardExpanded,
         sgsrEnabled = sgsrEnabled,
         sgsrSharpness = sgsrSharpness,
+        fsrEnabled = fsrEnabled,
+        fsrRenderScale = fsrRenderScale.coerceIn(25, 100),
+        fsrSharpness = fsrSharpness.coerceIn(0, 100),
         anrEnabled = anrEnabled,
         anrRenderScale = anrRenderScale.roundToInt().coerceIn(25, 100),
         anrSharpness = anrSharpness.roundToInt().coerceIn(0, 200),
