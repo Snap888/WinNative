@@ -2538,6 +2538,10 @@ static void run_fsr_pass(VkRenderer* r, VkCommandBuffer cmd, VkPipeline pipe,
     }
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
         r->pipelines.effect_layout, 0, 1, &src_set, 0, NULL);
+    /* The FSR vertex pipeline is configured as a triangle strip. Bind the shared quad
+     * buffer as well, although the SPIR-V derives positions from gl_VertexIndex. */
+    VkDeviceSize vertex_offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &r->quad_vbo, &vertex_offset);
     vkCmdDraw(cmd, 4, 1, 0, 0);
 }
 
