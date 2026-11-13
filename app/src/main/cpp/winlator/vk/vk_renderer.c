@@ -47,6 +47,9 @@
 #include "shaders/effect_pixelate_frag.spv.h"
 #include "shaders/sgsr1_frag.spv.h"
 #include "shaders/anr_spatial_frag.spv.h"
+#include "../../waylandcomp/shaders/upscale_vert.h"
+#include "../../waylandcomp/shaders/fsr_easu_frag.h"
+#include "../../waylandcomp/shaders/fsr_rcas_frag.h"
 
 // ============================================================
 // Forward decls
@@ -836,9 +839,9 @@ static bool create_pipeline_layouts(VkRenderer* r) {
     // Effect: push constants = vec2 resolution + 4 floats (sat, contrast, sharp, mode) = 24 bytes.
     // Other effect shaders only declare the first 16 bytes and ignore the rest.
     VkPushConstantRange pcr_effect = {0};
-    pcr_effect.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pcr_effect.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pcr_effect.offset = 0;
-    pcr_effect.size = 24;
+    pcr_effect.size = 88;
 
     VkPipelineLayoutCreateInfo plci2 = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     plci2.setLayoutCount = 1;
@@ -975,12 +978,16 @@ static bool create_pipelines(VkRenderer* r) {
     VkShaderModule fs_pixelate = load_shader_module(r, effect_pixelate_frag, effect_pixelate_frag_size);
     VkShaderModule fs_sgsr1 = load_shader_module(r, sgsr1_frag, sgsr1_frag_size);
     VkShaderModule fs_anr_spatial = load_shader_module(r, anr_spatial_frag, anr_spatial_frag_size);
+    VkShaderModule vs_upscale = load_shader_module(r, upscale_vert_code, sizeof(upscale_vert_code));
+    VkShaderModule fs_fsr_easu = load_shader_module(r, fsr_easu_code, sizeof(fsr_easu_code));
+    VkShaderModule fs_fsr_rcas = load_shader_module(r, fsr_rcas_code, sizeof(fsr_rcas_code));
     if (!vs_window || !fs_window || !fs_cursor || !vs_quad || !fs_blit
         || !fs_crt || !fs_vivid || !fs_hdr || !fs_natural
         || !fs_toon || !fs_ntsc || !fs_ntsc2 || !fs_coloradj
         || !fs_colorgrade || !fs_sharpen || !fs_scanlines
         || !fs_colorblind || !fs_pixelate
-        || !fs_sgsr1 || !fs_anr_spatial) {
+        || !fs_sgsr1 || !fs_anr_spatial
+        || !vs_upscale || !fs_fsr_easu || !fs_fsr_rcas) {
         return false;
     }
 
@@ -1011,6 +1018,12 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
         r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
+    r->pipelines.fsr_easu_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        true, false, NULL);
+    r->pipelines.fsr_rcas_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_rcas, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        true, false, NULL);
     r->pipelines.effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
@@ -1065,6 +1078,12 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
         r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
+    r->pipelines.offscreen_fsr_easu_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        true, false, NULL);
+    r->pipelines.offscreen_fsr_rcas_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_rcas, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        true, false, NULL);
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
@@ -1113,6 +1132,9 @@ static bool create_pipelines(VkRenderer* r) {
     vkDestroyShaderModule(r->device, fs_pixelate, NULL);
     vkDestroyShaderModule(r->device, fs_sgsr1, NULL);
     vkDestroyShaderModule(r->device, fs_anr_spatial, NULL);
+    vkDestroyShaderModule(r->device, vs_upscale, NULL);
+    vkDestroyShaderModule(r->device, fs_fsr_easu, NULL);
+    vkDestroyShaderModule(r->device, fs_fsr_rcas, NULL);
 
     if (!r->pipelines.window_pipeline || !r->pipelines.cursor_pipeline
         || !r->pipelines.blit_pipeline
@@ -1145,6 +1167,10 @@ static void destroy_pipelines(VkRenderer* r) {
             r->pipelines.offscreen_effect_pipelines[i] = VK_NULL_HANDLE;
         }
     }
+    if (r->pipelines.fsr_easu_pipeline) vkDestroyPipeline(r->device, r->pipelines.fsr_easu_pipeline, NULL);
+    if (r->pipelines.fsr_rcas_pipeline) vkDestroyPipeline(r->device, r->pipelines.fsr_rcas_pipeline, NULL);
+    if (r->pipelines.offscreen_fsr_easu_pipeline) vkDestroyPipeline(r->device, r->pipelines.offscreen_fsr_easu_pipeline, NULL);
+    if (r->pipelines.offscreen_fsr_rcas_pipeline) vkDestroyPipeline(r->device, r->pipelines.offscreen_fsr_rcas_pipeline, NULL);
     if (r->pipelines.window_pipeline) vkDestroyPipeline(r->device, r->pipelines.window_pipeline, NULL);
     if (r->pipelines.cursor_pipeline) vkDestroyPipeline(r->device, r->pipelines.cursor_pipeline, NULL);
     if (r->pipelines.blit_pipeline)   vkDestroyPipeline(r->device, r->pipelines.blit_pipeline, NULL);
