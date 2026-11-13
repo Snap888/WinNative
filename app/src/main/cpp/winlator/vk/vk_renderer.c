@@ -2563,7 +2563,7 @@ static VkExtent2D compute_sgsr1_source_extent(VkRenderer* r, const VkScene* s) {
         float scale = s->effects[0].param0;
         if (!(scale > 0.0f)) scale = 0.75f;
         if (scale < 0.25f) scale = 0.25f;
-        if (scale > 1.00f) scale = 1.00f;
+        if (scale > 1.50f) scale = 1.50f;
         source.width = (uint32_t)((float)source.width * scale + 0.5f);
         source.height = (uint32_t)((float)source.height * scale + 0.5f);
     }
