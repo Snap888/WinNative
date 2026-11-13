@@ -72,6 +72,7 @@ int vk_loader_bind_external(PFN_vkGetInstanceProcAddr gipa, VkInstance instance,
 #define X(n) g_vk.n = (PFN_vk##n)g_vk.GetDeviceProcAddr(device, "vk" #n);
     VK_DEVICE_FUNCS(X)
 #undef X
-    return (g_vk.CreateComputePipelines && g_vk.CmdDispatch && g_vk.CreateQueryPool
-            && g_vk.GetQueryPoolResults && g_vk.CmdWriteTimestamp) ? 0 : -1;
+    return (g_vk.CreateComputePipelines && g_vk.CmdDispatch && g_vk.CmdPipelineBarrier
+            && g_vk.CmdCopyImage && g_vk.CreateQueryPool && g_vk.GetQueryPoolResults
+            && g_vk.CmdResetQueryPool && g_vk.CmdWriteTimestamp) ? 0 : -1;
 }
