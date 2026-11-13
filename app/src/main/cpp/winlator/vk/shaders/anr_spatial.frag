@@ -117,7 +117,7 @@ void main() {
     vec2 texel = 1.0 / vec2(size);
     vec2 uv = clamp(vUV, texel * 0.5, vec2(1.0) - texel * 0.5);
     vec3 center = texture(sourceTexture, uv).rgb;
-    int quality = int(clamp(floor(pc.quality + 0.5), 0.0, 4.0));
+    int quality = int(clamp(floor(pc.quality + 0.5), 0.0, 5.0));
 
     vec3 reconstructed = center;
     vec3 neighborN = vec3(0.0), neighborS = vec3(0.0);
