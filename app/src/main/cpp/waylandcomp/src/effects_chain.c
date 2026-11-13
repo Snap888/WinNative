@@ -40,8 +40,8 @@ static VkFormat g_fx_fmt = FX_FORMAT, g_scene_fmt = FX_FORMAT;
 
 struct fx_settings {
     int scaling;        /* 0..9 */
-    int anr_quality;    /* 0..5 */
-    int sharp_pct;      /* 0..200 for ANR; legacy modes use 0..100 */
+    int anr_quality;    /* 0..6 reconstruction profiles */
+    int sharp_pct;      /* 0..300 for ANR; legacy modes use 0..100 */
     int cas_on, cas_pct;
     int hdr_on;
     int deband_on, deband_pct; /* 0..200 */
