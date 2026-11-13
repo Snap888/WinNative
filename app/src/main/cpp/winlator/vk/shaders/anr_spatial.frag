@@ -117,7 +117,7 @@ void main() {
     vec2 texel = 1.0 / vec2(size);
     vec2 uv = clamp(vUV, texel * 0.5, vec2(1.0) - texel * 0.5);
     vec3 center = texture(sourceTexture, uv).rgb;
-    int quality = int(clamp(floor(pc.quality + 0.5), 0.0, 5.0));
+    int quality = int(clamp(floor(pc.quality + 0.5), 0.0, 6.0));
 
     vec3 reconstructed = center;
     vec3 neighborN = vec3(0.0), neighborS = vec3(0.0);
@@ -181,12 +181,31 @@ void main() {
             vec3 lo8 = min(lo, min(min(nw, ne), min(sw, se)));
             vec3 hi8 = max(hi, max(max(nw, ne), max(sw, se)));
             reconstructed = clamp(reconstructed, lo8 - 0.018, hi8 + 0.018);
+        } else if (quality == 6) {
+            // Fine Texture+: restrained high-frequency recovery with silhouette protection.
+            vec3 nw = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, -1), size), 0).rgb;
+            vec3 ne = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, -1), size), 0).rgb;
+            vec3 sw = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,  1), size), 0).rgb;
+            vec3 se = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1,  1), size), 0).rgb;
+            float neighborhood = (luma(neighborN) + luma(neighborS)
+                                + luma(neighborW) + luma(neighborE)
+                                + luma(nw) + luma(ne) + luma(sw) + luma(se)) * 0.125;
+            float highFrequency = luma(center) - neighborhood;
+            float localGradient = max(gx, gy);
+            float textureGate = smoothstep(0.004, 0.032, abs(highFrequency));
+            float edgeGate = 1.0 - 0.72 * smoothstep(0.075, 0.22, localGradient);
+            float detail = clamp(highFrequency, -0.035, 0.035)
+                         * 0.30 * textureGate * edgeGate;
+            reconstructed += vec3(detail);
+            vec3 lo8 = min(lo, min(min(nw, ne), min(sw, se)));
+            vec3 hi8 = max(hi, max(max(nw, ne), max(sw, se)));
+            reconstructed = clamp(reconstructed, lo8 - 0.012, hi8 + 0.012);
         }
     }
 
     // Sharpening is independent from reconstruction quality and operates on
     // luma only, avoiding colored halos around high-contrast UI edges.
-    float strength = clamp(pc.sharpness, 0.0, 2.0);
+    float strength = clamp(pc.sharpness, 0.0, 3.0);
     if (strength > 0.001) {
         ivec2 pixel = clampPixel(ivec2(floor(uv * vec2(size))), size);
         if (!neighborsReady) {

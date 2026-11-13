@@ -64,9 +64,9 @@ void vkp_effects_set_formats(VkFormat scene_fmt, VkFormat target_fmt);
 /* ---- settings (any thread; values 1:1 with the X11 Vulkan renderer's setters) ---- */
 /* 0=None 1=Linear 2=Nearest 3=SGSR 4=FSR 5=FSR Fit 6=Sharpen 7=NIS 8=SGSR HQ 9=ANR Spatial. */
 void vkp_effects_set_scaling(int mode);
-/* Slider 0..100 for legacy modes; ANR mode 9 uses 0..200 (shader strength 0..2). */
+/* Slider 0..100 for legacy modes; ANR mode 9 uses 0..300 (shader strength 0..3). */
 void vkp_effects_set_upscale_sharpness(int pct);
-void vkp_effects_set_anr_quality(int quality);
+void vkp_effects_set_anr_quality(int quality); /* 0..6 reconstruction profiles */
 /* CAS toggle + slider 0..100 (0 = the pass is off). */
 void vkp_effects_set_cas(int enabled, int pct);
 void vkp_effects_set_hdr(int enabled);

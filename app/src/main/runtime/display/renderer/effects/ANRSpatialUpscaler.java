@@ -16,11 +16,11 @@ public final class ANRSpatialUpscaler extends Effect {
     }
 
     public void setSharpness(float value) {
-        sharpness = Math.max(0.0f, Math.min(2.0f, value));
+        sharpness = Math.max(0.0f, Math.min(3.0f, value));
     }
 
     public void setQuality(int value) {
-        quality = Math.max(0, Math.min(5, value));
+        quality = Math.max(0, Math.min(6, value));
     }
 
     @Override

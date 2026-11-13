@@ -69,12 +69,12 @@ void vkp_effects_set_scaling(int mode) {
 }
 void vkp_effects_set_upscale_sharpness(int pct) {
     if (pct < 0) pct = 0;
-    if (pct > 200) pct = 200;
+    if (pct > 300) pct = 300;
     set_begin(); g_set.sharp_pct = pct; set_end();
 }
 void vkp_effects_set_anr_quality(int quality) {
     if (quality < 0) quality = 0;
-    if (quality > 5) quality = 5;
+    if (quality > 6) quality = 6;
     set_begin(); g_set.anr_quality = quality; set_end();
 }
 void vkp_effects_set_cas(int enabled, int pct) {

@@ -306,9 +306,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = "Edge sharpness",
                                 valueText = "${state.anrSharpness}%",
                                 value = state.anrSharpness.toFloat(),
-                                valueRange = 0f..200f,
-                                steps = 199,
-                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 200)) },
+                                valueRange = 0f..300f,
+                                steps = 299,
+                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 300)) },
                             )
                             NavSliderRow(
                                 label = "Reconstruction filter",
@@ -318,12 +318,13 @@ internal fun ScreenEffectsPaneContent(
                                     2 -> "Lanczos2"
                                     3 -> "Edge Adaptive"
                                     4 -> "Edge Adaptive+"
-                                    else -> "Detail Recovery+"
+                                    5 -> "Detail Recovery+"
+                                    else -> "Fine Texture+"
                                 },
                                 value = state.anrQuality.toFloat(),
-                                valueRange = 0f..5f,
-                                steps = 4,
-                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 5)) },
+                                valueRange = 0f..6f,
+                                steps = 5,
+                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 6)) },
                             )
                         }
                     }

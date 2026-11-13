@@ -1459,7 +1459,7 @@ fun buildXServerDrawerState(
         anrEnabled = anrEnabled,
         anrRenderScale = anrRenderScale.roundToInt().coerceIn(25, 150),
         anrSharpness = anrSharpness.roundToInt().coerceIn(0, 200),
-        anrQuality = anrQuality.coerceIn(0, 5),
+        anrQuality = anrQuality.coerceIn(0, 6),
         vividEnabled = vividEnabled,
         vividStrength = vividStrength,
         colorProfile = colorProfile,
