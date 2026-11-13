@@ -6,7 +6,7 @@ public final class FSRUpscaler extends Effect {
     private float sharpness = 0.25f;
 
     public void setRenderScale(float value) {
-        renderScale = Math.max(0.25f, Math.min(1.0f, value));
+        renderScale = Math.max(0.25f, Math.min(1.5f, value));
     }
 
     public void setSharpness(float value) {
