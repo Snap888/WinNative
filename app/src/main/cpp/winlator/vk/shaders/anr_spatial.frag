@@ -159,6 +159,28 @@ void main() {
             vec3 detail = center - crossAverage;
             reconstructed += detail * (0.12 * localContrast);
             reconstructed = clamp(reconstructed, lo - 0.035, hi + 0.035);
+        } else if (quality == 5) {
+            // Detail Recovery+: recover fine texture along the local edge normal while
+            // keeping the edge tangent stable. The luma-only correction avoids chroma halos.
+            vec3 nw = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1, -1), size), 0).rgb;
+            vec3 ne = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1, -1), size), 0).rgb;
+            vec3 sw = texelFetch(sourceTexture, clampPixel(pixel + ivec2(-1,  1), size), 0).rgb;
+            vec3 se = texelFetch(sourceTexture, clampPixel(pixel + ivec2( 1,  1), size), 0).rgb;
+            float diagonalContrast = abs(luma(ne) - luma(sw)) + abs(luma(nw) - luma(se));
+            float edgeStrength = clamp(max(gx, gy) * 3.0, 0.0, 1.0);
+            vec3 normalAverage = gx >= gy ? (neighborW + neighborE) * 0.5
+                                          : (neighborN + neighborS) * 0.5;
+            vec3 diagonalAverage = (nw + ne + sw + se) * 0.25;
+            float directionalDetail = luma(center) - luma(normalAverage);
+            float fineDetail = luma(center) - luma(diagonalAverage);
+            float recovered = mix(fineDetail, directionalDetail, edgeStrength);
+            float textureGate = smoothstep(0.008, 0.12, max(gx + gy, diagonalContrast * 0.5));
+            float correction = clamp(recovered, -0.055, 0.055) * textureGate * 0.22;
+            reconstructed += vec3(correction);
+
+            vec3 lo8 = min(lo, min(min(nw, ne), min(sw, se)));
+            vec3 hi8 = max(hi, max(max(nw, ne), max(sw, se)));
+            reconstructed = clamp(reconstructed, lo8 - 0.018, hi8 + 0.018);
         }
     }
 
@@ -177,8 +199,9 @@ void main() {
                                abs(luma(neighborS) - luma(neighborN))) * 3.0, 0.0, 1.0);
         float detail = luma(reconstructed)
                      - luma((neighborN + neighborS + neighborW + neighborE) * 0.25);
+        float edgeProtection = quality == 5 ? 0.42 : 0.58;
         float sharpenedLuma = luma(reconstructed) + detail * strength * 0.42
-                            * mix(1.0, 0.58, edge);
+                            * mix(1.0, edgeProtection, edge);
         float delta = sharpenedLuma - luma(reconstructed);
         reconstructed += vec3(delta);
     }
