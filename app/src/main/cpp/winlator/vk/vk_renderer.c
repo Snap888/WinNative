@@ -2000,7 +2000,7 @@ static void destroy_snap(VkRenderer* r) {
 }
 
 static void create_snap(VkRenderer* r) {
-    if (r->snap || !r->device || !r->physical_device) return;
+    if (r->snap || !r->device || !r->physical_device || !r->snap_dispatch_available) return;
     r->snap = snap_frame_vk_create(r->device, r->physical_device);
     if (r->snap) snap_frame_vk_set_debug_mode(r->snap, r->snap_debug_mode);
     if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, r->snap_candidate_reconstruction_mode);
@@ -3635,9 +3635,10 @@ JNIEXPORT jlong JNICALL JNI_FN(nativeCreate)(JNIEnv* env, jclass clazz,
     if (!create_instance(r)) goto fail;
     if (!pick_physical_device(r)) goto fail;
     if (!create_device(r)) goto fail;
-    if (vk_loader_bind_external(vkd.GetInstanceProcAddr, r->instance, r->device) != 0) {
-        VK_LOGE("SnapFrame Vulkan dispatch could not bind to the X11 renderer device");
-        goto fail;
+    r->snap_dispatch_available = vk_loader_bind_external(vkd.GetInstanceProcAddr, r->instance, r->device) == 0;
+    if (!r->snap_dispatch_available) {
+        /* SnapFrame is optional: a missing compute entry point must never abort X11 startup. */
+        VK_LOGW("SnapFrame Vulkan dispatch unavailable; X11 renderer will continue without SnapFrame");
     }
     query_device_caps(r);
     if (!create_command_pool(r)) goto fail;
@@ -4278,7 +4279,7 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* 
                                                                         jlong handle) {
     (void)env; (void)clazz;
     VkRenderer* r = (VkRenderer*)(intptr_t)handle;
-    if (!r || !r->physical_device || !r->device || !r->framegen_supported
+    if (!r || !r->snap_dispatch_available || !r->physical_device || !r->device || !r->framegen_supported
         || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
         || r->swapchain_image_count <= 2u) return JNI_FALSE;
     VkPhysicalDeviceProperties props;
