@@ -40,7 +40,7 @@ static VkFormat g_fx_fmt = FX_FORMAT, g_scene_fmt = FX_FORMAT;
 
 struct fx_settings {
     int scaling;        /* 0..9 */
-    int anr_quality;    /* 0..4 */
+    int anr_quality;    /* 0..5 */
     int sharp_pct;      /* 0..200 for ANR; legacy modes use 0..100 */
     int cas_on, cas_pct;
     int hdr_on;
@@ -74,7 +74,7 @@ void vkp_effects_set_upscale_sharpness(int pct) {
 }
 void vkp_effects_set_anr_quality(int quality) {
     if (quality < 0) quality = 0;
-    if (quality > 4) quality = 4;
+    if (quality > 5) quality = 5;
     set_begin(); g_set.anr_quality = quality; set_end();
 }
 void vkp_effects_set_cas(int enabled, int pct) {
