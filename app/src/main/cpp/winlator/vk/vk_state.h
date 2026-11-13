@@ -123,6 +123,8 @@ typedef enum VkEffectType {
     VK_EFFECT_NTSC2 = 11,
     VK_EFFECT_COLORBLIND = 12,
     VK_EFFECT_PIXELATE = 13,
+    VK_EFFECT_ANR_SPATIAL = 14,
+    VK_EFFECT_FSR = 15,
     VK_EFFECT_COUNT
 } VkEffectType;
 
@@ -185,6 +187,10 @@ typedef struct VkPipelineSet {
     VkDescriptorSetLayout sampler_set_layout;
     VkPipelineLayout      window_layout;     // push constants: xform[6] + viewSize
     VkPipelineLayout      effect_layout;     // push constants: resolution + effect params
+    VkPipeline            fsr_easu_pipeline;
+    VkPipeline            fsr_rcas_pipeline;
+    VkPipeline            offscreen_fsr_easu_pipeline;
+    VkPipeline            offscreen_fsr_rcas_pipeline;
     VkPipeline            window_pipeline;
     VkPipeline            cursor_pipeline;
     VkPipeline            blit_pipeline;
