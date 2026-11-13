@@ -2655,13 +2655,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
     destroy_graveyard_textures(r, dead, dead_count);
 
     bool wants_sgsr1 = scene_starts_with_sgsr1(&snap);
+    bool wants_fsr = scene_starts_with_fsr(&snap);
     bool needs_fullres_offscreen = snap.effect_count > 0
-        && (!wants_sgsr1 || snap.effect_count > 1);
+        && (wants_fsr || !wants_sgsr1 || snap.effect_count > 1);
     // offscreen[1] is reached only once the chain writes two distinct offscreen buffers: the
     // effect loop's dst_idx starts at 1 for a non-SGSR chain but at 0 for an SGSR1-led one
     // (scene goes to the separate SGSR source), so the threshold is >1 normally, >2 for SGSR.
     bool needs_second_offscreen = needs_fullres_offscreen
-        && snap.effect_count > (wants_sgsr1 ? 2u : 1u);
+        && (wants_fsr ? snap.effect_count > 1u
+                      : snap.effect_count > (wants_sgsr1 ? 2u : 1u));
     VkExtent2D sgsr1_source_extent = wants_sgsr1
         ? compute_sgsr1_source_extent(r, &snap)
         : r->swapchain_extent;
@@ -2929,7 +2931,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
         bool full_ok = !needs_fullres_offscreen
             || (r->offscreen_built
                 && (!needs_second_offscreen || r->offscreen[1].image != VK_NULL_HANDLE));
-        has_effects = full_ok && (!wants_sgsr1 || r->sgsr1.built);
+        has_effects = full_ok && (!wants_sgsr1 || r->sgsr1.built)
+            && (!wants_fsr || (r->pipelines.offscreen_fsr_easu_pipeline
+                && r->pipelines.offscreen_fsr_rcas_pipeline
+                && r->pipelines.fsr_rcas_pipeline));
     }
 
     VkRenderPass final_pass = composite ? r->pipelines.composite_pass
@@ -2968,9 +2973,45 @@ static bool record_and_submit_frame(VkRenderer* r) {
         // first, the first source is low-res and SGSR1 writes full-res output.
         VkOffscreen* src_offscreen = scene_target;
         uint32_t dst_idx = (scene_target == &r->offscreen[0]) ? 1u : 0u;
+        if (wants_fsr) dst_idx = 0u; /* offscreen[0] is the dedicated EASU intermediate */
         for (uint32_t i = 0; i < snap.effect_count; i++) {
             bool last = (i == snap.effect_count - 1);
             VkEffectSlot* eff = &snap.effects[i];
+
+            if (eff->type == VK_EFFECT_FSR && i == 0 && r->offscreen[0].image != VK_NULL_HANDLE) {
+                /* FSR1 two-pass chain: source -> EASU intermediate -> RCAS final/next target. */
+                VkOffscreen* easu_target = &r->offscreen[0];
+                rpbi.renderPass = r->pipelines.offscreen_pass;
+                rpbi.framebuffer = easu_target->framebuffer;
+                rpbi.renderArea.extent.width = easu_target->width;
+                rpbi.renderArea.extent.height = easu_target->height;
+                vkCmdBeginRenderPass(f->cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+                run_fsr_pass(r, f->cmd, r->pipelines.offscreen_fsr_easu_pipeline,
+                    src_offscreen->descriptor_set, src_offscreen->width, src_offscreen->height,
+                    easu_target->width, easu_target->height, true, 0.0f);
+                vkCmdEndRenderPass(f->cmd);
+
+                const bool rcas_last = (snap.effect_count == 1);
+                VkOffscreen* rcas_target = rcas_last ? NULL : &r->offscreen[1];
+                rpbi.renderPass = rcas_last ? final_pass : r->pipelines.offscreen_pass;
+                rpbi.framebuffer = rcas_last ? final_fb : rcas_target->framebuffer;
+                rpbi.renderArea.extent = rcas_last ? final_extent
+                    : (VkExtent2D){rcas_target->width, rcas_target->height};
+                vkCmdBeginRenderPass(f->cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+                run_fsr_pass(r, f->cmd,
+                    rcas_last ? r->pipelines.fsr_rcas_pipeline : r->pipelines.offscreen_fsr_rcas_pipeline,
+                    easu_target->descriptor_set, easu_target->width, easu_target->height,
+                    rcas_last ? final_extent.width : rcas_target->width,
+                    rcas_last ? final_extent.height : rcas_target->height,
+                    false, eff->param1);
+                vkCmdEndRenderPass(f->cmd);
+
+                if (!rcas_last) {
+                    src_offscreen = rcas_target;
+                    dst_idx = 0u;
+                }
+                continue;
+            }
 
             if (last) {
                 rpbi.renderPass = final_pass;
