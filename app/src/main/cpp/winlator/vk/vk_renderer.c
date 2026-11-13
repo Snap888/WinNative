@@ -1017,6 +1017,11 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
         r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
+    /* FSR is executed by the dedicated two-pass path below; keep a valid blit fallback
+     * in the generic effect table so the normal pipeline completeness check still passes. */
+    r->pipelines.effect_pipelines[VK_EFFECT_FSR] = create_graphics_pipeline(
+        r, vs_quad, fs_blit, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        false, false, NULL);
     r->pipelines.fsr_easu_pipeline = create_graphics_pipeline(
         r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         true, false, NULL);
@@ -1076,6 +1081,9 @@ static bool create_pipelines(VkRenderer* r) {
         false, false, NULL);
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
         r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        false, false, NULL);
+    r->pipelines.offscreen_effect_pipelines[VK_EFFECT_FSR] = create_graphics_pipeline(
+        r, vs_quad, fs_blit, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
     r->pipelines.offscreen_fsr_easu_pipeline = create_graphics_pipeline(
         r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
