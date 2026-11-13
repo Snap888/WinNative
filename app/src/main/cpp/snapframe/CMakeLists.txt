@@ -25,7 +25,7 @@ target_link_libraries(snapframe_vk PRIVATE snap_ai)
 set_target_properties(snapframe_vk PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(snapframe_vk PRIVATE -Wall -Wextra)
 target_compile_definitions(snapframe_vk PUBLIC VK_USE_PLATFORM_ANDROID_KHR)
-target_include_directories(snapframe_vk PUBLIC include PRIVATE ${SNAPFRAME_SHADER_OUT} ${CMAKE_CURRENT_SOURCE_DIR}/../waylandcomp/src)
+target_include_directories(snapframe_vk PUBLIC include ../thirdparty/snapframe/include PRIVATE ${SNAPFRAME_SHADER_OUT} ${CMAKE_CURRENT_SOURCE_DIR}/../waylandcomp/src)
 target_link_libraries(snapframe_vk PRIVATE log)
 
 if(BUILD_TESTING AND NOT ANDROID)
