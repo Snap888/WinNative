@@ -952,6 +952,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
         applyFrameGeneration(renderer);
         applySnapFrameGeneration(renderer);
+        if (waylandMode) applyWaylandFrameGeneration();
     }
 
     private void applyFrameGeneration(VulkanRenderer renderer) {
@@ -985,6 +986,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         WaylandCompositor.nativeSetSnapFrameDebugMode(snapFrameDebugMode);
 
         if (snapFrameGenEnabled) {
+            frameGenRefreshRate = applyFrameGenerationDisplayMode();
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
             WaylandCompositor.nativeSetEngineTuning(0, frameGenTargetRate);
             WaylandCompositor.nativeSetFrameGenTuning(frameGenFlowScale / 100f, frameGenRefreshRate);
@@ -1287,6 +1289,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         applyFrameGeneration(renderer);
         applyDisFrameGeneration(renderer);
         applySnapFrameGeneration(renderer);
+        if (waylandMode) applyWaylandFrameGeneration();
         if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled && !snapFrameGenEnabled) {
             applyPreferredRefreshRate();
         }
@@ -1303,6 +1306,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         renderer.setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
         renderer.setSnapFrameAiMode(snapFrameAiMode);
         if (snapFrameGenEnabled) {
+            frameGenRefreshRate = applyFrameGenerationDisplayMode();
             renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
             renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
             Log.i("XServerDisplayActivity", "SnapFrame X11 requested multiplier=" + frameGenMultiplier
@@ -1717,6 +1721,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 applyWaylandFrameGeneration();
                 return;
             }
+            if (snapFrameGenEnabled) {
+                float refreshRate = applyFrameGenerationDisplayMode();
+                VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
+                frameGenRefreshRate = refreshRate;
+                if (renderer != null) renderer.setFrameGenerationRefreshRate(refreshRate);
+                applyWaylandFrameGeneration();
+                return;
+            }
             if (disFrameGenEnabled) {
                 float refreshRate = applyDisFrameGenerationDisplayMode();
                 VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
@@ -1812,7 +1824,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (waylandMode) WaylandCompositor.nativeSetOutputRefreshRate(active);
 
         boolean lsfg = frameGenEnabled && frameGenCachePath != null;
-        if (!lsfg && !disFrameGenEnabled) return;
+        if (!lsfg && !disFrameGenEnabled && !snapFrameGenEnabled) return;
         if (Math.abs(active - frameGenRefreshRate) < 0.5f) return;
 
         Log.i("XServerDisplayActivity", "Frame generation panel changed: "
