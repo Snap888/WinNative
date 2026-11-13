@@ -1,5 +1,6 @@
 /* Runs the X11 renderer's frame-generation engines on the compositor's Turnip device. */
 #include "vk_dispatch.h"
+#include "vk_loader.h"
 
 #include "framegen_engine.h"
 #include "framegen_bridge.h"
@@ -48,6 +49,7 @@ static uint32_t g_dis_min_side = DIS_FLOW_MIN_SIDE_DEFAULT;
 static uint32_t g_target_fps;
 
 static int g_caps_lsfg, g_caps_dis, g_caps_snapframe;
+static const char *g_snap_reason = "SnapFrame Vulkan capability probe not completed";
 static const char *g_reason = "not probed";
 
 static int format_supports(VkFormat fmt, VkFormatFeatureFlags want) {
@@ -94,7 +96,8 @@ const void *fge_probe(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
     g_caps_snapframe = snap_props.limits.timestampComputeAndGraphics &&
         format_supports(VK_FORMAT_R16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
         format_supports(VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) &&
-        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+    g_snap_reason = g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks R16 luma, RGBA16F flow, sampled RGBA8 support or compute timestamp queries required by SnapFrame";
     g_reason = g_caps_lsfg ? "supported" : "the driver has no storage half-float images";
 
     /* Neither engine needs a feature enabled at device creation. */
@@ -107,6 +110,15 @@ void fge_device_ready(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
     g_pd = pd;
     g_dev = dev; g_queue = queue; g_qfam = qfam;
     if (!vkd.CreateInstance) vkd_bind_proc(gipa, inst);
+    /* The compositor has loaded its own device dispatch before this callback. SnapFrame uses
+       the shared vk_loader table; gate availability now so the UI never advertises a backend
+       whose compute/query entry points cannot be called safely. */
+    if (g_caps_snapframe && (!g_vk.CreateComputePipelines || !g_vk.CmdDispatch ||
+        !g_vk.CmdPipelineBarrier || !g_vk.CmdCopyImage || !g_vk.CreateQueryPool ||
+        !g_vk.GetQueryPoolResults || !g_vk.CmdResetQueryPool || !g_vk.CmdWriteTimestamp)) {
+        g_caps_snapframe = 0;
+        g_snap_reason = "SnapFrame Vulkan device dispatch is incomplete";
+    }
 }
 
 int fge_caps_ok(int kind) {
@@ -118,7 +130,7 @@ int fge_caps_ok(int kind) {
 
 const char *fge_caps_reason(void) { return g_reason; }
 const char *fge_caps_reason_for(int kind) {
-    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks R16 luma, RGBA16F flow, sampled RGBA8 support or compute timestamp queries required by SnapFrame";
+    if (kind == VKP_FG_ENGINE_SNAPFRAME) return g_snap_reason;
     if (kind == VKP_FG_ENGINE_DIS) return g_caps_dis ? "WFG/DIS supported" : "the compositor cannot create its generation ring";
     return g_reason;
 }
