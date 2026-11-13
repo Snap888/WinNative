@@ -432,7 +432,7 @@ Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetUpscal
     vkp_effects_set_scaling(mode);
 }
 
-/* The upscaler's sharpness slider 0..100 for legacy modes, 0..200 for ANR mode 9. */
+/* The upscaler's sharpness slider 0..100 for legacy modes, 0..300 for ANR mode 9. */
 JNIEXPORT void JNICALL
 Java_com_winlator_cmod_runtime_display_wayland_WaylandCompositor_nativeSetUpscaleSharpness(JNIEnv *env, jclass clazz, jint sharpness) {
     vkp_effects_set_upscale_sharpness(sharpness);
