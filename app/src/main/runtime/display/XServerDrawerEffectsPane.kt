@@ -237,6 +237,45 @@ internal fun ScreenEffectsPaneContent(
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                    PaneSectionLabel("AMD FSR 1 (EASU + RCAS)")
+                    NavBooleanRow(
+                        title = "FSR upscaling",
+                        checked = state.fsrEnabled,
+                        onCheckedChange = listener::onFSREnabledChanged,
+                    )
+                    AnimatedVisibility(
+                        visible = state.fsrEnabled,
+                        enter = expandVertically(
+                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Top,
+                        ) + fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+                        exit = shrinkVertically(
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Top,
+                        ) + fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                            NavSliderRow(
+                                label = "Render scale",
+                                valueText = "${state.fsrRenderScale}%",
+                                value = state.fsrRenderScale.toFloat(),
+                                valueRange = 25f..100f,
+                                steps = 74,
+                                onValueChange = { listener.onFSRRenderScaleChanged(it.roundToInt().coerceIn(25, 100)) },
+                            )
+                            NavSliderRow(
+                                label = "RCAS sharpness",
+                                valueText = "${state.fsrSharpness}%",
+                                value = state.fsrSharpness.toFloat(),
+                                valueRange = 0f..100f,
+                                steps = 99,
+                                onValueChange = { listener.onFSRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
                     PaneSectionLabel("WinNative ANR")
                     NavBooleanRow(
                         title = "WinNative ANR Spatial Reconstruction",
