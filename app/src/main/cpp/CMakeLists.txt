@@ -105,6 +105,7 @@ set(SHADER_LIST
     "effect_colorblind:frag:effect_colorblind_frag"
     "effect_pixelate:frag:effect_pixelate_frag"
     "sgsr1:frag:sgsr1_frag"
+    "anr_spatial:frag:anr_spatial_frag"
 )
 
 set(SHADER_HEADERS "")
