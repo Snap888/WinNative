@@ -126,6 +126,8 @@ import com.winlator.cmod.runtime.display.renderer.effects.NTSCEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.PixelateEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ScanlinesEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.SGSRUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.ANRSpatialUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.FSRUpscaler;
 import com.winlator.cmod.runtime.display.renderer.effects.SharpenEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ToonEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.VividEffect;
@@ -542,6 +544,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
     private int sgsrSharpness = 100;
+    private boolean anrEnabled = false;
+    private int anrRenderScale = 90;
+    private int anrSharpness = 75;
+    private int anrQuality = 4;
+    private boolean fsrEnabled = false;
+    private int fsrRenderScale = 67;
+    private int fsrSharpness = 25;
     private String sgsrBaseScreenSize = Container.DEFAULT_SCREEN_SIZE;
     private boolean vividEnabled = false;
     private int vividStrength = 100;
@@ -2672,8 +2681,21 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             screenSize = sanitizedScreenSize;
         }
         sgsrBaseScreenSize = screenSize;
+        anrEnabled = preferences.getBoolean("anr_enabled", false);
+        anrRenderScale = Math.max(25, Math.min(150, preferences.getInt("anr_render_scale", 90)));
+        anrSharpness = Math.max(0, Math.min(300, preferences.getInt("anr_sharpness", 75)));
+        anrQuality = Math.max(0, Math.min(6, preferences.getInt("anr_quality", 4)));
+        fsrEnabled = preferences.getBoolean("fsr_x11_enabled", false);
+        fsrRenderScale = Math.max(25, Math.min(150, preferences.getInt("fsr_render_scale", 67)));
+        fsrSharpness = Math.max(0, Math.min(100, preferences.getInt("fsr_sharpness", 25)));
+        if (fsrEnabled) { anrEnabled = false; sgsrEnabled = false; sgsrRuntimeEnabled = false; }
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
+        if (waylandMode && fsrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, fsrRenderScale / 100.0f);
+        } else if (waylandMode && anrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, anrRenderScale / 100.0f);
+        }
         if (!effectiveScreenSize.equals(screenSize)) {
             Log.i("XServerDisplayActivity", "SGSR render scale active: container='" + screenSize +
                     "' effective='" + effectiveScreenSize + "' mode=" + sgsrUpscaleMode);
@@ -5547,6 +5569,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 screenEffectsCardExpanded,
                 sgsrEnabled,
                 sgsrSharpness,
+                fsrEnabled,
+                fsrRenderScale,
+                fsrSharpness,
+                anrEnabled,
+                anrRenderScale,
+                anrSharpness,
+                anrQuality,
                 vividEnabled,
                 vividStrength,
                 colorProfile,
@@ -6135,6 +6164,78 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     public void onSGSRSharpnessChanged(int sharpness) {
                         sgsrSharpness = Math.max(0, Math.min(100, sharpness));
                         saveSGSRShortcutSettings();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSREnabledChanged(boolean enabled) {
+                        fsrEnabled = enabled;
+                        if (enabled) {
+                            anrEnabled = false;
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                            preferences.edit().putBoolean("anr_enabled", false).apply();
+                        }
+                        preferences.edit().putBoolean("fsr_x11_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRRenderScaleChanged(int scale) {
+                        fsrRenderScale = Math.max(25, Math.min(150, scale));
+                        preferences.edit().putInt("fsr_render_scale", fsrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRSharpnessChanged(int sharpness) {
+                        fsrSharpness = Math.max(0, Math.min(100, sharpness));
+                        preferences.edit().putInt("fsr_sharpness", fsrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANREnabledChanged(boolean enabled) {
+                        anrEnabled = enabled;
+                        if (enabled && fsrEnabled) {
+                            fsrEnabled = false;
+                            preferences.edit().putBoolean("fsr_x11_enabled", false).apply();
+                        }
+                        if (enabled && sgsrEnabled) {
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                        }
+                        preferences.edit().putBoolean("anr_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRRenderScaleChanged(int scale) {
+                        anrRenderScale = Math.max(25, Math.min(150, scale));
+                        preferences.edit().putInt("anr_render_scale", anrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRSharpnessChanged(int sharpness) {
+                        anrSharpness = Math.max(0, Math.min(300, sharpness));
+                        preferences.edit().putInt("anr_sharpness", anrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRQualityChanged(int quality) {
+                        anrQuality = Math.max(0, Math.min(6, quality));
+                        preferences.edit().putInt("anr_quality", anrQuality).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
                     }
@@ -6937,13 +7038,46 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     }
 
     private void applyScreenEffects() {
+        // Wayland has its own Vulkan post chain; mode 9 runs the same ANR Spatial shader.
+        if (waylandMode) {
+            try {
+                int selectedUpscaler = anrEnabled ? 9 : (fsrEnabled ? 4 : (sgsrEnabled ? 3 : 0));
+                WaylandCompositor.nativeSetUpscaler(selectedUpscaler);
+                WaylandCompositor.nativeSetUpscaleSharpness(fsrEnabled ? fsrSharpness : (anrEnabled ? anrSharpness : sgsrSharpness));
+                WaylandCompositor.nativeSetANRQuality(anrQuality);
+            } catch (Throwable t) {
+                Log.w("XServerDisplayActivity", "Failed to apply Wayland ANR settings", t);
+            }
+            return;
+        }
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         if (renderer == null) return;
         EffectComposer composer = renderer.getEffectComposer();
         if (composer == null) return;
 
+        FSRUpscaler fsr = composer.getEffect(FSRUpscaler.class);
+        if (fsrEnabled && !anrEnabled && !sgsrRuntimeEnabled) {
+            if (fsr == null) fsr = new FSRUpscaler();
+            fsr.setRenderScale(fsrRenderScale / 100.0f);
+            fsr.setSharpness(fsrSharpness / 100.0f);
+            composer.addEffectFirst(fsr);
+        } else if (fsr != null) {
+            composer.removeEffect(fsr);
+        }
+
+        ANRSpatialUpscaler anr = composer.getEffect(ANRSpatialUpscaler.class);
+        if (anrEnabled) {
+            if (anr == null) anr = new ANRSpatialUpscaler();
+            anr.setRenderScale(anrRenderScale / 100.0f);
+            anr.setSharpness(anrSharpness / 100.0f);
+            anr.setQuality(anrQuality);
+            composer.addEffectFirst(anr);
+        } else if (anr != null) {
+            composer.removeEffect(anr);
+        }
+
         SGSRUpscaler sgsr = composer.getEffect(SGSRUpscaler.class);
-        if (sgsrRuntimeEnabled) {
+        if (sgsrRuntimeEnabled && !anrEnabled) {
             if (sgsr == null) {
                 sgsr = new SGSRUpscaler();
             }
