@@ -317,12 +317,13 @@ internal fun ScreenEffectsPaneContent(
                                     1 -> "Catmull–Rom"
                                     2 -> "Lanczos2"
                                     3 -> "Edge Adaptive"
-                                    else -> "Edge Adaptive+"
+                                    4 -> "Edge Adaptive+"
+                                    else -> "Detail Recovery+"
                                 },
                                 value = state.anrQuality.toFloat(),
-                                valueRange = 0f..4f,
-                                steps = 3,
-                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 4)) },
+                                valueRange = 0f..5f,
+                                steps = 4,
+                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 5)) },
                             )
                         }
                     }
