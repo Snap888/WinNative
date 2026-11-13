@@ -21,6 +21,7 @@
 #include <android/native_window_jni.h>
 #include <dlfcn.h>
 #include <jni.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -2423,7 +2424,83 @@ static void run_effect(VkRenderer* r, VkCommandBuffer cmd, VkEffectSlot* eff,
 static bool scene_starts_with_sgsr1(const VkScene* s) {
     if (s->effect_count == 0) return false;
     return s->effects[0].type == VK_EFFECT_SGSR1
-        || s->effects[0].type == VK_EFFECT_ANR_SPATIAL;
+        || s->effects[0].type == VK_EFFECT_ANR_SPATIAL
+        || s->effects[0].type == VK_EFFECT_FSR;
+}
+
+static bool scene_starts_with_fsr(const VkScene* s) {
+    return s->effect_count > 0 && s->effects[0].type == VK_EFFECT_FSR;
+}
+
+struct FsrEasuPush {
+    float ndc[4];
+    uint32_t con0[4], con1[4], con2[4], con3[4];
+    float outW, outH;
+};
+struct FsrRcasPush {
+    float ndc[4];
+    uint32_t con[4];
+    float outW, outH;
+};
+
+static uint32_t fsr_pack_float(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static void fsr_build_easu_constants(struct FsrEasuPush* pc,
+                                     uint32_t in_w, uint32_t in_h,
+                                     uint32_t out_w, uint32_t out_h) {
+    const float iw = (float)in_w, ih = (float)in_h;
+    const float ow = (float)out_w, oh = (float)out_h;
+    pc->ndc[0] = -1.0f; pc->ndc[1] = -1.0f;
+    pc->ndc[2] = 1.0f; pc->ndc[3] = 1.0f;
+    pc->con0[0] = fsr_pack_float(iw / ow);
+    pc->con0[1] = fsr_pack_float(ih / oh);
+    pc->con0[2] = fsr_pack_float(0.5f * iw / ow - 0.5f);
+    pc->con0[3] = fsr_pack_float(0.5f * ih / oh - 0.5f);
+    pc->con1[0] = fsr_pack_float(1.0f / iw); pc->con1[1] = fsr_pack_float(1.0f / ih);
+    pc->con1[2] = fsr_pack_float(1.0f / iw); pc->con1[3] = fsr_pack_float(-1.0f / ih);
+    pc->con2[0] = fsr_pack_float(-1.0f / iw); pc->con2[1] = fsr_pack_float(2.0f / ih);
+    pc->con2[2] = fsr_pack_float(1.0f / iw); pc->con2[3] = fsr_pack_float(2.0f / ih);
+    pc->con3[0] = 0; pc->con3[1] = fsr_pack_float(4.0f / ih);
+    pc->con3[2] = 0; pc->con3[3] = 0;
+    pc->outW = ow; pc->outH = oh;
+}
+
+static void fsr_build_rcas_constants(struct FsrRcasPush* pc,
+                                     float sharpness, uint32_t out_w, uint32_t out_h) {
+    pc->ndc[0] = -1.0f; pc->ndc[1] = -1.0f;
+    pc->ndc[2] = 1.0f; pc->ndc[3] = 1.0f;
+    pc->con[0] = fsr_pack_float(fminf(1.0f, fmaxf(0.0f, sharpness)));
+    pc->con[1] = pc->con[2] = pc->con[3] = 0;
+    pc->outW = (float)out_w; pc->outH = (float)out_h;
+}
+
+static void run_fsr_pass(VkRenderer* r, VkCommandBuffer cmd, VkPipeline pipe,
+                         VkDescriptorSet src_set, uint32_t in_w, uint32_t in_h,
+                         uint32_t out_w, uint32_t out_h, bool easu, float sharpness) {
+    if (!pipe || !src_set || out_w == 0 || out_h == 0) return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+    VkViewport vp = {0, 0, (float)out_w, (float)out_h, 0.0f, 1.0f};
+    VkRect2D sc = {{0, 0}, {out_w, out_h}};
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    vkCmdSetScissor(cmd, 0, 1, &sc);
+    if (easu) {
+        struct FsrEasuPush pc;
+        fsr_build_easu_constants(&pc, in_w, in_h, out_w, out_h);
+        vkCmdPushConstants(cmd, r->pipelines.effect_layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    } else {
+        struct FsrRcasPush pc;
+        fsr_build_rcas_constants(&pc, sharpness, out_w, out_h);
+        vkCmdPushConstants(cmd, r->pipelines.effect_layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    }
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        r->pipelines.effect_layout, 0, 1, &src_set, 0, NULL);
+    vkCmdDraw(cmd, 4, 1, 0, 0);
 }
 
 static void wait_inflight_frames(VkRenderer* r) {
@@ -2455,7 +2532,8 @@ static VkExtent2D compute_sgsr1_source_extent(VkRenderer* r, const VkScene* s) {
         source_w < out.width ? source_w : out.width,
         source_h < out.height ? source_h : out.height,
     };
-    if (s->effect_count > 0 && s->effects[0].type == VK_EFFECT_ANR_SPATIAL) {
+    if (s->effect_count > 0 && (s->effects[0].type == VK_EFFECT_ANR_SPATIAL
+        || s->effects[0].type == VK_EFFECT_FSR)) {
         float scale = s->effects[0].param0;
         if (!(scale > 0.0f)) scale = 0.75f;
         if (scale < 0.25f) scale = 0.25f;
