@@ -2591,6 +2591,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (fsrEnabled) { anrEnabled = false; sgsrEnabled = false; sgsrRuntimeEnabled = false; }
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
+        if (waylandMode && fsrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, fsrRenderScale / 100.0f);
+        } else if (waylandMode && anrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, anrRenderScale / 100.0f);
+        }
         if (!effectiveScreenSize.equals(screenSize)) {
             Log.i("XServerDisplayActivity", "SGSR render scale active: container='" + screenSize +
                     "' effective='" + effectiveScreenSize + "' mode=" + sgsrUpscaleMode);
