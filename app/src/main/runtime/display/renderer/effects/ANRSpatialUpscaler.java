@@ -20,7 +20,7 @@ public final class ANRSpatialUpscaler extends Effect {
     }
 
     public void setQuality(int value) {
-        quality = Math.max(0, Math.min(4, value));
+        quality = Math.max(0, Math.min(5, value));
     }
 
     @Override
