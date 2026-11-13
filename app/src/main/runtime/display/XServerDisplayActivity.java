@@ -2584,7 +2584,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         anrEnabled = preferences.getBoolean("anr_enabled", false);
         anrRenderScale = Math.max(25, Math.min(150, preferences.getInt("anr_render_scale", 90)));
         anrSharpness = Math.max(0, Math.min(200, preferences.getInt("anr_sharpness", 75)));
-        anrQuality = Math.max(0, Math.min(4, preferences.getInt("anr_quality", 4)));
+        anrQuality = Math.max(0, Math.min(5, preferences.getInt("anr_quality", 4)));
         fsrEnabled = preferences.getBoolean("fsr_x11_enabled", false);
         fsrRenderScale = Math.max(25, Math.min(150, preferences.getInt("fsr_render_scale", 67)));
         fsrSharpness = Math.max(0, Math.min(100, preferences.getInt("fsr_sharpness", 25)));
@@ -6079,7 +6079,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onANRQualityChanged(int quality) {
-                        anrQuality = Math.max(0, Math.min(4, quality));
+                        anrQuality = Math.max(0, Math.min(5, quality));
                         preferences.edit().putInt("anr_quality", anrQuality).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
