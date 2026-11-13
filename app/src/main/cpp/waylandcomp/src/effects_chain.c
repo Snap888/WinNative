@@ -56,7 +56,7 @@ static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct fx_settings g_set = {
     .scaling = 0, .sharp_pct = 75, .anr_quality = 4, .cas_on = 0, .cas_pct = 60, .deband_pct = 100,
     .gamma = 1.0f, .saturation = 1.0f, .s_raw = 100.0f, .look = "Off"};
-static volatile int g_changed;
+static int g_changed;
 static struct fx_settings g_cur; /* the compositor thread's per-frame snapshot */
 static int g_cur_valid;
 
@@ -145,8 +145,11 @@ static void log_settings(const struct fx_settings *s) {
 }
 
 int vkp_effects_sync(void) {
-    if (!g_changed && g_cur_valid) return 0;
     pthread_mutex_lock(&g_lock);
+    if (!g_changed && g_cur_valid) {
+        pthread_mutex_unlock(&g_lock);
+        return 0;
+    }
     g_changed = 0;
     g_cur = g_set;
     pthread_mutex_unlock(&g_lock);
