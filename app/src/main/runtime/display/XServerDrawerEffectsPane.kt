@@ -259,9 +259,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = "Render scale",
                                 valueText = "${state.fsrRenderScale}%",
                                 value = state.fsrRenderScale.toFloat(),
-                                valueRange = 25f..100f,
-                                steps = 74,
-                                onValueChange = { listener.onFSRRenderScaleChanged(it.roundToInt().coerceIn(25, 100)) },
+                                valueRange = 25f..150f,
+                                steps = 124,
+                                onValueChange = { listener.onFSRRenderScaleChanged(it.roundToInt().coerceIn(25, 150)) },
                             )
                             NavSliderRow(
                                 label = "RCAS sharpness",
@@ -298,9 +298,9 @@ internal fun ScreenEffectsPaneContent(
                                 label = "Render scale",
                                 valueText = "${state.anrRenderScale}%",
                                 value = state.anrRenderScale.toFloat(),
-                                valueRange = 25f..100f,
-                                steps = 74,
-                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(25, 100)) },
+                                valueRange = 25f..150f,
+                                steps = 124,
+                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(25, 150)) },
                             )
                             NavSliderRow(
                                 label = "Edge sharpness",
