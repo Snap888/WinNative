@@ -49,6 +49,7 @@ VkFilter vkp_effects_blit_filter(void);
  * the output (what the scaling modes resize to; the caller maps the result over the whole scene
  * afterwards, so Fullscreen Mode / Alignment still apply after the chain). Returns `scene` itself
  * (transitioned to TRANSFER_SRC_OPTIMAL) when there is nothing to do or the chain is unavailable. */
+VkImageView vkp_effects_view(VkImage image);
 VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int scene_h,
                         int out_w, int out_h, int *res_w, int *res_h);
 
