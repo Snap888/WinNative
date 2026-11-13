@@ -21,7 +21,6 @@
 #include <android/native_window_jni.h>
 #include <dlfcn.h>
 #include <jni.h>
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -2497,12 +2496,17 @@ static void fsr_build_easu_constants(struct FsrEasuPush* pc,
 
 static void fsr_build_rcas_constants(struct FsrRcasPush* pc,
                                      float sharpness, uint32_t out_w, uint32_t out_h) {
+    if (sharpness < 0.0f) sharpness = 0.0f;
+    if (sharpness > 1.0f) sharpness = 1.0f;
     pc->ndc[0] = -1.0f; pc->ndc[1] = -1.0f;
     pc->ndc[2] = 1.0f; pc->ndc[3] = 1.0f;
-    pc->con[0] = fsr_pack_float(fminf(1.0f, fmaxf(0.0f, sharpness)));
+    pc->con[0] = fsr_pack_float(sharpness);
     pc->con[1] = pc->con[2] = pc->con[3] = 0;
     pc->outW = (float)out_w; pc->outH = (float)out_h;
 }
+
+_Static_assert(sizeof(struct FsrEasuPush) == 88, "FSR EASU push constants layout mismatch");
+_Static_assert(sizeof(struct FsrRcasPush) == 40, "FSR RCAS push constants layout mismatch");
 
 static void run_fsr_pass(VkRenderer* r, VkCommandBuffer cmd, VkPipeline pipe,
                          VkDescriptorSet src_set, uint32_t in_w, uint32_t in_h,
