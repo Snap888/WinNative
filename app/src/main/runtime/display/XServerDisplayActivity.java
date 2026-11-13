@@ -126,6 +126,7 @@ import com.winlator.cmod.runtime.display.renderer.effects.PixelateEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ScanlinesEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.SGSRUpscaler;
 import com.winlator.cmod.runtime.display.renderer.effects.ANRSpatialUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.FSRUpscaler;
 import com.winlator.cmod.runtime.display.renderer.effects.SharpenEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ToonEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.VividEffect;
@@ -539,6 +540,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int anrRenderScale = 90;
     private int anrSharpness = 75;
     private int anrQuality = 4;
+    private boolean fsrEnabled = false;
+    private int fsrRenderScale = 67;
+    private int fsrSharpness = 25;
     private String sgsrBaseScreenSize = Container.DEFAULT_SCREEN_SIZE;
     private boolean vividEnabled = false;
     private int vividStrength = 100;
@@ -2581,6 +2585,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         anrRenderScale = Math.max(25, Math.min(100, preferences.getInt("anr_render_scale", 90)));
         anrSharpness = Math.max(0, Math.min(200, preferences.getInt("anr_sharpness", 75)));
         anrQuality = Math.max(0, Math.min(4, preferences.getInt("anr_quality", 4)));
+        fsrEnabled = preferences.getBoolean("fsr_x11_enabled", false);
+        fsrRenderScale = Math.max(25, Math.min(100, preferences.getInt("fsr_render_scale", 67)));
+        fsrSharpness = Math.max(0, Math.min(100, preferences.getInt("fsr_sharpness", 25)));
+        if (fsrEnabled) { anrEnabled = false; sgsrEnabled = false; sgsrRuntimeEnabled = false; }
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
         if (!effectiveScreenSize.equals(screenSize)) {
@@ -5455,6 +5463,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 screenEffectsCardExpanded,
                 sgsrEnabled,
                 sgsrSharpness,
+                fsrEnabled,
+                fsrRenderScale,
+                fsrSharpness,
                 anrEnabled,
                 anrRenderScale,
                 anrSharpness,
@@ -5966,6 +5977,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                             anrEnabled = false;
                             preferences.edit().putBoolean("anr_enabled", false).apply();
                         }
+                        if (enabled && fsrEnabled) {
+                            fsrEnabled = false;
+                            preferences.edit().putBoolean("fsr_x11_enabled", false).apply();
+                        }
                         boolean wasEnabled = sgsrEnabled;
                         boolean wasRuntimeEnabled = sgsrRuntimeEnabled;
                         sgsrEnabled = enabled;
@@ -5994,8 +6009,43 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     }
 
                     @Override
+                    public void onFSREnabledChanged(boolean enabled) {
+                        fsrEnabled = enabled;
+                        if (enabled) {
+                            anrEnabled = false;
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                            preferences.edit().putBoolean("anr_enabled", false).apply();
+                        }
+                        preferences.edit().putBoolean("fsr_x11_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRRenderScaleChanged(int scale) {
+                        fsrRenderScale = Math.max(25, Math.min(100, scale));
+                        preferences.edit().putInt("fsr_render_scale", fsrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRSharpnessChanged(int sharpness) {
+                        fsrSharpness = Math.max(0, Math.min(100, sharpness));
+                        preferences.edit().putInt("fsr_sharpness", fsrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
                     public void onANREnabledChanged(boolean enabled) {
                         anrEnabled = enabled;
+                        if (enabled && fsrEnabled) {
+                            fsrEnabled = false;
+                            preferences.edit().putBoolean("fsr_x11_enabled", false).apply();
+                        }
                         if (enabled && sgsrEnabled) {
                             sgsrEnabled = false;
                             sgsrRuntimeEnabled = false;
@@ -6831,8 +6881,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         // Wayland has its own Vulkan post chain; mode 9 runs the same ANR Spatial shader.
         if (waylandMode) {
             try {
-                WaylandCompositor.nativeSetUpscaler(anrEnabled ? 9 : 0);
-                WaylandCompositor.nativeSetUpscaleSharpness(anrSharpness);
+                int selectedUpscaler = anrEnabled ? 9 : (fsrEnabled ? 4 : (sgsrEnabled ? 3 : 0));
+                WaylandCompositor.nativeSetUpscaler(selectedUpscaler);
+                WaylandCompositor.nativeSetUpscaleSharpness(fsrEnabled ? fsrSharpness : (anrEnabled ? anrSharpness : sgsrSharpness));
                 WaylandCompositor.nativeSetANRQuality(anrQuality);
             } catch (Throwable t) {
                 Log.w("XServerDisplayActivity", "Failed to apply Wayland ANR settings", t);
@@ -6843,6 +6894,16 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (renderer == null) return;
         EffectComposer composer = renderer.getEffectComposer();
         if (composer == null) return;
+
+        FSRUpscaler fsr = composer.getEffect(FSRUpscaler.class);
+        if (fsrEnabled && !anrEnabled && !sgsrRuntimeEnabled) {
+            if (fsr == null) fsr = new FSRUpscaler();
+            fsr.setRenderScale(fsrRenderScale / 100.0f);
+            fsr.setSharpness(fsrSharpness / 100.0f);
+            composer.addEffectFirst(fsr);
+        } else if (fsr != null) {
+            composer.removeEffect(fsr);
+        }
 
         ANRSpatialUpscaler anr = composer.getEffect(ANRSpatialUpscaler.class);
         if (anrEnabled) {
