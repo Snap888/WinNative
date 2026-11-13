@@ -2,7 +2,7 @@ name: PR CI
 
 on:
   push:
-    branches: [ main, Snap888-patch-1 ]
+    branches: [ main, Snap888-patch-1, fg-fsr ]
     paths-ignore:
       - '**.md'
       - '.gitignore'
