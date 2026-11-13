@@ -96,7 +96,7 @@ const void *fge_probe(PFN_vkGetInstanceProcAddr gipa, VkInstance inst, VkPhysica
     g_caps_snapframe = snap_props.limits.timestampComputeAndGraphics &&
         format_supports(VK_FORMAT_R16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) &&
         format_supports(VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) &&
-        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+        format_supports(VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
     g_snap_reason = g_caps_snapframe ? "SnapFrame Vulkan compute formats supported" : "Turnip lacks R16 luma, RGBA16F flow, sampled RGBA8 support or compute timestamp queries required by SnapFrame";
     g_reason = g_caps_lsfg ? "supported" : "the driver has no storage half-float images";
 
