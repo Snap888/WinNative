@@ -207,7 +207,9 @@ public final class WaylandCompositor {
     /** Flow viewer: 0=Motion, 1=Confidence, 2=Consistency. */
     public static native void nativeSetSnapFrameDebugMode(int mode);
 
-    public static native void nativeSetUpscaler(int mode);
+    public static native void nativeSetUpscaler(int mode); // mode 9 = shared ANR Spatial shader
+    public static native void nativeSetUpscaleSharpness(int sharpness);
+    public static native void nativeSetANRQuality(int quality);
     public static native void nativeSetUpscaleSharpness(int sharpness);
     public static native void nativeSetCas(boolean enabled, int sharpness);
     public static native void nativeSetHdr(boolean enabled);
