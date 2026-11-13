@@ -16,6 +16,7 @@
 #include "vk_dispatch.h"
 #include "lsfg/vkr_lsfg.h"
 #include "vkr_dis.h"
+#include "../../snapframe/include/snap_frame_vk.h"
 
 #define VK_FRAMEGEN_MAX_GENERATIONS \
     (VKR_DIS_MAX_GENERATIONS > VKR_LSFG_MAX_GENERATIONS ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS)
@@ -31,8 +32,8 @@
 #define VK_MAX_RECORD_IMAGES 32
 #define VK_MAX_EFFECTS 8
 #define VK_MAX_COMPOSITE_TARGETS 10
-#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 3000000ULL
-#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 12000000ULL
+#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL
+#define VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL
 #define VK_MAX_RENDERABLE_WINDOWS 64
 // Number of in-flight upload slots. Each slot owns a persistently-mapped staging buffer,
 // fence, and command pool. An upload only blocks when this many uploads are still pending
@@ -214,6 +215,7 @@ typedef struct VkFrame {
     VkSemaphore image_available_gen[VK_FRAMEGEN_MAX_GENERATIONS];
     VkFence     in_flight;
     VkCommandBuffer cmd;
+    uint32_t    framegen_compute_pending;
 } VkFrame;
 
 // ============================================================
@@ -430,10 +432,17 @@ typedef struct VkRenderer {
     bool              swapchain_transfer_dst;
     bool              swapchain_storage;
     uint64_t          framegen_present_failures;
+    uint64_t          framegen_source_present_failures;
     struct VkrLsfg*   lsfg;
     char*             lsfg_cache_path;
     struct VkrDis*    dis;
     bool              dis_requested;
+    SnapFrameVk*      snap;
+    bool              snap_requested;
+    bool              snap_debug_flow;
+    uint32_t          snap_debug_mode;
+    uint32_t          snap_candidate_reconstruction_mode;
+    uint32_t          snap_ai_mode;
     uint32_t          dis_scale;
     uint32_t          dis_target_fps;
     bool              dis_debug_flow;
@@ -444,11 +453,26 @@ typedef struct VkRenderer {
     float             framegen_refresh_rate;
     int32_t           framegen_refresh_mhz;
     uint64_t          framegen_source_frames;
-    uint64_t          framegen_real_frames;
+    uint64_t          framegen_real_frames;       // source frames with successful base present
     uint64_t          framegen_log_real;
     uint64_t          framegen_log_made;
-    uint64_t          framegen_made_frames;
+    uint64_t          framegen_made_frames;       // generated frames with successful queue present
+    uint64_t          framegen_planned_total;
+    uint64_t          framegen_acquired_total;
+    uint64_t          framegen_compute_total;          // compute commands recorded
+    uint64_t          framegen_compute_completed_total; // GPU fence confirmed completion
+    uint64_t          framegen_submitted_total;
     uint64_t          framegen_acquire_misses;
+    uint64_t          framegen_acquire_timeouts;
+    uint64_t          framegen_acquire_errors;
+    uint64_t          framegen_acquire_ns;
+    uint64_t          framegen_acquire_slot_ns[7];
+    uint64_t          framegen_acquire_slot_calls[7];
+    uint64_t          framegen_submit_ns;
+    uint64_t          framegen_present_ns;
+    uint64_t          framegen_present_calls;
+    uint64_t          framegen_present_slot_ns[7];
+    uint64_t          framegen_present_slot_calls[7];
     uint64_t          framegen_draw_ns;
     uint64_t          framegen_gap_ns;
     uint64_t          framegen_last_end_ns;
