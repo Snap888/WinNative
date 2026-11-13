@@ -2582,11 +2582,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
         sgsrBaseScreenSize = screenSize;
         anrEnabled = preferences.getBoolean("anr_enabled", false);
-        anrRenderScale = Math.max(25, Math.min(100, preferences.getInt("anr_render_scale", 90)));
+        anrRenderScale = Math.max(25, Math.min(150, preferences.getInt("anr_render_scale", 90)));
         anrSharpness = Math.max(0, Math.min(200, preferences.getInt("anr_sharpness", 75)));
         anrQuality = Math.max(0, Math.min(4, preferences.getInt("anr_quality", 4)));
         fsrEnabled = preferences.getBoolean("fsr_x11_enabled", false);
-        fsrRenderScale = Math.max(25, Math.min(100, preferences.getInt("fsr_render_scale", 67)));
+        fsrRenderScale = Math.max(25, Math.min(150, preferences.getInt("fsr_render_scale", 67)));
         fsrSharpness = Math.max(0, Math.min(100, preferences.getInt("fsr_sharpness", 25)));
         if (fsrEnabled) { anrEnabled = false; sgsrEnabled = false; sgsrRuntimeEnabled = false; }
         String effectiveScreenSize =
@@ -6025,7 +6025,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onFSRRenderScaleChanged(int scale) {
-                        fsrRenderScale = Math.max(25, Math.min(100, scale));
+                        fsrRenderScale = Math.max(25, Math.min(150, scale));
                         preferences.edit().putInt("fsr_render_scale", fsrRenderScale).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
@@ -6058,7 +6058,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
                     @Override
                     public void onANRRenderScaleChanged(int scale) {
-                        anrRenderScale = Math.max(25, Math.min(100, scale));
+                        anrRenderScale = Math.max(25, Math.min(150, scale));
                         preferences.edit().putInt("anr_render_scale", anrRenderScale).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
