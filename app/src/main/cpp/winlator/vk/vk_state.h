@@ -439,6 +439,7 @@ typedef struct VkRenderer {
     bool              dis_requested;
     SnapFrameVk*      snap;
     bool              snap_requested;
+    bool              snap_dispatch_available;
     bool              snap_debug_flow;
     uint32_t          snap_debug_mode;
     uint32_t          snap_candidate_reconstruction_mode;
