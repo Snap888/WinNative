@@ -24,7 +24,7 @@
 
 #define VK_DEVICE_FUNCS(X) \
     X(GetDeviceQueue) X(CreateSwapchainKHR) X(DestroySwapchainKHR) X(GetSwapchainImagesKHR) \
-    X(CreateCommandPool) X(AllocateCommandBuffers) X(CreateSemaphore) X(CreateFence) \
+    X(CreateCommandPool) X(AllocateCommandBuffers) X(CreateSemaphore) X(CreateFence) X(GetFenceStatus) \
     X(DeviceWaitIdle) X(CreateImage) X(GetImageMemoryRequirements) X(AllocateMemory) \
     X(CreateBuffer) X(GetBufferMemoryRequirements) X(BindBufferMemory) X(DestroyBuffer) \
     X(CmdCopyImageToBuffer) \
