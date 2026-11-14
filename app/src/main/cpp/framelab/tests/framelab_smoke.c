@@ -37,8 +37,8 @@ int main(void) {
     config.effects[0].effect_id = 9;
     config.effects[0].params[0] = 0.5f;
     assert(anr_fl_start(dir) == 0);
-    assert(anr_fl_submit(ANR_FL_STAGE_FRAMEGEN_INPUT, 42, 123456789ULL,
-                         2, 1, 1, pixels, sizeof(pixels), params, sizeof(params)) == 0);
+    assert(anr_fl_submit_configured(ANR_FL_STAGE_FRAMEGEN_INPUT, 42, 123456789ULL,
+                                    2, 1, 1, pixels, sizeof(pixels), &config) == 0);
     assert(anr_fl_stop() == 0);
     anr_fl_stats stats;
     anr_fl_get_stats(&stats);
