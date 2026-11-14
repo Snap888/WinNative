@@ -66,7 +66,6 @@ static inline uint32_t snap_frame_vk_flow_extent(uint32_t max_w, uint32_t max_h,
     return percent;
 }
 
-static inline float snap_frame_vk_phase_time(uint32_t index, uint32_t count) {
 /* A source-frame gap invalidates temporal correspondence. Use four measured source
  * intervals, with conservative 100..300 ms bounds for variable-refresh/low-FPS games. */
 static inline uint64_t snap_frame_vk_gap_limit_ns(uint64_t average_interval_ns) {
@@ -84,7 +83,7 @@ static inline int snap_frame_vk_timestamp_gap_exceeded(uint64_t previous_ns,
     return current_ns - previous_ns > snap_frame_vk_gap_limit_ns(average_interval_ns);
 }
 
-
+static inline float snap_frame_vk_phase_time(uint32_t index, uint32_t count) {
     if (!count || count > 3u || index >= count) return -1.0f;
     return (float)(index + 1u) / (float)(count + 1u);
 }
