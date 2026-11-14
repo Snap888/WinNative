@@ -574,6 +574,9 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
     return (int)n_gen;
 }
 
+int vkp_framegen_readback_slot(void){return g_engine_ok&&g_engine_kind==VKP_FG_ENGINE_SNAPFRAME?fge_readback_slot():-1;}
+void vkp_framegen_set_submission_fence(VkFence fence){if(g_engine_ok&&g_engine_kind==VKP_FG_ENGINE_SNAPFRAME)fge_set_submission_fence(fence);}
+
 void vkp_framegen_presented(int generated, int source_presented) {
     if (generated < 0) generated = 0;
     if (source_presented != 0) source_presented = 1;
