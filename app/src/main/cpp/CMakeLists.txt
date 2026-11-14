@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
 
 project(Winlator)
+include(CTest)
 
 include(FetchContent)
 
@@ -136,7 +137,11 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 # WFG frame generator (DIS optical flow + interpolation), linked by libwinlator and libwnwayland.
 add_subdirectory(wfg)
 
-# Shared lossless capture queue and ANR-style frame record writer for both display backends.
+# SnapFrame's independent Vulkan compute backend, using the Wayland compositor's Turnip dispatch.
+add_subdirectory(snapai)
+add_subdirectory(snapframe)
+
+# ANR Frame Lab: bounded lossless capture writer shared by X11 and Wayland.
 add_subdirectory(framelab)
 
 # ----------------------------------------------------------------------------
@@ -155,6 +160,7 @@ add_library(winlator SHARED
         winlator/process_lifecycle.c
         winlator/vulkan.c
         winlator/vk/vk_dispatch.c
+        waylandcomp/src/vk_loader.c
         winlator/vk/vk_image.c
         winlator/vk/vk_renderer.c
         winlator/vk/lsfg/lsfg_dll.c
@@ -185,6 +191,8 @@ target_compile_definitions(winlator PRIVATE
 target_include_directories(winlator PRIVATE
         ${xz_SOURCE_DIR}/src/liblzma/api
         winlator/vk
+        waylandcomp/src
+        snapframe/include
         ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -192,6 +200,7 @@ target_compile_features(winlator PRIVATE cxx_std_17)
 
 target_link_libraries(winlator
         wfg
+        snapframe_vk
         log
         android
         mediandk
@@ -202,7 +211,6 @@ target_link_libraries(winlator
         libzstd_static
         liblzma
         curl::curl
-        m
 )
 
 # Fake evdev input shim used by the pb_controller_fix controller path.

@@ -26,7 +26,7 @@
 #endif
 #include <vulkan/vulkan.h>
 
-enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1 };
+enum { VKP_FG_ENGINE_LSFG = 0, VKP_FG_ENGINE_DIS = 1, VKP_FG_ENGINE_SNAPFRAME = 2 };
 /* Hard ceiling on generated frames per source frame, as on X11: DIS goes to 8x, LSFG to 4x. */
 #define VKP_FG_MAX_GENERATIONS 7
 #define VKP_FG_LSFG_MAX_GENERATIONS 3
@@ -39,17 +39,28 @@ void vkp_framegen_set_armed(int armed, int multiplier);
 void vkp_framegen_set_lsfg_cache_path(const char *path);
 /* Flow scale 0.25..1.0 and the panel's real refresh rate (the pacer never generates above it). */
 void vkp_framegen_set_tuning(float flow_scale, float refresh_hz);
+/* Bounded acquire budget: one display refresh, clamped to 4..16 ms. */
+uint64_t vkp_framegen_acquire_timeout_ns(int generated_slot);
 /* Flow resolution in pixels of the frame's short side (DIS only) and the target output rate
  * both engines pace to (0 = follow the panel). */
 void vkp_framegen_set_engine_tuning(int flow_min_side, int target_fps);
+/* SnapFrame candidate reconstruction: 0=AI automatic, 1=off, 2=on. */
+void vkp_framegen_set_candidate_reconstruction(int mode);
+/* Snap AI policy: 0=Auto, 1=Off, 2=On. */
+void vkp_framegen_set_ai_mode(int mode);
+/* SnapFrame flow viewer controls; mode 0=Motion, 1=Confidence, 2=Consistency. */
+void vkp_framegen_set_debug_flow(int enabled);
+void vkp_framegen_set_debug_mode(int mode);
 /* Same codes as VulkanRenderer.getFrameGenProblem(): -1 not known yet (device not up), 0 fine,
  * 1 the driver lacks what the selected engine needs (vkp_framegen_caps_reason says what),
  * 2 the engine failed to start / build its chain. */
 int vkp_framegen_problem(void);
+int vkp_framegen_engine_available(int kind);
 const char *vkp_framegen_caps_reason(void);
-/* Same shape as VulkanRenderer.getFrameGenStats(): {generations trusted, generations planned,
- * real (source) fps, presented fps incl. generated frames, thermal (-1 = none), ms per
- * generated frame (-1 = unknown)}. */
+/* Same shape as VulkanRenderer.getFrameGenStats(): {generated frames successfully presented
+ * for the latest source frame, generations planned for the latest source frame, real (source)
+ * fps, presented fps incl. generated frames, thermal (-1 = none), ms per generated frame
+ * (-1 = unknown)}. The first two values must never be copied from the same planned counter. */
 void vkp_framegen_stats(float out[6]);
 /* Generated frames presented since the last call (compositor.c, the 10 s stats line). */
 unsigned vkp_framegen_stats_take(void);
@@ -75,6 +86,10 @@ int vkp_framegen_active(void);
 /* Extra swapchain images wanted so every present of one scene frame is queued without waiting
  * for a vblank: multiplier - 1 while armed, 0 otherwise. A change means "rebuild the swapchain". */
 int vkp_framegen_extra_images(void);
+uint32_t vkp_framegen_requested_multiplier(void);
+uint32_t vkp_framegen_effective_multiplier(void);
+void vkp_framegen_set_wsi_feedback(float delivery_ratio,float acquire_pressure,
+                                   float submit_pressure,float present_pressure);
 /* THE hook. Called once per composed scene frame, after the effects hook, with the scene image
  * (GENERAL, w x h, fmt, TRANSFER_SRC|SAMPLED). Records the engine's chain into `cmd` and
  * returns how many generated frames (0..VKP_FG_MAX_GENERATIONS) it produced, their images in
@@ -83,11 +98,15 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
                      VkFormat fmt, VkImage gens[VKP_FG_MAX_GENERATIONS]);
 /* After the presents of one scene frame: how many generated frames actually reached the
  * swapchain (rate tracking + the stats counters). */
-void vkp_framegen_presented(int generated);
+void vkp_framegen_presented(int generated, int source_presented);
 /* 1 when vkp_framegen_run can be fed `fmt` (the 8-bit scene always; FP16 for HDR frames where the
  * device can generate in it and the engine has not refused it this session). A chain that fails to
  * build in a deeper format is not an engine failure: the engine restarts and the format is refused,
  * so the caller goes back to 8 bits. */
 int vkp_framegen_format_ok(VkFormat fmt);
+/* SnapFrame flow viewer is rendered into the current scene before the output blit. */
+int vkp_framegen_debug_flow_active(void);
+void vkp_framegen_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
+                             uint32_t width, uint32_t height);
 
 #endif
