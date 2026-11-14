@@ -22,6 +22,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.os.Environment;
 import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -125,6 +126,8 @@ import com.winlator.cmod.runtime.display.renderer.effects.NTSCEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.PixelateEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ScanlinesEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.SGSRUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.ANRSpatialUpscaler;
+import com.winlator.cmod.runtime.display.renderer.effects.FSRUpscaler;
 import com.winlator.cmod.runtime.display.renderer.effects.SharpenEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.ToonEffect;
 import com.winlator.cmod.runtime.display.renderer.effects.VividEffect;
@@ -503,6 +506,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private String frameGenCachePath = null;
     private float frameGenRefreshRate = 0f;
     private boolean disFrameGenEnabled = false;
+    private boolean snapFrameGenEnabled = false;
     private SystemFrameGenMonitor systemFrameGenMonitor = null;
     private boolean systemFrameGenSupported = false;
     private boolean systemFrameGenHudEnabled = false;
@@ -530,10 +534,23 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     private int disFrameGenScale = DIS_FRAME_GEN_SCALE_DEFAULT;
     private int disFrameGenTargetFps = 0;
     private boolean disFrameGenDebugFlow = false;
+    private int snapFrameDebugMode = 0;
+    private int snapFrameCandidateMode = WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO;
+    private int snapFrameAiMode = 0;
+    private boolean snapFrameLogEnabled = false;
+    private Process snapFrameLogcatProcess;
+    private java.io.File snapFrameLogFile;
     private boolean sgsrEnabled = false;
     private boolean sgsrRuntimeEnabled = false;
     private int sgsrUpscaleMode = 1;
     private int sgsrSharpness = 100;
+    private boolean anrEnabled = false;
+    private int anrRenderScale = 90;
+    private int anrSharpness = 75;
+    private int anrQuality = 4;
+    private boolean fsrEnabled = false;
+    private int fsrRenderScale = 67;
+    private int fsrSharpness = 25;
     private String sgsrBaseScreenSize = Container.DEFAULT_SCREEN_SIZE;
     private boolean vividEnabled = false;
     private int vividStrength = 100;
@@ -883,6 +900,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         String containerMultiplier = container != null ? container.getExtra("frameGenMultiplier", "2") : "2";
         String containerTargetRate = container != null ? container.getExtra("frameGenTargetRate", "0") : "0";
         String containerFlowScale = container != null ? container.getExtra("frameGenFlowScale", "70") : "70";
+        String containerSnapFrame = container != null ? container.getExtra("snapFrameGen", "0") : "0";
+        String containerCandidateMode = container != null ? container.getExtra("snapFrameCandidateMode", "0") : "0";
+        String containerAiMode = container != null ? container.getExtra("snapFrameAiMode", "0") : "0";
 
         frameGenEnabled = "1".equals(getFrameGenSetting("frameGen", containerValue));
         frameGenMultiplier = clampFrameGenMultiplier(
@@ -891,6 +911,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 parseSettingInt(getFrameGenSetting("frameGenTargetRate", containerTargetRate), 0));
         frameGenFlowScale = clampFrameGenFlowScale(
                 parseSettingInt(getFrameGenSetting("frameGenFlowScale", containerFlowScale), 70));
+        snapFrameGenEnabled = "1".equals(getFrameGenSetting("snapFrameGen", containerSnapFrame));
+        snapFrameLogEnabled = "1".equals(getFrameGenSetting("snapFrameLog", container != null ? container.getExtra("snapFrameLog", "0") : "0"));
+        if (snapFrameLogEnabled) startSnapFrameDiagnosticLog();
+        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON,
+                        parseSettingInt(getFrameGenSetting("snapFrameCandidateMode", containerCandidateMode), 0)));
+        snapFrameAiMode = Math.max(0, Math.min(2, parseSettingInt(getFrameGenSetting("snapFrameAiMode", containerAiMode), 0)));
+        if (snapFrameGenEnabled) { frameGenEnabled = false; disFrameGenEnabled = false; }
 
         if (frameGenEnabled) {
             int result = com.winlator.cmod.feature.library.LosslessAutoImport.INSTANCE.sync(this).getResult();
@@ -923,6 +951,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         }
 
         applyFrameGeneration(renderer);
+        applySnapFrameGeneration(renderer);
+        if (waylandMode) {
+            if (snapFrameGenEnabled) frameGenRefreshRate = applyFrameGenerationDisplayMode();
+            applyWaylandFrameGeneration();
+        }
     }
 
     private void applyFrameGeneration(VulkanRenderer renderer) {
@@ -950,8 +983,17 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
      * X11 renderer is given; the setters are stores its thread picks up on its next frame. */
     private void applyWaylandFrameGeneration() {
         if (!waylandMode) return;
+        WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+        WaylandCompositor.nativeSetSnapFrameAiMode(snapFrameAiMode);
+        WaylandCompositor.nativeSetSnapFrameDebugFlow(disFrameGenDebugFlow);
+        WaylandCompositor.nativeSetSnapFrameDebugMode(snapFrameDebugMode);
 
-        if (frameGenEnabled && frameGenCachePath != null) {
+        if (snapFrameGenEnabled) {
+            WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_SNAPFRAME);
+            WaylandCompositor.nativeSetEngineTuning(0, frameGenTargetRate);
+            WaylandCompositor.nativeSetFrameGenTuning(frameGenFlowScale / 100f, frameGenRefreshRate);
+            WaylandCompositor.nativeSetFrameGenArmed(true, frameGenMultiplier);
+        } else if (frameGenEnabled && frameGenCachePath != null) {
             WaylandCompositor.nativeSetLsfgCachePath(frameGenCachePath);
             WaylandCompositor.nativeSetFrameGenEngine(WaylandCompositor.ENGINE_LSFG);
             WaylandCompositor.nativeSetEngineTuning(disFrameGenScale, frameGenTargetRate);
@@ -969,12 +1011,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     private void syncFrameGenerationHud() {
         applyWaylandFrameGeneration();
-        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled;
+        boolean ourFrameGen = (frameGenEnabled && frameGenCachePath != null) || disFrameGenEnabled || snapFrameGenEnabled;
         boolean systemFrameGen = !ourFrameGen && systemFrameGenHudEnabled;
         boolean active = ourFrameGen || systemFrameGen;
 
         FrameRating.OutputFrameSource source;
-        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled) {
+        if (ourFrameGen || frameGenEnabled || disFrameGenEnabled || snapFrameGenEnabled) {
             source = waylandMode ? waylandFrameGenOutputSource : frameGenOutputSource;
         } else if (systemFrameGen) {
             source = ensureSystemFrameGenMonitor();
@@ -1248,7 +1290,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         applyFrameGeneration(renderer);
         applyDisFrameGeneration(renderer);
-        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled) {
+        applySnapFrameGeneration(renderer);
+        if (waylandMode) {
+            if (snapFrameGenEnabled) frameGenRefreshRate = applyFrameGenerationDisplayMode();
+            applyWaylandFrameGeneration();
+        }
+        if ((!frameGenEnabled || frameGenCachePath == null) && !disFrameGenEnabled && !snapFrameGenEnabled) {
             applyPreferredRefreshRate();
         }
         saveFrameGenerationSettings();
@@ -1256,22 +1303,93 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         renderDrawerMenu();
     }
 
+    private void applySnapFrameGeneration(VulkanRenderer renderer) {
+        if (renderer == null || waylandMode) return;
+        renderer.setSnapFrameGenerationEnabled(snapFrameGenEnabled);
+        renderer.setSnapFrameDebugFlow(disFrameGenDebugFlow);
+        renderer.setSnapFrameDebugMode(snapFrameDebugMode);
+        renderer.setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+        renderer.setSnapFrameAiMode(snapFrameAiMode);
+        if (snapFrameGenEnabled) {
+            frameGenRefreshRate = applyFrameGenerationDisplayMode();
+            renderer.setFrameGenerationMode(frameGenMultiplier, frameGenTargetRate, frameGenFlowScale);
+            renderer.setFrameGenerationRefreshRate(frameGenRefreshRate);
+            Log.i("XServerDisplayActivity", "SnapFrame X11 requested multiplier=" + frameGenMultiplier
+                    + " flowScale=" + frameGenFlowScale + " available="
+                    + renderer.isSnapFrameGenerationAvailable());
+        }
+    }
+
+    private void startSnapFrameDiagnosticLog() {
+        if (snapFrameLogcatProcess != null && snapFrameLogcatProcess.isAlive()) return;
+        try {
+            java.io.File directory = new java.io.File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    "winnative");
+            if (!directory.exists() && !directory.mkdirs()) {
+                Log.e("SnapFrameLog", "Cannot create log directory: " + directory);
+                snapFrameLogEnabled = false;
+                return;
+            }
+            snapFrameLogFile = new java.io.File(directory, "snapframe.log");
+            /* Verify scoped-storage / all-files access before starting logcat. */
+            java.io.File probe = new java.io.File(directory, ".snapframe-write-test");
+            try (java.io.FileOutputStream ignored = new java.io.FileOutputStream(probe, false)) {
+                ignored.write(0);
+            } finally {
+                probe.delete();
+            }
+            // Do not clear the device log buffer: capture only our tags from this point onward.
+            snapFrameLogcatProcess = new ProcessBuilder(
+                    "logcat", "-v", "threadtime", "-f", snapFrameLogFile.getAbsolutePath(),
+                    "SnapFrame:I", "VkRenderer:I", "SnapFrameLog:I", "*:S")
+                    .redirectErrorStream(true).start();
+            Log.i("SnapFrameLog", "Diagnostic log enabled: " + snapFrameLogFile.getAbsolutePath());
+        } catch (Exception e) {
+            Log.e("SnapFrameLog", "Cannot start logcat capture", e);
+            snapFrameLogEnabled = false;
+            snapFrameLogcatProcess = null;
+        }
+    }
+
+    private void stopSnapFrameDiagnosticLog() {
+        Process process = snapFrameLogcatProcess;
+        snapFrameLogcatProcess = null;
+        if (process != null) {
+            process.destroy();
+            try { process.waitFor(2, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+        Log.i("SnapFrameLog", "Diagnostic log disabled");
+    }
+
     private void saveFrameGenerationSettings() {
         if (shortcut != null) {
             boolean overridden = saveFrameGenOverride("frameGen", frameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("snapFrameGen", snapFrameGenEnabled ? "1" : "0", "0");
+            overridden |= saveFrameGenOverride("frameGenEngine", snapFrameGenEnabled ? "1" : "0", "0");
             overridden |= saveFrameGenOverride("frameGenMultiplier",
                     String.valueOf(frameGenMultiplier), "2");
             overridden |= saveFrameGenOverride("frameGenTargetRate",
                     String.valueOf(frameGenTargetRate), "0");
             overridden |= saveFrameGenOverride("frameGenFlowScale",
                     String.valueOf(frameGenFlowScale), "70");
+            overridden |= saveFrameGenOverride("snapFrameCandidateMode",
+                    String.valueOf(snapFrameCandidateMode), "0");
+            overridden |= saveFrameGenOverride("snapFrameAiMode", String.valueOf(snapFrameAiMode), "0");
+            overridden |= saveFrameGenOverride("snapFrameLog", snapFrameLogEnabled ? "1" : "0", "0");
             if (overridden) shortcut.putExtra("use_container_defaults", "0");
             shortcut.saveData();
         } else if (container != null) {
             container.putExtra("frameGen", frameGenEnabled ? "1" : "0");
+            container.putExtra("snapFrameGen", snapFrameGenEnabled ? "1" : "0");
+            container.putExtra("frameGenEngine", snapFrameGenEnabled ? "1" : "0");
             container.putExtra("frameGenMultiplier", String.valueOf(frameGenMultiplier));
             container.putExtra("frameGenTargetRate", String.valueOf(frameGenTargetRate));
             container.putExtra("frameGenFlowScale", String.valueOf(frameGenFlowScale));
+            container.putExtra("snapFrameCandidateMode", String.valueOf(snapFrameCandidateMode));
+            container.putExtra("snapFrameAiMode", String.valueOf(snapFrameAiMode));
+            container.putExtra("snapFrameLog", snapFrameLogEnabled ? "1" : "0");
             container.saveData();
         }
     }
@@ -1608,6 +1726,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 applyWaylandFrameGeneration();
                 return;
             }
+            if (snapFrameGenEnabled) {
+                float refreshRate = applyFrameGenerationDisplayMode();
+                VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
+                frameGenRefreshRate = refreshRate;
+                if (renderer != null) renderer.setFrameGenerationRefreshRate(refreshRate);
+                applyWaylandFrameGeneration();
+                return;
+            }
             if (disFrameGenEnabled) {
                 float refreshRate = applyDisFrameGenerationDisplayMode();
                 VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
@@ -1703,7 +1829,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         if (waylandMode) WaylandCompositor.nativeSetOutputRefreshRate(active);
 
         boolean lsfg = frameGenEnabled && frameGenCachePath != null;
-        if (!lsfg && !disFrameGenEnabled) return;
+        if (!lsfg && !disFrameGenEnabled && !snapFrameGenEnabled) return;
         if (Math.abs(active - frameGenRefreshRate) < 0.5f) return;
 
         Log.i("XServerDisplayActivity", "Frame generation panel changed: "
@@ -2572,8 +2698,21 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
             screenSize = sanitizedScreenSize;
         }
         sgsrBaseScreenSize = screenSize;
+        anrEnabled = preferences.getBoolean("anr_enabled", false);
+        anrRenderScale = Math.max(25, Math.min(150, preferences.getInt("anr_render_scale", 90)));
+        anrSharpness = Math.max(0, Math.min(300, preferences.getInt("anr_sharpness", 75)));
+        anrQuality = Math.max(0, Math.min(6, preferences.getInt("anr_quality", 4)));
+        fsrEnabled = preferences.getBoolean("fsr_x11_enabled", false);
+        fsrRenderScale = Math.max(25, Math.min(150, preferences.getInt("fsr_render_scale", 67)));
+        fsrSharpness = Math.max(0, Math.min(100, preferences.getInt("fsr_sharpness", 25)));
+        if (fsrEnabled) { anrEnabled = false; sgsrEnabled = false; sgsrRuntimeEnabled = false; }
         String effectiveScreenSize =
                 SGSRResolutionUtils.applyRenderScale(screenSize, sgsrEnabled, sgsrUpscaleMode);
+        if (waylandMode && fsrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, fsrRenderScale / 100.0f);
+        } else if (waylandMode && anrEnabled) {
+            effectiveScreenSize = SGSRResolutionUtils.applyRenderScale(screenSize, anrRenderScale / 100.0f);
+        }
         if (!effectiveScreenSize.equals(screenSize)) {
             Log.i("XServerDisplayActivity", "SGSR render scale active: container='" + screenSize +
                     "' effective='" + effectiveScreenSize + "' mode=" + sgsrUpscaleMode);
@@ -5142,6 +5281,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
 
     @Override
     protected void onDestroy() {
+        stopSnapFrameDiagnosticLog();
         activityDestroyed.set(true);
         detachWaylandSession();
         stopSteamControllerSupport();
@@ -5446,6 +5586,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 screenEffectsCardExpanded,
                 sgsrEnabled,
                 sgsrSharpness,
+                fsrEnabled,
+                fsrRenderScale,
+                fsrSharpness,
+                anrEnabled,
+                anrRenderScale,
+                anrSharpness,
+                anrQuality,
                 vividEnabled,
                 vividStrength,
                 colorProfile,
@@ -5506,14 +5653,27 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 frameGenMultiplier,
                 frameGenTargetRate,
                 frameGenFlowScale,
-                getString(R.string.session_drawer_frame_generation));
+                getString(R.string.session_drawer_frame_generation),
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
+                snapFrameGenEnabled);
 
         state = XServerDrawerMenuKt.withDisFrameGenState(
                 state,
                 disFrameGenEnabled,
                 disFrameGenScale,
                 disFrameGenTargetFps,
-                disFrameGenDebugFlow);
+                disFrameGenDebugFlow,
+                snapFrameDebugMode,
+                snapFrameCandidateMode,
+                waylandMode
+                        ? WaylandCompositor.nativeFrameGenEngineAvailable(WaylandCompositor.ENGINE_SNAPFRAME)
+                        : xServerView != null && xServerView.getRenderer() != null
+                                && xServerView.getRenderer().isSnapFrameGenerationAvailable(),
+                snapFrameLogEnabled,
+                snapFrameAiMode);
 
         // Always-present "Output" tab (live controls while swapped, otherwise a Cast entry point).
         if (externalDisplayController != null) {
@@ -5899,6 +6059,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                         if (lsfg && frameGenCachePath == null) return;
                         frameGenEnabled = lsfg;
                         disFrameGenEnabled = engine == FrameGenEngine.DIS;
+                        snapFrameGenEnabled = engine == FrameGenEngine.SNAPFRAME;
                         applyFrameGenerationLive();
                     }
 
@@ -5940,15 +6101,71 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     @Override
                     public void onDisDebugFlowChanged(boolean enabled) {
                         disFrameGenDebugFlow = enabled;
-                        if (xServerView != null && xServerView.getRenderer() != null) {
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameDebugFlow(enabled);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
                             xServerView.getRenderer().setDisDebugFlow(enabled);
+                            xServerView.getRenderer().setSnapFrameDebugFlow(enabled);
                         }
+                        applyFrameGenerationLive();
+                    }
+
+                    @Override
+                    public void onSnapFrameDebugModeChanged(int mode) {
+                        snapFrameDebugMode = Math.max(0, Math.min(2, mode));
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameDebugMode(snapFrameDebugMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameDebugMode(snapFrameDebugMode);
+                        }
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameCandidateModeChanged(int mode) {
+                        snapFrameCandidateMode = Math.max(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_AUTO,
+                                Math.min(WaylandCompositor.SNAPFRAME_RECONSTRUCTION_ON, mode));
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameCandidateReconstruction(snapFrameCandidateMode);
+                        }
+                        saveFrameGenerationSettings();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameAiModeChanged(int mode) {
+                        snapFrameAiMode = Math.max(0, Math.min(2, mode));
+                        if (waylandMode) {
+                            WaylandCompositor.nativeSetSnapFrameAiMode(snapFrameAiMode);
+                        } else if (xServerView != null && xServerView.getRenderer() != null) {
+                            xServerView.getRenderer().setSnapFrameAiMode(snapFrameAiMode);
+                        }
+                        saveFrameGenerationSettings();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSnapFrameLogChanged(boolean enabled) {
+                        snapFrameLogEnabled = enabled;
+                        if (enabled) startSnapFrameDiagnosticLog();
+                        else stopSnapFrameDiagnosticLog();
+                        saveFrameGenerationSettings();
                         renderDrawerMenu();
                     }
 
 
                     @Override
                     public void onSGSREnabledChanged(boolean enabled) {
+                        if (enabled && anrEnabled) {
+                            anrEnabled = false;
+                            preferences.edit().putBoolean("anr_enabled", false).apply();
+                        }
+                        if (enabled && fsrEnabled) {
+                            fsrEnabled = false;
+                            preferences.edit().putBoolean("fsr_x11_enabled", false).apply();
+                        }
                         boolean wasEnabled = sgsrEnabled;
                         boolean wasRuntimeEnabled = sgsrRuntimeEnabled;
                         sgsrEnabled = enabled;
@@ -5972,6 +6189,78 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                     public void onSGSRSharpnessChanged(int sharpness) {
                         sgsrSharpness = Math.max(0, Math.min(100, sharpness));
                         saveSGSRShortcutSettings();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSREnabledChanged(boolean enabled) {
+                        fsrEnabled = enabled;
+                        if (enabled) {
+                            anrEnabled = false;
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                            preferences.edit().putBoolean("anr_enabled", false).apply();
+                        }
+                        preferences.edit().putBoolean("fsr_x11_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRRenderScaleChanged(int scale) {
+                        fsrRenderScale = Math.max(25, Math.min(150, scale));
+                        preferences.edit().putInt("fsr_render_scale", fsrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onFSRSharpnessChanged(int sharpness) {
+                        fsrSharpness = Math.max(0, Math.min(100, sharpness));
+                        preferences.edit().putInt("fsr_sharpness", fsrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANREnabledChanged(boolean enabled) {
+                        anrEnabled = enabled;
+                        if (enabled && fsrEnabled) {
+                            fsrEnabled = false;
+                            preferences.edit().putBoolean("fsr_x11_enabled", false).apply();
+                        }
+                        if (enabled && sgsrEnabled) {
+                            sgsrEnabled = false;
+                            sgsrRuntimeEnabled = false;
+                            saveSGSRShortcutSettings();
+                        }
+                        preferences.edit().putBoolean("anr_enabled", enabled).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRRenderScaleChanged(int scale) {
+                        anrRenderScale = Math.max(25, Math.min(150, scale));
+                        preferences.edit().putInt("anr_render_scale", anrRenderScale).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRSharpnessChanged(int sharpness) {
+                        anrSharpness = Math.max(0, Math.min(300, sharpness));
+                        preferences.edit().putInt("anr_sharpness", anrSharpness).apply();
+                        applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onANRQualityChanged(int quality) {
+                        anrQuality = Math.max(0, Math.min(6, quality));
+                        preferences.edit().putInt("anr_quality", anrQuality).apply();
                         applyScreenEffects();
                         renderDrawerMenu();
                     }
@@ -6774,13 +7063,78 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
     }
 
     private void applyScreenEffects() {
+        // Wayland has its own Vulkan post chain; mode 9 runs the same ANR Spatial shader.
+        if (waylandMode) {
+            try {
+                // Keep the Wayland compositor's Vulkan post-chain in sync with the same live
+                // settings used by X11. Previously this branch returned after setting only the
+                // upscaler, silently dropping colour, sharpening and picture-profile controls.
+                int selectedUpscaler = anrEnabled ? 9 : (fsrEnabled ? 4 : (sgsrEnabled ? 3 : 0));
+                WaylandCompositor.nativeSetUpscaler(selectedUpscaler);
+                WaylandCompositor.nativeSetUpscaleSharpness(fsrEnabled ? fsrSharpness : (anrEnabled ? anrSharpness : sgsrSharpness));
+                WaylandCompositor.nativeSetANRQuality(anrQuality);
+
+                float effectiveSaturation = saturation / 100.0f;
+                if (vividEnabled) {
+                    effectiveSaturation = Math.min(2.0f, effectiveSaturation * (1.0f + Math.max(0, vividStrength) / 100.0f));
+                }
+                boolean profileHdr = colorProfile == 1;
+                boolean profileCrt = colorProfile == 3;
+                boolean profileToon = colorProfile == 4;
+                boolean profileNtsc = colorProfile == 5 || colorProfile == 6;
+
+                // Native chain supports colour adjustment, CAS, HDR, Toon, CRT and NTSC.
+                // Pixelate/colour-blind/temperature/tint remain X11-only until matching
+                // Wayland shaders are implemented; do not pretend those effects are active.
+                WaylandCompositor.nativeSetScreenEffects(
+                        brightness, contrast, gammaPercent / 100.0f, effectiveSaturation,
+                        false, profileToon, profileCrt || scanlinesEnabled, profileNtsc);
+                WaylandCompositor.nativeSetCas(sharpenEnabled, sharpenStrength);
+                WaylandCompositor.nativeSetHdr(profileHdr);
+                WaylandCompositor.nativeSetLookName(
+                        colorProfile == 0 ? "Off" :
+                        colorProfile == 1 ? "HDR" :
+                        colorProfile == 2 ? "Natural (not available on Wayland)" :
+                        colorProfile == 3 ? "CRT" :
+                        colorProfile == 4 ? "Toon" :
+                        colorProfile == 5 ? "NTSC" : "NTSC 2");
+                if (pixelateEnabled || colorBlind != 0 || temperature != 0 || tint != 0) {
+                    Log.w("XServerDisplayActivity",
+                            "Wayland post-chain does not implement pixelate, colour-blind, temperature or tint effects yet");
+                }
+            } catch (Throwable t) {
+                Log.w("XServerDisplayActivity", "Failed to apply Wayland screen effects", t);
+            }
+            return;
+        }
         VulkanRenderer renderer = xServerView != null ? xServerView.getRenderer() : null;
         if (renderer == null) return;
         EffectComposer composer = renderer.getEffectComposer();
         if (composer == null) return;
 
+        FSRUpscaler fsr = composer.getEffect(FSRUpscaler.class);
+        if (fsrEnabled && !anrEnabled && !sgsrRuntimeEnabled) {
+            if (fsr == null) fsr = new FSRUpscaler();
+            fsr.setRenderScale(fsrRenderScale / 100.0f);
+            fsr.setSharpness(fsrSharpness / 100.0f);
+            composer.addEffectFirst(fsr);
+        } else if (fsr != null) {
+            composer.removeEffect(fsr);
+        }
+
+        ANRSpatialUpscaler anr = composer.getEffect(ANRSpatialUpscaler.class);
+        if (anrEnabled) {
+            if (anr == null) anr = new ANRSpatialUpscaler();
+            anr.setRenderScale(anrRenderScale / 100.0f);
+            anr.setSharpness(anrSharpness / 100.0f);
+            anr.setQuality(anrQuality);
+            composer.addEffectFirst(anr);
+        } else if (anr != null) {
+            composer.removeEffect(anr);
+        }
+
         SGSRUpscaler sgsr = composer.getEffect(SGSRUpscaler.class);
-        if (sgsrRuntimeEnabled) {
+        if (sgsrRuntimeEnabled && !anrEnabled) {
             if (sgsr == null) {
                 sgsr = new SGSRUpscaler();
             }

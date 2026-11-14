@@ -1,0 +1,84 @@
+#version 450
+
+// Midpoint reconstruction from two real color frames and bidirectional flow.
+// Flow vectors are measured in half-resolution luma texels. Motion fields are
+// sampled with nearest-cell semantics to avoid mixing foreground/background
+// vectors across moving silhouettes.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+layout(push_constant) uniform PC { float phase; float flowToFullPixels; uint flowWidth; uint flowHeight; } pc;
+layout(set = 0, binding = 0) uniform sampler2D previousColor;
+layout(set = 0, binding = 1) uniform sampler2D currentColor;
+layout(set = 0, binding = 2) uniform sampler2D currentToPrevious;
+layout(set = 0, binding = 3) uniform sampler2D previousToCurrent;
+layout(set = 0, binding = 4) uniform sampler2D consistencyMask;
+layout(set = 0, binding = 5, rgba16f) writeonly uniform image2D midpointOutput;
+
+ivec2 nearestFlowCell(vec2 uv, ivec2 flowExtent) {
+    return clamp(ivec2(floor(uv * vec2(flowExtent))),
+                 ivec2(0), flowExtent - ivec2(1));
+}
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 extent = imageSize(midpointOutput);
+    if (any(greaterThanEqual(p, extent))) return;
+
+    vec2 uv = (vec2(p) + vec2(0.5)) / vec2(extent);
+    ivec2 flowExtent = ivec2(pc.flowWidth, pc.flowHeight);
+    ivec2 flowCell = nearestFlowCell(uv, flowExtent);
+
+    // Keep each block estimate intact; interpolating vectors across a motion
+    // boundary can bend static geometry beside moving objects.
+    vec4 fwd = texelFetch(currentToPrevious, flowCell, 0);
+    vec4 bwd = texelFetch(previousToCurrent, flowCell, 0);
+    float consistency = texelFetch(consistencyMask, flowCell, 0).r;
+
+    // Alpha stores normalized 3x3 SAD. A distinct best match alone is not
+    // sufficient evidence on animated content, occlusions or repeated texture.
+    float meanMatchCost = 0.5 * (fwd.w + bwd.w);
+    float photometricConfidence =
+        1.0 - smoothstep(0.035, 0.10, meanMatchCost);
+    float confidence = clamp(min(fwd.z, bwd.z)
+        * consistency * photometricConfidence, 0.0, 1.0);
+
+    // Flow units are half-resolution luma texels: one unit equals two
+    // full-resolution color pixels. Offset each source toward the midpoint.
+    vec2 pixelToUv = pc.flowToFullPixels / vec2(extent);
+    float t = clamp(pc.phase, 0.0, 1.0);
+    vec2 previousUv = clamp(uv + fwd.xy * pixelToUv * (1.0 - t),
+                            vec2(0.0), vec2(1.0));
+    vec2 currentUv = clamp(uv + bwd.xy * pixelToUv * t,
+                           vec2(0.0), vec2(1.0));
+
+    vec4 prev = texture(previousColor, previousUv);
+    vec4 curr = texture(currentColor, currentUv);
+    vec4 warped = mix(prev, curr, t);
+
+    // Occlusion/disocclusion guard: even a geometrically plausible flow pair
+    // can cross a newly exposed silhouette. Large disagreement between the
+    // two independently warped colors is evidence that they do not describe
+    // the same visible surface. Do not average those colors: that is the
+    // characteristic double-edge/ghosting failure mode.
+    float warpedLumaPrev = dot(prev.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float warpedLumaCurr = dot(curr.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float warpedDisagreement = abs(warpedLumaPrev - warpedLumaCurr);
+    float occlusionAgreement = 1.0 - smoothstep(0.035, 0.14, warpedDisagreement);
+
+    // If the two projections disagree, select the better-supported endpoint
+    // instead of blending both surfaces. Confidence includes the FB/visibility
+    // mask, so a disoccluded or out-of-bounds projection loses this choice.
+    float previousSupport = clamp(fwd.z * consistency, 0.0, 1.0);
+    float currentSupport = clamp(bwd.z * consistency, 0.0, 1.0);
+    float chooseCurrent = currentSupport > previousSupport ? 1.0 :
+                          (previousSupport > currentSupport ? 0.0 : step(0.5, t));
+    vec4 occlusionFallback = mix(prev, curr, chooseCurrent);
+    vec4 fallback = texture(currentColor, uv);
+
+    // Normal interpolation is allowed only where flow and appearance agree.
+    // At an occlusion boundary use a single warped endpoint; where flow itself
+    // is unreliable use the unwarped current frame as the sharp spatial fallback.
+    float motionWeight = smoothstep(0.18, 0.70, confidence);
+    float safeBlend = motionWeight * occlusionAgreement;
+    vec4 guardedWarp = mix(occlusionFallback, warped, occlusionAgreement);
+    imageStore(midpointOutput, p, mix(fallback, guardedWarp, max(safeBlend, motionWeight * 0.35)));
+}

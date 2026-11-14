@@ -456,6 +456,7 @@ class GameSettingsStateHolder {
     val sgsrSharpness = mutableIntStateOf(100)
 
     val frameGenEnabled = mutableStateOf(false)
+    val frameGenEngine = mutableIntStateOf(0) // 0 = LSFG, 1 = SnapFrame (Wayland/Turnip)
     val frameGenMultiplier = mutableIntStateOf(2)
 
     val netDriverEntries = mutableStateOf<List<String>>(emptyList())
@@ -2052,7 +2053,8 @@ private fun displayServerStatus(context: Context, wineIdentifier: String): Displ
 private fun FrameGenerationCard(state: GameSettingsStateHolder) {
     val context = LocalContext.current
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(state.frameGenEngine.intValue) {
+        if (state.frameGenEngine.intValue != 0) return@LaunchedEffect
         if (state.frameGenShaderState.intValue != FRAMEGEN_SHADERS_CHECKING) return@LaunchedEffect
         state.frameGenShaderState.intValue = FRAMEGEN_SHADERS_IMPORTING
         val outcome = withContext(Dispatchers.IO) { LosslessAutoImport.sync(context) }
@@ -2095,7 +2097,10 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
     }
 
     val shaders = state.frameGenShaderState.intValue
-    val ready = shaders == FRAMEGEN_SHADERS_READY || shaders == FRAMEGEN_SHADERS_UPDATED
+    val snapFrameSelected = state.frameGenEngine.intValue == 1
+    val snapFrameSupported = state.gamescopeContainer.value || state.displayServerWaylandAvailable.value
+    val lsfgReady = shaders == FRAMEGEN_SHADERS_READY || shaders == FRAMEGEN_SHADERS_UPDATED
+    val ready = if (snapFrameSelected) snapFrameSupported else lsfgReady
     val busy = shaders == FRAMEGEN_SHADERS_IMPORTING || shaders == FRAMEGEN_SHADERS_CHECKING
     val enabled = ready && state.frameGenEnabled.value
     val targetRate = state.frameGenTargetRate.intValue
@@ -2119,6 +2124,18 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
 
         Spacer(Modifier.height(SettingItemGap))
 
+        SettingDropdown(
+            label = stringResource(R.string.settings_frame_generation_engine),
+            entries = listOf(
+                stringResource(R.string.settings_frame_generation_engine_lsfg),
+                stringResource(R.string.settings_frame_generation_engine_snapframe),
+            ),
+            selectedIndex = state.frameGenEngine.intValue.coerceIn(0, 1),
+            onSelected = { state.frameGenEngine.intValue = it },
+        )
+
+        Spacer(Modifier.height(SettingItemGap))
+
         SettingSwitch(
             label = stringResource(R.string.session_drawer_frame_generation_enable),
             checked = enabled,
@@ -2126,7 +2143,15 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
             onCheckedChange = { state.frameGenEnabled.value = it },
         )
 
-
+        if (snapFrameSelected) {
+            Text(
+                text = if (snapFrameSupported) stringResource(R.string.settings_frame_generation_snapframe_note)
+                       else stringResource(R.string.settings_frame_generation_snapframe_unavailable),
+                color = TextSecondary,
+                fontSize = SettingLabelSize,
+                lineHeight = SettingLabelSize * 1.4f,
+            )
+        } else {
         Text(
             text =
                 when (shaders) {
@@ -2190,11 +2215,12 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
                 }
             )
         }
+        }
 
         if (enabled) {
             Spacer(Modifier.height(SettingItemGap))
 
-            SettingPairRow {
+            if (!snapFrameSelected) SettingPairRow {
                 Box(Modifier.weight(1f)) {
                     SettingDropdown(
                         label = stringResource(R.string.session_drawer_frame_generation_target),
@@ -2232,7 +2258,17 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
                 }
             }
 
-            Spacer(Modifier.height(SettingItemGap))
+            if (snapFrameSelected) {
+                SettingDropdown(
+                    label = stringResource(R.string.session_drawer_frame_generation_multiplier),
+                    entries = FrameGenMultiplierOptions.map { multiplier ->
+                        stringResource(R.string.session_drawer_frame_generation_multiplier_value, multiplier)
+                    },
+                    selectedIndex = FrameGenMultiplierOptions.indexOf(state.frameGenMultiplier.intValue).coerceAtLeast(0),
+                    onSelected = { state.frameGenMultiplier.intValue = FrameGenMultiplierOptions[it] },
+                )
+                Spacer(Modifier.height(SettingItemGap))
+            }
 
             FrameGenPresetSlider(
                 selected = FrameGenPreset.fromFlowScale(state.frameGenFlowScale.intValue),
@@ -2242,7 +2278,8 @@ private fun FrameGenerationCard(state: GameSettingsStateHolder) {
             Spacer(Modifier.height(SettingItemGap))
 
             Text(
-                text = stringResource(R.string.session_drawer_frame_generation_note),
+                text = if (snapFrameSelected) stringResource(R.string.session_drawer_snapframe_ai_note)
+                       else stringResource(R.string.session_drawer_frame_generation_note),
                 color = TextSecondary,
                 fontSize = SettingLabelSize,
                 lineHeight = SettingLabelSize * 1.4f,
