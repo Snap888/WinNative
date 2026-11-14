@@ -13,6 +13,10 @@ void snap_frame_vk_abandon(SnapFrameVk *engine);
 int snap_frame_vk_prepare(SnapFrameVk *engine, uint32_t width, uint32_t height, VkFormat format, uint32_t flow_scale_percent);
 int snap_frame_vk_has_history(const SnapFrameVk *engine);
 void snap_frame_vk_reset_history(SnapFrameVk *engine);
+/* Associate the current query slot with the host renderer's fence for its QueueSubmit. */
+void snap_frame_vk_set_submission_fence(SnapFrameVk *engine, VkFence fence);
+/* Current query slot, or -1 when this frame did not record telemetry queries. */
+int snap_frame_vk_current_query_slot(const SnapFrameVk *engine);
 /* Candidate reconstruction mode: 0=AI automatic, 1=forced off, 2=forced on. */
 void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk *engine, uint32_t mode);
 /* Snap AI policy: 0=Auto (adaptive multiplier), 1=Off, 2=On (AI active, manual multiplier). */
