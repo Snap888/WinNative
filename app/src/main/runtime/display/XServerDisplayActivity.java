@@ -7066,12 +7066,44 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         // Wayland has its own Vulkan post chain; mode 9 runs the same ANR Spatial shader.
         if (waylandMode) {
             try {
+                // Keep the Wayland compositor's Vulkan post-chain in sync with the same live
+                // settings used by X11. Previously this branch returned after setting only the
+                // upscaler, silently dropping colour, sharpening and picture-profile controls.
                 int selectedUpscaler = anrEnabled ? 9 : (fsrEnabled ? 4 : (sgsrEnabled ? 3 : 0));
                 WaylandCompositor.nativeSetUpscaler(selectedUpscaler);
                 WaylandCompositor.nativeSetUpscaleSharpness(fsrEnabled ? fsrSharpness : (anrEnabled ? anrSharpness : sgsrSharpness));
                 WaylandCompositor.nativeSetANRQuality(anrQuality);
+
+                float effectiveSaturation = saturation / 100.0f;
+                if (vividEnabled) {
+                    effectiveSaturation = Math.min(2.0f, effectiveSaturation * (1.0f + Math.max(0, vividStrength) / 100.0f));
+                }
+                boolean profileHdr = colorProfile == 1;
+                boolean profileCrt = colorProfile == 3;
+                boolean profileToon = colorProfile == 4;
+                boolean profileNtsc = colorProfile == 5 || colorProfile == 6;
+
+                // Native chain supports colour adjustment, CAS, HDR, Toon, CRT and NTSC.
+                // Pixelate/colour-blind/temperature/tint remain X11-only until matching
+                // Wayland shaders are implemented; do not pretend those effects are active.
+                WaylandCompositor.nativeSetScreenEffects(
+                        brightness, contrast, gammaPercent / 100.0f, effectiveSaturation,
+                        false, profileToon, profileCrt || scanlinesEnabled, profileNtsc);
+                WaylandCompositor.nativeSetCas(sharpenEnabled, sharpenStrength);
+                WaylandCompositor.nativeSetHdr(profileHdr);
+                WaylandCompositor.nativeSetLookName(
+                        colorProfile == 0 ? "Off" :
+                        colorProfile == 1 ? "HDR" :
+                        colorProfile == 2 ? "Natural (not available on Wayland)" :
+                        colorProfile == 3 ? "CRT" :
+                        colorProfile == 4 ? "Toon" :
+                        colorProfile == 5 ? "NTSC" : "NTSC 2");
+                if (pixelateEnabled || colorBlind != 0 || temperature != 0 || tint != 0) {
+                    Log.w("XServerDisplayActivity",
+                            "Wayland post-chain does not implement pixelate, colour-blind, temperature or tint effects yet");
+                }
             } catch (Throwable t) {
-                Log.w("XServerDisplayActivity", "Failed to apply Wayland ANR settings", t);
+                Log.w("XServerDisplayActivity", "Failed to apply Wayland screen effects", t);
             }
             return;
         }
