@@ -5,6 +5,7 @@
 #include "framegen_engine.h"
 #include "framegen_bridge.h"
 #include "snap_frame_vk.h"
+#include "snap_frame_vk_contract.h"
 #include "snap_frame/snap_frame.h"
 #include "snap_frame/snap_frame_vulkan.h"
 #include "vkr_dis.h"
@@ -41,6 +42,8 @@ static uint32_t g_snap_debug_mode;
 
 static VkImage g_source;
 static uint64_t g_last_plan_ns;
+static uint64_t g_snap_last_source_ns;
+static uint64_t g_snap_source_interval_ns = 16666667ull;
 
 static uint32_t g_multiplier = 2;
 static float g_flow_scale = 0.7f;
@@ -188,7 +191,7 @@ int fge_start(int kind, const char *cache_path) {
         SnapFrameVk *created = snap_frame_vk_create(g_dev, g_pd);
         if (!created) return -1;
         pthread_mutex_lock(&g_snap_lock); g_snap = created; pthread_mutex_unlock(&g_snap_lock);
-        g_snap_host.vk=created;g_snap_host.multiplier=g_multiplier;g_snap_frame_id=0;
+        g_snap_host.vk=created;g_snap_host.multiplier=g_multiplier;g_snap_frame_id=0;g_snap_last_source_ns=0;g_snap_source_interval_ns=16666667ull;
         snap_frame_vk_set_ai_mode(created, (uint32_t)g_snap_ai_mode);
         snap_frame_vk_set_debug_mode(created, g_snap_debug_mode);
         SnapFrameEngineConfig cfg;snap_frame_default_config(&cfg);cfg.enabled=1;cfg.multiplier=g_multiplier;
@@ -296,7 +299,19 @@ uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_vie
     if (!g_chain_ok) return 0;
     g_source = source;
     if (g_snap && g_snap_core) {
-        uint64_t now=now_ns();uint32_t scene_cut=(g_last_plan_ns&&now-g_last_plan_ns>500000000ull)?1u:0u;
+        uint64_t now=now_ns();
+        uint32_t scene_cut=(uint32_t)snap_frame_vk_timestamp_gap_exceeded(
+            g_snap_last_source_ns,now,g_snap_source_interval_ns);
+        if(g_snap_last_source_ns&&now>g_snap_last_source_ns&&!scene_cut){
+            uint64_t interval=now-g_snap_last_source_ns;
+            g_snap_source_interval_ns=(g_snap_source_interval_ns*7u+interval)/8u;
+        }else if(!g_snap_last_source_ns){
+            g_snap_source_interval_ns=16666667ull;
+        }
+        if(scene_cut)
+            wnc_log("framegen","SnapFrame temporal history reset after source-frame gap (avg=%llums)",
+                    (unsigned long long)(g_snap_source_interval_ns/1000000ull));
+        g_snap_last_source_ns=now;
         g_last_plan_ns=now;
         SnapFrameVulkanFrame native={0};native.struct_size=sizeof(native);native.interop_version=SNAP_FRAME_VULKAN_INTEROP_VERSION;
         native.physical_device=g_pd;native.device=g_dev;native.queue=g_queue;native.queue_family_index=g_qfam;
