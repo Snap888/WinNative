@@ -30,7 +30,7 @@
 #define VK_MAX_SWAPCHAIN_IMAGES 12
 // Encoder input-surface swapchains can expose many more images than a display swapchain.
 #define VK_MAX_RECORD_IMAGES 32
-#define VK_MAX_EFFECTS 8
+#define VK_MAX_EFFECTS 16
 #define VK_MAX_COMPOSITE_TARGETS 10
 #define VK_FRAMEGEN_ACQUIRE_TIMEOUT_NS 8000000ULL
 #define VK_FRAMEGEN_ACQUIRE_TIMEOUT_MAX_NS 16000000ULL
