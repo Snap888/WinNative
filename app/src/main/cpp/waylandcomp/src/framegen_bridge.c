@@ -346,8 +346,11 @@ static int engine_usable(void) {
 }
 
 int vkp_framegen_debug_flow_active(void) {
-    return atomic_load(&g_kind) == VKP_FG_ENGINE_SNAPFRAME
-        && atomic_load(&g_armed) && atomic_load(&g_debug_flow);
+    /* Wayland's SnapFrame viewer is deliberately fail-closed. The UI currently shares the
+     * DIS debug-flow preference, so a stale DIS value can otherwise paint the diagnostic
+     * flow field over normal game frames even when SnapFrame debug is not selected. Keep
+     * the compositor output clean until SnapFrame has its own independent persisted toggle. */
+    return 0;
 }
 
 void vkp_framegen_debug_into(VkCommandBuffer cmd, VkImage output, VkImageView output_view,
