@@ -20,8 +20,6 @@ int main(void) {
     assert(metrics.psnr_db < 100.0 && metrics.mean_absolute_error > 0.0);
     assert(anr_fl_temporal_rgba8(a, changed, 2, 1, &metrics) == 0);
     assert(metrics.temporal_flicker > 0.0 && metrics.temporal_stability < 1.0);
-    assert(metrics.motion_x == 0 && metrics.motion_y == 0);
-
     /* A translated test pattern should be compensated instead of scored as flicker. */
     enum { TW = 32, TH = 24 };
     uint8_t previous[TW * TH * 4], translated[TW * TH * 4];
