@@ -54,6 +54,9 @@ static VkCommandPool g_pool;
 static VkCommandBuffer g_cmds[MAX_PRESENTS];
 static VkSemaphore g_acqs[MAX_PRESENTS], g_rnds[MAX_PRESENTS];
 static VkFence g_fence;
+#define SNAP_READBACK_SLOTS 4
+static VkFence g_snap_readback_fences[SNAP_READBACK_SLOTS];
+static int g_snap_readback_fences_ready;
 /* Extra swapchain images this swapchain was built with (frame generation: one per generated
  * frame, so all presents of a scene frame queue without waiting for a vblank). */
 static int g_swap_extra;
@@ -532,6 +535,18 @@ static int dev_init(void) {
     g_vk.AllocateCommandBuffers(g_dev, &cai, g_cmds);
     VkFenceCreateInfo fci = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     g_vk.CreateFence(g_dev, &fci, NULL, &g_fence);
+    g_snap_readback_fences_ready = 1;
+    for (uint32_t i = 0; i < SNAP_READBACK_SLOTS; i++) {
+        if (g_vk.CreateFence(g_dev, &fci, NULL, &g_snap_readback_fences[i]) != VK_SUCCESS) {
+            g_snap_readback_fences_ready = 0;
+            for (uint32_t j = 0; j <= i; j++) {
+                if (g_snap_readback_fences[j]) g_vk.DestroyFence(g_dev, g_snap_readback_fences[j], NULL);
+                g_snap_readback_fences[j] = VK_NULL_HANDLE;
+            }
+            LOGE("present: SnapFrame per-slot fence ring unavailable; using legacy frame fence");
+            break;
+        }
+    }
 
     vkp_effects_bind_device(g_dev, g_pd, &g_memprops);
     hdrc_bind_device(g_dev, &g_memprops);
@@ -1799,7 +1814,11 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     float generated_present_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
     if (ngen > 0) generated_acquire_slot_ms[0] = (float)initial_acquire_ns / 1.0e6f;
     VkResult pr = VK_SUCCESS;
-    g_vk.ResetFences(g_dev, 1, &g_fence);
+    const int readback_slot = vkp_framegen_readback_slot();
+    VkFence frame_fence = (g_snap_readback_fences_ready && readback_slot >= 0 && readback_slot < SNAP_READBACK_SLOTS)
+        ? g_snap_readback_fences[readback_slot] : g_fence;
+    g_vk.ResetFences(g_dev, 1, &frame_fence);
+    if (frame_fence != g_fence) vkp_framegen_set_submission_fence(frame_fence);
     for (int k = 0; k < presents; k++) {
         if (k > 0) {
             VkResult ark;
@@ -1841,7 +1860,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                            .pWaitSemaphores = &g_acqs[k], .pWaitDstStageMask = &wait, .commandBufferCount = 1,
                            .pCommandBuffers = &g_cmds[k], .signalSemaphoreCount = 1, .pSignalSemaphores = &g_rnds[k]};
         const int64_t submit_begin_ns = perf_now();
-        VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? g_fence : VK_NULL_HANDLE);
+        VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? frame_fence : VK_NULL_HANDLE);
         const int64_t submit_elapsed_ns = perf_now() - submit_begin_ns;
         if (k < ngen) {
             generated_submit_calls++;
