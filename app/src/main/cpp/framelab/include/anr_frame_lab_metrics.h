@@ -12,6 +12,8 @@ typedef struct anr_fl_metrics {
     double temporal_flicker;
     double temporal_stability;
     uint64_t compared_samples;
+    int32_t motion_x; /* estimated global translation, pixels */
+    int32_t motion_y;
 } anr_fl_metrics;
 
 /* Compare two tightly packed RGBA8 frames. Alpha is ignored. */
