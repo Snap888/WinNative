@@ -57,6 +57,22 @@ int anr_fl_submit_configured(uint32_t stage, uint64_t frame_id, uint64_t timesta
                              uint32_t width, uint32_t height, uint32_t format,
                              const void *pixels, size_t pixel_bytes,
                              const anr_fl_config_v1 *config);
+
+typedef struct anr_fl_replay_frame {
+    uint32_t stage, width, height, format;
+    uint64_t frame_id, timestamp_ns;
+    uint8_t *pixels;
+    size_t pixel_bytes;
+    uint8_t *params;
+    size_t params_bytes;
+} anr_fl_replay_frame;
+typedef struct anr_fl_replay_session anr_fl_replay_session;
+/* Iterate a completed recording. next: 1=frame, 0=EOF, negative errno on error. */
+int anr_fl_replay_open(const char *directory, anr_fl_replay_session **out_session);
+int anr_fl_replay_next(anr_fl_replay_session *session, anr_fl_replay_frame *out_frame);
+void anr_fl_replay_frame_release(anr_fl_replay_frame *frame);
+void anr_fl_replay_close(anr_fl_replay_session *session);
+
 void anr_fl_get_stats(anr_fl_stats *out_stats);
 int anr_fl_stop(void);
 
