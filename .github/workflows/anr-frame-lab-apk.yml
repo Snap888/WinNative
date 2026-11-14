@@ -24,14 +24,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Configure Android SDK
-        run: |
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          yes | "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" --licenses >/dev/null
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install Android platform, NDK and CMake
         run: |
-          "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" \
-            "platforms;android-35" "ndk;27.3.13750724" "cmake;3.22.1"
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-35" "ndk;27.3.13750724" "cmake;3.22.1"
       - name: Compile and smoke-test Frame Lab writer
         run: |
           cc -std=c11 -Wall -Wextra -Werror -pthread \\
