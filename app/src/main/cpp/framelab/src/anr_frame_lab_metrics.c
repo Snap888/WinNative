@@ -1,6 +1,7 @@
 #include "anr_frame_lab_metrics.h"
 #include <errno.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define FL_MAX_PIXELS ((uint64_t)16384u * 16384u)
