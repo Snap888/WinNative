@@ -99,6 +99,10 @@ int vkp_framegen_run(VkCommandBuffer cmd, VkImage scene, VkImageView scene_view,
 /* After the presents of one scene frame: how many generated frames actually reached the
  * swapchain (rate tracking + the stats counters). */
 void vkp_framegen_presented(int generated, int source_presented);
+/* SnapFrame query slot used by this recorded scene frame; -1 when no query was recorded. */
+int vkp_framegen_readback_slot(void);
+/* Attach the fence that the host renderer will signal for this frame's final QueueSubmit. */
+void vkp_framegen_set_submission_fence(VkFence fence);
 /* 1 when vkp_framegen_run can be fed `fmt` (the 8-bit scene always; FP16 for HDR frames where the
  * device can generate in it and the engine has not refused it this session). A chain that fails to
  * build in a deeper format is not an engine failure: the engine restarts and the format is refused,
