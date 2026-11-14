@@ -3,6 +3,7 @@
 #include "anr_frame_lab_metrics.h"
 #include <assert.h>
 #include <math.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -19,6 +20,25 @@ int main(void) {
     assert(metrics.psnr_db < 100.0 && metrics.mean_absolute_error > 0.0);
     assert(anr_fl_temporal_rgba8(a, changed, 2, 1, &metrics) == 0);
     assert(metrics.temporal_flicker > 0.0 && metrics.temporal_stability < 1.0);
+    assert(metrics.motion_x == 0 && metrics.motion_y == 0);
+
+    /* A translated test pattern should be compensated instead of scored as flicker. */
+    enum { TW = 32, TH = 24 };
+    uint8_t previous[TW * TH * 4], translated[TW * TH * 4];
+    for (unsigned y = 0; y < TH; ++y) {
+        for (unsigned x = 0; x < TW; ++x) {
+            const unsigned p = (y * TW + x) * 4;
+            const uint8_t v = (uint8_t)((x * 37u + y * 61u + x * y * 13u) & 255u);
+            previous[p] = v; previous[p + 1] = (uint8_t)(v ^ 0x55u);
+            previous[p + 2] = (uint8_t)(v ^ 0xaau); previous[p + 3] = 255;
+            const unsigned sx = x >= 2 ? x - 2 : 0;
+            const unsigned q = (y * TW + sx) * 4;
+            memcpy(translated + p, previous + q, 4);
+        }
+    }
+    assert(anr_fl_temporal_rgba8(previous, translated, TW, TH, &metrics) == 0);
+    assert(metrics.motion_x == 2 && metrics.motion_y == 0);
+    assert(metrics.temporal_flicker < 1.0);
     char dir[] = "/tmp/anr-frame-lab-XXXXXX";
     assert(mkdtemp(dir) != NULL);
     const unsigned char pixels[] = {0, 1, 2, 3, 4, 5, 6, 7};
