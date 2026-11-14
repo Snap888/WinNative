@@ -99,7 +99,7 @@ public class VulkanRenderer
 
     // Must mirror VK_MAX_RENDERABLE_WINDOWS / VK_MAX_EFFECTS in vk_state.h.
     private static final int MAX_WINDOWS = 64;
-    private static final int MAX_EFFECTS = 8;
+    private static final int MAX_EFFECTS = 16;
 
     private static final int OFF_CURSOR_HANDLE   = 0;
     private static final int OFF_WINDOW_HANDLES  = 8;
@@ -114,13 +114,13 @@ public class VulkanRenderer
     private static final int OFF_SCREEN_H        = 608;
     private static final int OFF_EFFECT_COUNT    = 612;
     private static final int OFF_EFFECT_TYPES    = 616;
-    private static final int OFF_EFFECT_PARAMS   = 648;
-    private static final int OFF_WINDOW_GEOM     = 776;
-    private static final int OFF_WINDOW_UV       = 1800;
-    private static final int OFF_SWAP_RB         = 2824;
-    private static final int OFF_SOURCE_W        = 2828;
-    private static final int OFF_SOURCE_H        = 2832;
-    private static final int SCENE_BUF_SIZE      = 2836;
+    private static final int OFF_EFFECT_PARAMS   = 680;
+    private static final int OFF_WINDOW_GEOM     = 936;
+    private static final int OFF_WINDOW_UV       = 1960;
+    private static final int OFF_SWAP_RB         = 2984;
+    private static final int OFF_SOURCE_W        = 2988;
+    private static final int OFF_SOURCE_H        = 2992;
+    private static final int SCENE_BUF_SIZE      = 2996;
 
     private final ByteBuffer sceneBuf =
             ByteBuffer.allocateDirect(SCENE_BUF_SIZE).order(ByteOrder.nativeOrder());
