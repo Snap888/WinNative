@@ -6,7 +6,7 @@ on:
       - anr-frame-lab
   pull_request:
     branches:
-      - anr-frame-lab
+      - main
   workflow_dispatch:
 
 permissions:
