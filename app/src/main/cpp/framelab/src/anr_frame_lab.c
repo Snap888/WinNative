@@ -34,7 +34,7 @@ static struct {
     frame_slot queue[ANR_FL_QUEUE_CAPACITY];
     unsigned head, count;
     anr_fl_stats stats;
-} g = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER };
+} g = { .mutex = PTHREAD_MUTEX_INITIALIZER, .ready = PTHREAD_COND_INITIALIZER };
 
 static void free_slot(frame_slot *slot) {
     free(slot->pixels);
