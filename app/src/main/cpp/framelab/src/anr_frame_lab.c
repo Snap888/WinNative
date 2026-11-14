@@ -191,6 +191,19 @@ int anr_fl_submit(uint32_t stage, uint64_t frame_id, uint64_t timestamp_ns,
     return 0;
 }
 
+
+int anr_fl_submit_configured(uint32_t stage, uint64_t frame_id, uint64_t timestamp_ns,
+                             uint32_t width, uint32_t height, uint32_t format,
+                             const void *pixels, size_t pixel_bytes,
+                             const anr_fl_config_v1 *config) {
+    if (!config || config->version != ANR_FL_CONFIG_VERSION ||
+        config->struct_size != sizeof(*config) ||
+        config->effect_count > ANR_FL_CONFIG_MAX_EFFECTS)
+        return EINVAL;
+    return anr_fl_submit(stage, frame_id, timestamp_ns, width, height, format,
+                         pixels, pixel_bytes, config, sizeof(*config));
+}
+
 void anr_fl_get_stats(anr_fl_stats *out_stats) {
     if (!out_stats) return;
     pthread_mutex_lock(&g.mutex);
