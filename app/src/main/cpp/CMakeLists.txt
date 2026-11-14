@@ -136,12 +136,16 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 # WFG frame generator (DIS optical flow + interpolation), linked by libwinlator and libwnwayland.
 add_subdirectory(wfg)
 
+# Shared lossless capture queue and ANR-style frame record writer for both display backends.
+add_subdirectory(framelab)
+
 # ----------------------------------------------------------------------------
 # Winlator native library (X-server, AHB, Vulkan compositor, helpers)
 # ----------------------------------------------------------------------------
 
 add_library(winlator SHARED
         winlator/drawable.c
+        $<TARGET_OBJECTS:framelab>
         winlator/native_content_io.cpp
         winlator/gpu_image.c
         winlator/ring_fence.c
@@ -198,6 +202,7 @@ target_link_libraries(winlator
         libzstd_static
         liblzma
         curl::curl
+        m
 )
 
 # Fake evdev input shim used by the pb_controller_fix controller path.

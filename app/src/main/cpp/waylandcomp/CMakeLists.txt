@@ -3,6 +3,7 @@
 # CREDITS.md for attribution. Protocol glue is pre-generated in generated/ so no host
 # wayland-scanner is needed at build time.
 add_library(wnwayland SHARED
+        $<TARGET_OBJECTS:framelab>
         src/compositor.c
         src/vk_present.c
         src/effects_chain.c
@@ -87,4 +88,5 @@ target_link_libraries(wnwayland
         dl
         log
         android
+        m
 )

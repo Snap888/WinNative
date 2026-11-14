@@ -1,0 +1,47 @@
+name: ANR Frame Lab APK
+
+on:
+  push:
+    branches:
+      - anr-frame-lab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout with submodules and LFS
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android platform, NDK and CMake
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-35" "ndk;27.3.13750724" "cmake;3.22.1"
+      - name: Install Rust Android target
+        run: rustup target add aarch64-linux-android
+      - name: Compile and smoke-test Frame Lab writer
+        run: cc -std=c11 -Wall -Wextra -Werror -pthread -Iapp/src/main/cpp/framelab/include app/src/main/cpp/framelab/src/anr_frame_lab.c app/src/main/cpp/framelab/src/anr_frame_lab_metrics.c app/src/main/cpp/framelab/src/anr_frame_lab_replay.c app/src/main/cpp/framelab/tests/framelab_smoke.c -lm -o /tmp/framelab-smoke && /tmp/framelab-smoke
+      - name: Build Standard debug APK
+        run: ./gradlew --no-daemon --stacktrace assembleStandardDebug
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinNative-ANR-FrameLab-standard-debug
+          path: app/build/outputs/apk/standard/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
