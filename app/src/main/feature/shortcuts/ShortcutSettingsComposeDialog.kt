@@ -575,8 +575,13 @@ class ShortcutSettingsComposeDialog private constructor(
             getShortcutSetting(NetworkingSettings.EXTRA_MAC, container.getExtra(NetworkingSettings.EXTRA_MAC, ""))
         state.netMacAuto.value = NetworkingSettings.automaticMac(context)
 
-        state.frameGenEnabled.value =
-            getShortcutSetting("frameGen", container.getExtra("frameGen", "0")) == "1"
+        val snapFrameDefault = if (container.getExtra("snapFrameGen", "0") == "1") "1" else "0"
+        state.frameGenEngine.intValue =
+            getShortcutSetting("frameGenEngine", container.getExtra("frameGenEngine", snapFrameDefault))
+                .toIntOrNull()?.coerceIn(0, 1) ?: if (snapFrameDefault == "1") 1 else 0
+        val snapFrameEnabled = getShortcutSetting("snapFrameGen", container.getExtra("snapFrameGen", "0")) == "1"
+        val lsfgEnabled = getShortcutSetting("frameGen", container.getExtra("frameGen", "0")) == "1"
+        state.frameGenEnabled.value = if (state.frameGenEngine.intValue == 1) snapFrameEnabled else lsfgEnabled
         state.frameGenMultiplier.intValue =
             getShortcutSetting("frameGenMultiplier", container.getExtra("frameGenMultiplier", "2"))
                 .toIntOrNull()
@@ -1451,12 +1456,25 @@ class ShortcutSettingsComposeDialog private constructor(
                 NetworkingSettings.normalizeMac(state.netMac.value),
                 NetworkingSettings.normalizeMac(container.getExtra(NetworkingSettings.EXTRA_MAC, "")),
             )
+            val snapFrameSelected = state.frameGenEngine.intValue == 1
+            val lsfgEnabled = state.frameGenEnabled.value && !snapFrameSelected
+            val snapFrameEnabled = state.frameGenEnabled.value && snapFrameSelected
+            hasContainerOverride = hasContainerOverride or saveOverride(
+                "frameGenEngine",
+                if (snapFrameSelected) "1" else "0",
+                container.getExtra("frameGenEngine", "0"),
+            )
             hasContainerOverride = hasContainerOverride or saveOverride(
                 "frameGen",
-                if (state.frameGenEnabled.value) "1" else "0",
+                if (lsfgEnabled) "1" else "0",
                 container.getExtra("frameGen", "0"),
             )
-            if (state.frameGenEnabled.value) {
+            hasContainerOverride = hasContainerOverride or saveOverride(
+                "snapFrameGen",
+                if (snapFrameEnabled) "1" else "0",
+                container.getExtra("snapFrameGen", "0"),
+            )
+            if (lsfgEnabled) {
                 hasContainerOverride = hasContainerOverride or saveOverride(
                     "disFrameGen",
                     "0",
