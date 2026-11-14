@@ -136,6 +136,9 @@ add_custom_target(winlator_shaders DEPENDS ${SHADER_HEADERS})
 # WFG frame generator (DIS optical flow + interpolation), linked by libwinlator and libwnwayland.
 add_subdirectory(wfg)
 
+# Shared lossless capture queue and ANR-style frame record writer for both display backends.
+add_subdirectory(framelab)
+
 # ----------------------------------------------------------------------------
 # Winlator native library (X-server, AHB, Vulkan compositor, helpers)
 # ----------------------------------------------------------------------------
@@ -188,6 +191,7 @@ target_compile_features(winlator PRIVATE cxx_std_17)
 
 target_link_libraries(winlator
         wfg
+        framelab
         log
         android
         mediandk
