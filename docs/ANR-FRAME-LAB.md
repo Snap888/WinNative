@@ -44,3 +44,32 @@ Use a consistent frame ID across all stages from one real frame. Record timestam
 nanoseconds. Store actual motion/depth/HUD-less/UI inputs only when the engine exposes them; do not
 synthesize them from the final composited image. The format field identifies the submitted pixel
 layout and must be interpreted by the decoder.
+
+## Metrics update
+
+The current metrics implementation now uses non-overlapping local 8x8 SSIM windows (with
+smaller edge windows) instead of one global luminance/variance score. Temporal comparison runs
+a bounded global translation search (±8 pixels, coarse 4-pixel samples), aligns the frames, and
+computes residual RGB flicker on the overlapping region. The estimated integer translation is
+returned as `motion_x` / `motion_y`.
+
+This is motion-compensated global translation, **not dense optical flow**. It handles simple
+camera pans and fixed translations, but cannot compensate independently moving objects,
+rotation, parallax, or non-rigid motion. Scores are therefore diagnostic metrics, not a
+replacement for a full optical-flow temporal consistency benchmark.
+
+## Integration status (explicit)
+
+- The six stage identifiers and session file format exist.
+- The X11 renderer has a stable scene snapshot under `scene_mutex`, real effect slots, and
+  concrete effect/frame-generation command-recording boundaries. These are suitable integration
+  points, but the Frame Lab submit path is not yet connected to those GPU images.
+- The Wayland renderer has a scene image, a synchronized effects-chain boundary, and the real
+  frame-generation bridge. Its own Vulkan dispatch table and queue lifetime are separate from
+  X11's; capture resources must be created/destroyed per backend/device.
+- Neither backend currently has a verified per-slot Vulkan readback ring with independent capture
+  fences. The existing presentation fences must not be reused for capture.
+- Generator replay adapters are not implemented. The current replay API reads stored records only.
+- No Android Frame Lab screen is wired into app navigation yet.
+
+Do not interpret these integration points as completed capture or replay functionality.
