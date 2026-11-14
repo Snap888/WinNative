@@ -1,12 +1,24 @@
 #define _POSIX_C_SOURCE 200809L
 #include "anr_frame_lab.h"
+#include "anr_frame_lab_metrics.h"
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 int main(void) {
+    const uint8_t a[] = {10,20,30,255, 40,50,60,255};
+    const uint8_t same[] = {10,20,30,255, 40,50,60,255};
+    const uint8_t changed[] = {10,20,30,255, 80,90,100,255};
+    anr_fl_metrics metrics;
+    assert(anr_fl_compare_rgba8(a, same, 2, 1, &metrics) == 0);
+    assert(isinf(metrics.psnr_db) && metrics.ssim > 0.999);
+    assert(anr_fl_compare_rgba8(a, changed, 2, 1, &metrics) == 0);
+    assert(metrics.psnr_db < 100.0 && metrics.mean_absolute_error > 0.0);
+    assert(anr_fl_temporal_rgba8(a, changed, 2, 1, &metrics) == 0);
+    assert(metrics.temporal_flicker > 0.0 && metrics.temporal_stability < 1.0);
     char dir[] = "/tmp/anr-frame-lab-XXXXXX";
     assert(mkdtemp(dir) != NULL);
     const unsigned char pixels[] = {0, 1, 2, 3, 4, 5, 6, 7};
