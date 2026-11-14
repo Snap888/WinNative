@@ -15,9 +15,9 @@ The core is linked into both `libwinlator` and `libwnwayland`. This is infrastru
 3. **Settings snapshots are not connected to settings owners.** `anr_fl_config_v1` is a useful versioned container, but the smoke test fills it with constants. It does not prove that the actual X11/Wayland effect settings or generator controls are sampled atomically for the same frame.
 4. **Replay is file iteration, not generator replay.** `anr_fl_replay_next` only decodes the recorded record. There is no adapter that feeds captured frame pairs and saved settings into the real LSFG, WFG, or SnapFrame runtime.
 5. **No Frame Lab UI exists in this change.** There are no recording controls, session browser, export action, replay controls, or A/B comparison screen.
-6. **Metrics are preliminary.** The current SSIM calculation is a single global statistic, not windowed SSIM. Temporal flicker is raw consecutive-frame difference and is not motion-compensated, so camera motion can dominate the score.
+6. **Metrics improved, still limited.** SSIM now averages local 8x8 windows. Temporal flicker compensates a bounded global translation (±8 px); this is not dense optical flow and does not handle parallax, rotation, or independently moving objects.
 7. **Writer/replay hardening is incomplete.** The writer now uses `ftello` for large-file offsets and stops/drains queued records after the first I/O failure instead of continuing a damaged stream. Remaining format/replay risks: the index is still a native C struct (host endianness/layout), replay does not validate stream file bounds or confirm payload size against dimensions/format. The submit API also allocates and copies the entire image on the caller thread; a 4K RGBA frame is a substantial render-thread copy.
-8. **CI coverage is narrow.** The workflow runs a host writer smoke test and builds only `assembleStandardDebug`; it does not exercise Vulkan capture, X11/Wayland runtime paths, replay through a generator, or the four-flavor APK matrix.
+8. **CI expanded, runtime coverage still absent.** The workflow now runs the host smoke test with ASan/UBSan and builds Standard, Ludashi, PUBG, and AnTuTu debug APK flavors. It still does not exercise Vulkan capture, X11/Wayland runtime paths, or replay through a generator; no successful APK artifact has yet been verified.
 
 ## Required implementation order
 
@@ -40,3 +40,12 @@ The core is linked into both `libwinlator` and `libwnwayland`. This is infrastru
 - CI artifacts are installable APKs; runtime claims remain marked pending until device validation.
 
 This audit intentionally does not label the existing file reader as generator replay or the existing writer as Vulkan capture.
+
+
+## Follow-up changes
+
+- Writer uses `ftello` for large-file offsets and stops accepting queued records after an I/O failure.
+- Metrics now use local-window SSIM and bounded translation-compensated temporal flicker; a synthetic two-pixel translation regression test was added.
+- CI now runs the host smoke test with AddressSanitizer/UndefinedBehaviorSanitizer and builds all four debug flavors on branch pushes and pull requests targeting `main`.
+
+The Vulkan capture ring, compositor hooks, real per-frame settings serialization, generator execution adapters, and Android Frame Lab UI remain unimplemented. The requested end-to-end APK is therefore not yet deliverable.
