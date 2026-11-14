@@ -279,15 +279,24 @@ static int target_ensure(struct fx_target *t, int w, int h, const char *what) {
     g_vk.GetImageMemoryRequirements(g_dev, t->img, &req);
     int idx = memtype(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     if (idx < 0) idx = memtype(req.memoryTypeBits, 0);
+    if (idx < 0) {
+        wnc_log("error", "effects: %s image %dx%d has no compatible Vulkan memory type (bits=0x%x)",
+                   what, w, h, req.memoryTypeBits);
+        target_destroy(t); return -1;
+    }
     VkMemoryAllocateInfo mai = {.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO, .allocationSize = req.size,
-                                .memoryTypeIndex = (uint32_t)(idx < 0 ? 0 : idx)};
+                                .memoryTypeIndex = (uint32_t)idx};
     r = g_vk.AllocateMemory(g_dev, &mai, NULL, &t->mem);
     if (r != VK_SUCCESS) {
         wnc_log("error", "effects: %s image %dx%d (%llu bytes): vkAllocateMemory %d", what, w, h,
                    (unsigned long long)req.size, (int)r);
         target_destroy(t); return -1;
     }
-    g_vk.BindImageMemory(g_dev, t->img, t->mem, 0);
+    r = g_vk.BindImageMemory(g_dev, t->img, t->mem, 0);
+    if (r != VK_SUCCESS) {
+        wnc_log("error", "effects: %s image %dx%d: vkBindImageMemory %d", what, w, h, (int)r);
+        target_destroy(t); return -1;
+    }
     if (!(t->view = make_view(t->img, g_fx_fmt))) { target_destroy(t); return -1; }
     VkFramebufferCreateInfo fi = {.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO, .renderPass = g_rp,
                                   .attachmentCount = 1, .pAttachments = &t->view, .width = (uint32_t)w,
