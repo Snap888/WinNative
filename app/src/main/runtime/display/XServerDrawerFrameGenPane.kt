@@ -231,7 +231,7 @@ internal fun FrameGenEngineSection(
             SnapFrameOptions(
                 multiplier = multiplier,
                 flowScale = flowScale,
-                debugFlow = disDebugFlow,
+                debugFlow = false,
                 debugMode = snapDebugMode,
                 candidateMode = candidateMode,
                 aiMode = aiMode,
@@ -240,7 +240,7 @@ internal fun FrameGenEngineSection(
                 paneScale = paneScale,
                 onMultiplierSelected = onMultiplierSelected,
                 onFlowScaleChanged = onFlowScaleChanged,
-                onDebugFlowChanged = onDisDebugFlowChanged,
+                onDebugFlowChanged = {},
                 onDebugModeChanged = onSnapDebugModeChanged,
                 onCandidateModeChanged = onCandidateModeChanged,
                 onAiModeChanged = onAiModeChanged,
