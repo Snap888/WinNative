@@ -22,7 +22,20 @@ int main(void) {
     char dir[] = "/tmp/anr-frame-lab-XXXXXX";
     assert(mkdtemp(dir) != NULL);
     const unsigned char pixels[] = {0, 1, 2, 3, 4, 5, 6, 7};
-    const unsigned char params[] = {9, 8, 7};
+    anr_fl_config_v1 config = {0};
+    config.struct_size = sizeof(config);
+    config.version = ANR_FL_CONFIG_VERSION;
+    config.feature_flags = ANR_FL_CFG_SNAPFRAME | ANR_FL_CFG_WFG | ANR_FL_CFG_LSFG;
+    config.engine = 2;
+    config.snapframe_mode = 1;
+    config.wfg_mode = 1;
+    config.lsfg_mode = 1;
+    config.multiplier = 2;
+    config.target_fps = 60;
+    config.flow_scale = 0.75f;
+    config.effect_count = 1;
+    config.effects[0].effect_id = 9;
+    config.effects[0].params[0] = 0.5f;
     assert(anr_fl_start(dir) == 0);
     assert(anr_fl_submit(ANR_FL_STAGE_FRAMEGEN_INPUT, 42, 123456789ULL,
                          2, 1, 1, pixels, sizeof(pixels), params, sizeof(params)) == 0);
