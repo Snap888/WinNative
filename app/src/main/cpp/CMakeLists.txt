@@ -145,6 +145,7 @@ add_subdirectory(framelab)
 
 add_library(winlator SHARED
         winlator/drawable.c
+        $<TARGET_OBJECTS:framelab>
         winlator/native_content_io.cpp
         winlator/gpu_image.c
         winlator/ring_fence.c
@@ -191,7 +192,6 @@ target_compile_features(winlator PRIVATE cxx_std_17)
 
 target_link_libraries(winlator
         wfg
-        framelab
         log
         android
         mediandk
