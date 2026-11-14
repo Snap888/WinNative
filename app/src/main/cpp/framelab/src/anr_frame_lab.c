@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #define ANR_FL_QUEUE_CAPACITY 3u
 #define ANR_FL_MAX_PAYLOAD (256u * 1024u * 1024u)
@@ -58,8 +59,8 @@ static void *writer_main(void *unused) {
         --g.count;
         pthread_mutex_unlock(&g.mutex);
 
-        long data_offset = ftell(g.frames_file);
-        long params_offset = ftell(g.params_file);
+        off_t data_offset = ftello(g.frames_file);
+        off_t params_offset = ftello(g.params_file);
         frame_index ix;
         memset(&ix, 0, sizeof(ix));
         ix.magic = ANR_FL_MAGIC;
@@ -82,6 +83,17 @@ static void *writer_main(void *unused) {
             pthread_mutex_lock(&g.mutex);
             g.worker_error = errno ? errno : EIO;
             g.stats.last_error = g.worker_error;
+            /* A failed stream is no longer appendable as a valid recording. Stop accepting
+             * queued records and account for them as dropped instead of writing past a hole. */
+            g.stopping = 1;
+            while (g.count) {
+                frame_slot *pending = &g.queue[g.head];
+                free_slot(pending);
+                g.head = (g.head + 1u) % ANR_FL_QUEUE_CAPACITY;
+                --g.count;
+                ++g.stats.dropped;
+            }
+            pthread_cond_broadcast(&g.ready);
             pthread_mutex_unlock(&g.mutex);
         } else {
             pthread_mutex_lock(&g.mutex);
@@ -125,8 +137,10 @@ int anr_fl_start(const char *directory) {
     g.head = g.count = 0;
     g.stopping = g.worker_error = 0;
     g.initialized = 1;
-    if (pthread_create(&g.worker, NULL, writer_main, NULL) != 0) {
+    int thread_error = pthread_create(&g.worker, NULL, writer_main, NULL);
+    if (thread_error != 0) {
         g.initialized = 0;
+        errno = thread_error;
         goto open_failed;
     }
     g.running = 1;
@@ -225,9 +239,14 @@ int anr_fl_stop(void) {
 
     pthread_mutex_lock(&g.mutex);
     int result = g.worker_error;
-    if (fflush(g.frames_file) != 0 || fflush(g.params_file) != 0 || fflush(g.index_file) != 0)
-        if (!result) result = errno ? errno : EIO;
-    fclose(g.params_file); fclose(g.frames_file); fclose(g.index_file); fclose(g.manifest_file);
+    if (fflush(g.frames_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fflush(g.params_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fflush(g.index_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fflush(g.manifest_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fclose(g.params_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fclose(g.frames_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fclose(g.index_file) != 0 && !result) result = errno ? errno : EIO;
+    if (fclose(g.manifest_file) != 0 && !result) result = errno ? errno : EIO;
     g.params_file = g.frames_file = g.index_file = g.manifest_file = NULL;
     g.running = g.stopping = g.initialized = 0;
     pthread_mutex_unlock(&g.mutex);
