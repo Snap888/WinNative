@@ -31,7 +31,7 @@
 
 struct sf_image { VkImage image; VkDeviceMemory memory; VkImageView view; uint32_t w,h; int fresh; };
 struct sf_pipeline { VkDescriptorSetLayout set_layout; VkPipelineLayout layout; VkPipeline pipeline; VkDescriptorSet sets[4]; };
-struct sf_buffer { VkBuffer buffer; VkDeviceMemory memory; };
+struct sf_buffer { VkBuffer buffer; VkDeviceMemory memory; VkDeviceSize allocation_size; uint32_t host_coherent; };
 struct SnapFrameVk {
     VkDevice device; VkPhysicalDevice physical; VkPhysicalDeviceMemoryProperties memprops;
     VkSampler sampler; VkDescriptorPool pool;
@@ -95,18 +95,22 @@ static int buffer_create_readback(SnapFrameVk*e,struct sf_buffer*b){
         .usage=VK_BUFFER_USAGE_TRANSFER_DST_BIT,.sharingMode=VK_SHARING_MODE_EXCLUSIVE};
     if(g_vk.CreateBuffer(e->device,&ci,NULL,&b->buffer)!=VK_SUCCESS)return 0;
     VkMemoryRequirements req;g_vk.GetBufferMemoryRequirements(e->device,b->buffer,&req);
-    int mt=-1;
+    int coherent_type=-1,visible_type=-1;
     for(uint32_t i=0;i<e->memprops.memoryTypeCount;i++){
         VkMemoryPropertyFlags flags=e->memprops.memoryTypes[i].propertyFlags;
-        if((req.memoryTypeBits&(1u<<i))&&
-           (flags&(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))==
-                    (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT|VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)){mt=(int)i;break;}
+        if(!(req.memoryTypeBits&(1u<<i)) || !(flags&VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))continue;
+        if(flags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT){coherent_type=(int)i;break;}
+        if(visible_type<0)visible_type=(int)i;
     }
+    int mt=coherent_type>=0?coherent_type:
+        (g_vk.InvalidateMappedMemoryRanges?visible_type:-1);
     if(mt<0){buffer_destroy(e,b);return 0;}
     VkMemoryAllocateInfo ai={.sType=VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
         .allocationSize=req.size,.memoryTypeIndex=(uint32_t)mt};
     if(g_vk.AllocateMemory(e->device,&ai,NULL,&b->memory)!=VK_SUCCESS){buffer_destroy(e,b);return 0;}
     if(g_vk.BindBufferMemory(e->device,b->buffer,b->memory,0)!=VK_SUCCESS){buffer_destroy(e,b);return 0;}
+    b->allocation_size=req.size;
+    b->host_coherent=coherent_type>=0;
     return 1;
 }
 static void pipeline_destroy(SnapFrameVk*e,struct sf_pipeline*p){
@@ -390,8 +394,16 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         float flow_metrics[4]={0.0f,0.0f,0.0f,1.0f};void*mapped=NULL;
         int valid=1,metrics_source=0;
         if(e->metrics_enabled&&metrics_ready&&
-           g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,sizeof(flow_metrics),0,&mapped)==VK_SUCCESS&&mapped){
-            memcpy(flow_metrics,mapped,sizeof(flow_metrics));g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
+           g_vk.MapMemory(e->device,e->metrics_readback[slot].memory,0,VK_WHOLE_SIZE,0,&mapped)==VK_SUCCESS&&mapped){
+            int readable=e->metrics_readback[slot].host_coherent;
+            if(!readable&&g_vk.InvalidateMappedMemoryRanges){
+                VkMappedMemoryRange range={.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+                    .memory=e->metrics_readback[slot].memory,.offset=0,.size=VK_WHOLE_SIZE};
+                readable=g_vk.InvalidateMappedMemoryRanges(e->device,1,&range)==VK_SUCCESS;
+            }
+            if(readable)memcpy(flow_metrics,mapped,sizeof(flow_metrics));
+            else valid=0;
+            g_vk.UnmapMemory(e->device,e->metrics_readback[slot].memory);
             for(uint32_t i=0;i<4;i++)if(!isfinite(flow_metrics[i])||flow_metrics[i]<0.0f||flow_metrics[i]>1.0f)valid=0;
             if(valid)metrics_source=1;
         }
