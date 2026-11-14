@@ -35,7 +35,7 @@ jobs:
       - name: Install Rust Android target
         run: rustup target add aarch64-linux-android
       - name: Compile and smoke-test Frame Lab writer
-        run: cc -std=c11 -Wall -Wextra -Werror -pthread -Iapp/src/main/cpp/framelab/include app/src/main/cpp/framelab/src/anr_frame_lab.c app/src/main/cpp/framelab/src/anr_frame_lab_metrics.c app/src/main/cpp/framelab/tests/framelab_smoke.c -o /tmp/framelab-smoke && /tmp/framelab-smoke
+        run: cc -std=c11 -Wall -Wextra -Werror -pthread -Iapp/src/main/cpp/framelab/include app/src/main/cpp/framelab/src/anr_frame_lab.c app/src/main/cpp/framelab/src/anr_frame_lab_metrics.c app/src/main/cpp/framelab/src/anr_frame_lab_replay.c app/src/main/cpp/framelab/tests/framelab_smoke.c -o /tmp/framelab-smoke && /tmp/framelab-smoke
       - name: Build Standard debug APK
         run: ./gradlew --no-daemon --stacktrace assembleStandardDebug
       - name: Upload test APK
