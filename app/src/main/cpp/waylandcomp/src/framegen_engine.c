@@ -295,6 +295,9 @@ uint32_t fge_plan(uint32_t capacity, uint64_t source_frames, float presented_rat
     return 0;
 }
 
+int fge_readback_slot(void){return g_snap?snap_frame_vk_current_query_slot(g_snap):-1;}
+void fge_set_submission_fence(VkFence fence){if(g_snap)snap_frame_vk_set_submission_fence(g_snap,fence);}
+
 uint32_t fge_process(VkCommandBuffer cmd, VkImage source, VkImageView source_view, uint32_t w, uint32_t h, VkFormat fmt, uint32_t gens, const SnapFrameVulkanOutputSlot *outputs) {
     if (!g_chain_ok) return 0;
     g_source = source;
