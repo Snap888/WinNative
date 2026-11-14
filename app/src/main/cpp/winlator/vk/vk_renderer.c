@@ -4045,13 +4045,13 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeRenderFrame)(JNIEnv* env, jclass clazz, 
 #define SCENE_OFF_SCREEN_H           608
 #define SCENE_OFF_EFFECT_COUNT       612
 #define SCENE_OFF_EFFECT_TYPES       616      /* int32 × VK_MAX_EFFECTS */
-#define SCENE_OFF_EFFECT_PARAMS      648      /* float32 × VK_MAX_EFFECTS × 4 */
-#define SCENE_OFF_WINDOW_GEOM        776      /* int32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
-#define SCENE_OFF_WINDOW_UV          1800     /* float32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
-#define SCENE_OFF_SWAP_RB            2824
-#define SCENE_OFF_SOURCE_W           2828
-#define SCENE_OFF_SOURCE_H           2832
-#define SCENE_BUF_SIZE               2836
+#define SCENE_OFF_EFFECT_PARAMS      680      /* float32 × VK_MAX_EFFECTS × 4 */
+#define SCENE_OFF_WINDOW_GEOM        936      /* int32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
+#define SCENE_OFF_WINDOW_UV          1960     /* float32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
+#define SCENE_OFF_SWAP_RB            2984
+#define SCENE_OFF_SOURCE_W           2988
+#define SCENE_OFF_SOURCE_H           2992
+#define SCENE_BUF_SIZE               2996
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetScene)(JNIEnv* env, jclass clazz, jlong handle,
                                               jobject sceneBuf)
