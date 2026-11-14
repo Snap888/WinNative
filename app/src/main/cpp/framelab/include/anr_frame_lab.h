@@ -53,7 +53,11 @@ int anr_fl_submit(uint32_t stage, uint64_t frame_id, uint64_t timestamp_ns,
                   uint32_t width, uint32_t height, uint32_t format,
                   const void *pixels, size_t pixel_bytes,
                   const void *params, size_t params_bytes);
-int anr_fl_submit_configured(uint32_t stage, uint64_t frame_id, uint64_t timestamp_ns,\n                             uint32_t width, uint32_t height, uint32_t format,\n                             const void *pixels, size_t pixel_bytes,\n                             const anr_fl_config_v1 *config);\nvoid anr_fl_get_stats(anr_fl_stats *out_stats);
+int anr_fl_submit_configured(uint32_t stage, uint64_t frame_id, uint64_t timestamp_ns,
+                             uint32_t width, uint32_t height, uint32_t format,
+                             const void *pixels, size_t pixel_bytes,
+                             const anr_fl_config_v1 *config);
+void anr_fl_get_stats(anr_fl_stats *out_stats);
 int anr_fl_stop(void);
 
 #ifdef __cplusplus
