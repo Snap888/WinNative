@@ -3,6 +3,7 @@
 # CREDITS.md for attribution. Protocol glue is pre-generated in generated/ so no host
 # wayland-scanner is needed at build time.
 add_library(wnwayland SHARED
+        $<TARGET_OBJECTS:framelab>
         src/compositor.c
         src/vk_present.c
         src/effects_chain.c
@@ -83,7 +84,6 @@ set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
 # driver's dma-buf import path, which the system Adreno driver lacks.
 target_link_libraries(wnwayland
         wayland-server
-        framelab
         adrenotools
         dl
         log
