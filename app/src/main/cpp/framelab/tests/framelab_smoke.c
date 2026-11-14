@@ -40,6 +40,16 @@ int main(void) {
     assert(anr_fl_submit_configured(ANR_FL_STAGE_FRAMEGEN_INPUT, 42, 123456789ULL,
                                     2, 1, 1, pixels, sizeof(pixels), &config) == 0);
     assert(anr_fl_stop() == 0);
+    anr_fl_replay_session *session = NULL;
+    assert(anr_fl_replay_open(dir, &session) == 0);
+    anr_fl_replay_frame replayed;
+    assert(anr_fl_replay_next(session, &replayed) == 1);
+    assert(replayed.frame_id == 42 && replayed.width == 2 && replayed.params_bytes == sizeof(config));
+    anr_fl_config_v1 *saved = (anr_fl_config_v1 *)replayed.params;
+    assert(saved->version == ANR_FL_CONFIG_VERSION && saved->effect_count == 1);
+    anr_fl_replay_frame_release(&replayed);
+    assert(anr_fl_replay_next(session, &replayed) == 0);
+    anr_fl_replay_close(session);
     anr_fl_stats stats;
     anr_fl_get_stats(&stats);
     assert(stats.submitted == 1 && stats.written == 1 && stats.dropped == 0);
