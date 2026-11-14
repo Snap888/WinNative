@@ -202,6 +202,7 @@ target_link_libraries(winlator
         libzstd_static
         liblzma
         curl::curl
+        m
 )
 
 # Fake evdev input shim used by the pb_controller_fix controller path.
