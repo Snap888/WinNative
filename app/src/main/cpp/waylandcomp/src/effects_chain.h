@@ -49,6 +49,7 @@ VkFilter vkp_effects_blit_filter(void);
  * the output (what the scaling modes resize to; the caller maps the result over the whole scene
  * afterwards, so Fullscreen Mode / Alignment still apply after the chain). Returns `scene` itself
  * (transitioned to TRANSFER_SRC_OPTIMAL) when there is nothing to do or the chain is unavailable. */
+VkImageView vkp_effects_view(VkImage image);
 VkImage vkp_effects_run(VkCommandBuffer cmd, VkImage scene, int scene_w, int scene_h,
                         int out_w, int out_h, int *res_w, int *res_h);
 
@@ -62,10 +63,11 @@ void vkp_effects_destroy(void);
 void vkp_effects_set_formats(VkFormat scene_fmt, VkFormat target_fmt);
 
 /* ---- settings (any thread; values 1:1 with the X11 Vulkan renderer's setters) ---- */
-/* 0=None 1=Linear 2=Nearest 3=SGSR 4=FSR 5=FSR Fit 6=Sharpen 7=NIS 8=SGSR HQ */
+/* 0=None 1=Linear 2=Nearest 3=SGSR 4=FSR 5=FSR Fit 6=Sharpen 7=NIS 8=SGSR HQ 9=ANR Spatial. */
 void vkp_effects_set_scaling(int mode);
-/* Slider 0..100: RCAS lobe scale (FSR/Sharpen), SGSR EdgeSharpness 0.5..4.5, NIS sharpness. */
+/* Slider 0..100 for legacy modes; ANR mode 9 uses 0..300 (shader strength 0..3). */
 void vkp_effects_set_upscale_sharpness(int pct);
+void vkp_effects_set_anr_quality(int quality); /* 0..6 reconstruction profiles */
 /* CAS toggle + slider 0..100 (0 = the pass is off). */
 void vkp_effects_set_cas(int enabled, int pct);
 void vkp_effects_set_hdr(int enabled);

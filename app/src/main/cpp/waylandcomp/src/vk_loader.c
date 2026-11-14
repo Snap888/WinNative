@@ -59,3 +59,20 @@ void vk_loader_load_device(VkDevice device) {
     VK_DEVICE_FUNCS(X)
 #undef X
 }
+
+/* Bind SnapFrame's dispatch table to the X11 presenter's existing Turnip device.
+ * This does not create an instance/device and does not take ownership of either. */
+int vk_loader_bind_external(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkDevice device) {
+    if (!gipa || instance == VK_NULL_HANDLE || device == VK_NULL_HANDLE) return -1;
+    g_gip = gipa;
+#define X(n) g_vk.n = (PFN_vk##n)g_gip(instance, "vk" #n);
+    VK_INSTANCE_FUNCS(X)
+#undef X
+    if (!g_vk.GetDeviceProcAddr) return -1;
+#define X(n) g_vk.n = (PFN_vk##n)g_vk.GetDeviceProcAddr(device, "vk" #n);
+    VK_DEVICE_FUNCS(X)
+#undef X
+    return (g_vk.CreateComputePipelines && g_vk.CmdDispatch && g_vk.CmdPipelineBarrier
+            && g_vk.CmdCopyImage && g_vk.CreateQueryPool && g_vk.GetQueryPoolResults
+            && g_vk.CmdResetQueryPool && g_vk.CmdWriteTimestamp) ? 0 : -1;
+}

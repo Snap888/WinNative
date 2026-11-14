@@ -6,7 +6,9 @@
  * process-default system Adreno driver, which lacks VK_EXT_image_drm_format_modifier /
  * dmabuf import. All compositor Vulkan calls go through g_vk.* .
  */
+#ifndef VK_USE_PLATFORM_ANDROID_KHR
 #define VK_USE_PLATFORM_ANDROID_KHR
+#endif
 #include <vulkan/vulkan.h>
 
 #define VK_GLOBAL_FUNCS(X) X(CreateInstance) X(EnumerateInstanceExtensionProperties)
@@ -24,6 +26,8 @@
     X(GetDeviceQueue) X(CreateSwapchainKHR) X(DestroySwapchainKHR) X(GetSwapchainImagesKHR) \
     X(CreateCommandPool) X(AllocateCommandBuffers) X(CreateSemaphore) X(CreateFence) \
     X(DeviceWaitIdle) X(CreateImage) X(GetImageMemoryRequirements) X(AllocateMemory) \
+    X(CreateBuffer) X(GetBufferMemoryRequirements) X(BindBufferMemory) X(DestroyBuffer) \
+    X(CmdCopyImageToBuffer) \
     X(BindImageMemory) X(DestroyImage) X(FreeMemory) X(AcquireNextImageKHR) \
     X(ResetCommandBuffer) X(BeginCommandBuffer) X(CmdPipelineBarrier) X(CmdBlitImage) \
     X(EndCommandBuffer) X(ResetFences) X(QueueSubmit) X(QueuePresentKHR) X(WaitForFences) \
@@ -35,8 +39,10 @@
     X(CreateFramebuffer) X(DestroyFramebuffer) X(CreateImageView) X(DestroyImageView) \
     X(CreateSampler) X(DestroySampler) X(CreateDescriptorSetLayout) X(DestroyDescriptorSetLayout) \
     X(CreateDescriptorPool) X(DestroyDescriptorPool) X(AllocateDescriptorSets) X(FreeDescriptorSets) \
-    X(UpdateDescriptorSets) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) \
-    X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdDraw) X(CmdSetViewport) X(CmdSetScissor) \
+    X(UpdateDescriptorSets) X(CreateQueryPool) X(DestroyQueryPool) X(GetQueryPoolResults) \
+    X(CmdResetQueryPool) X(CmdWriteTimestamp) X(CmdBeginRenderPass) X(CmdEndRenderPass) X(CmdBindPipeline) \
+    X(CmdBindDescriptorSets) X(CmdPushConstants) X(CmdDispatch) X(CmdCopyImage) \
+    X(CreateComputePipelines) X(CmdDraw) X(CmdSetViewport) X(CmdSetScissor) \
     /* frame generation (framegen_bridge.c / vk_present.c per-present sync slots) */ \
     X(DestroySemaphore)
 
@@ -53,6 +59,8 @@ int vk_loader_open(const char *driver_path, const char *library_name,
                    const char *native_lib_dir);
 void vk_loader_load_instance(VkInstance instance);
 void vk_loader_load_device(VkDevice device);
+/* Bind this dispatch table to an already-created Vulkan device owned by another renderer. */
+int vk_loader_bind_external(PFN_vkGetInstanceProcAddr gipa, VkInstance instance, VkDevice device);
 /* The driver's vkGetInstanceProcAddr (NULL before vk_loader_open): for modules that resolve their
  * own entry points, e.g. the frame-generation engines (framegen_engine.cpp). */
 PFN_vkGetInstanceProcAddr vk_loader_gipa(void);

@@ -99,7 +99,7 @@ public class VulkanRenderer
 
     // Must mirror VK_MAX_RENDERABLE_WINDOWS / VK_MAX_EFFECTS in vk_state.h.
     private static final int MAX_WINDOWS = 64;
-    private static final int MAX_EFFECTS = 8;
+    private static final int MAX_EFFECTS = 16;
 
     private static final int OFF_CURSOR_HANDLE   = 0;
     private static final int OFF_WINDOW_HANDLES  = 8;
@@ -114,13 +114,13 @@ public class VulkanRenderer
     private static final int OFF_SCREEN_H        = 608;
     private static final int OFF_EFFECT_COUNT    = 612;
     private static final int OFF_EFFECT_TYPES    = 616;
-    private static final int OFF_EFFECT_PARAMS   = 648;
-    private static final int OFF_WINDOW_GEOM     = 776;
-    private static final int OFF_WINDOW_UV       = 1800;
-    private static final int OFF_SWAP_RB         = 2824;
-    private static final int OFF_SOURCE_W        = 2828;
-    private static final int OFF_SOURCE_H        = 2832;
-    private static final int SCENE_BUF_SIZE      = 2836;
+    private static final int OFF_EFFECT_PARAMS   = 680;
+    private static final int OFF_WINDOW_GEOM     = 936;
+    private static final int OFF_WINDOW_UV       = 1960;
+    private static final int OFF_SWAP_RB         = 2984;
+    private static final int OFF_SOURCE_W        = 2988;
+    private static final int OFF_SOURCE_H        = 2992;
+    private static final int SCENE_BUF_SIZE      = 2996;
 
     private final ByteBuffer sceneBuf =
             ByteBuffer.allocateDirect(SCENE_BUF_SIZE).order(ByteOrder.nativeOrder());
@@ -325,6 +325,13 @@ public class VulkanRenderer
                 if (disFrameGenerationRequested) {
                     nativeSetDisFrameGenerationEnabled(nativeHandle, true);
                 }
+                if (snapFrameGenerationRequested) {
+                    nativeSetSnapFrameGenerationEnabled(nativeHandle, true);
+                }
+                nativeSetSnapFrameDebugFlow(nativeHandle, snapFrameDebugFlow);
+                nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
+                nativeSetSnapFrameCandidateReconstruction(nativeHandle, snapFrameCandidateMode);
+                nativeSetSnapFrameAiMode(nativeHandle, snapFrameAiMode);
                 destroyed.set(false);
                 xServer.windowManager.addOnWindowModificationListener(this);
                 xServer.pointer.addOnPointerMotionListener(this);
@@ -1062,6 +1069,46 @@ public class VulkanRenderer
         }
     }
 
+    private boolean snapFrameGenerationRequested = false;
+    private boolean snapFrameDebugFlow = false;
+    private int snapFrameDebugMode = 0;
+    private int snapFrameCandidateMode = 0;
+    private int snapFrameAiMode = 0;
+
+    public void setSnapFrameGenerationEnabled(boolean enabled) {
+        snapFrameGenerationRequested = enabled;
+        if (nativeHandle != 0) nativeSetSnapFrameGenerationEnabled(nativeHandle, enabled);
+    }
+
+    public boolean isSnapFrameGenerationAvailable() {
+        return nativeHandle != 0 && nativeIsSnapFrameGenerationAvailable(nativeHandle);
+    }
+
+    public void setSnapFrameDebugFlow(boolean enabled) {
+        snapFrameDebugFlow = enabled;
+        if (nativeHandle != 0) nativeSetSnapFrameDebugFlow(nativeHandle, enabled);
+    }
+
+    /** 0=motion, 1=matcher confidence, 2=forward/backward consistency. */
+    public void setSnapFrameDebugMode(int mode) {
+        snapFrameDebugMode = Math.max(0, Math.min(2, mode));
+        if (nativeHandle != 0) nativeSetSnapFrameDebugMode(nativeHandle, snapFrameDebugMode);
+    }
+
+    /** 0=Auto (AI may adapt multiplier), 1=Off, 2=On (AI active, manual multiplier). */
+    public void setSnapFrameAiMode(int mode) {
+        snapFrameAiMode = Math.max(0, Math.min(2, mode));
+        if (nativeHandle != 0) nativeSetSnapFrameAiMode(nativeHandle, snapFrameAiMode);
+    }
+
+    /** 0=AI Auto, 1=Off, 2=On. */
+    public void setSnapFrameCandidateReconstruction(int mode) {
+        snapFrameCandidateMode = Math.max(0, Math.min(2, mode));
+        if (nativeHandle != 0) {
+            nativeSetSnapFrameCandidateReconstruction(nativeHandle, snapFrameCandidateMode);
+        }
+    }
+
     private boolean disFrameGenerationRequested = false;
     private int disFrameGenerationScale = 180;
     private int disFrameGenerationTargetFps = 0;
@@ -1169,6 +1216,12 @@ public class VulkanRenderer
     private static native void nativeSetFrameGenerationMode(long handle, int multiplier,
                                                             int targetRate,
                                                             int flowScalePercent);
+    private static native boolean nativeIsSnapFrameGenerationAvailable(long handle);
+    private static native void nativeSetSnapFrameGenerationEnabled(long handle, boolean enabled);
+    private static native void nativeSetSnapFrameDebugFlow(long handle, boolean enabled);
+    private static native void nativeSetSnapFrameDebugMode(long handle, int mode);
+    private static native void nativeSetSnapFrameCandidateReconstruction(long handle, int mode);
+    private static native void nativeSetSnapFrameAiMode(long handle, int mode);
     private static native void nativeSetDisFrameGenerationEnabled(long handle, boolean enabled);
     private static native void nativeSetDisFrameGenerationScale(long handle, int scalePercent);
     private static native void nativeSetDisFrameGenerationTargetFps(long handle, int targetFps);

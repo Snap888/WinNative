@@ -16,6 +16,7 @@
 
 #include "vk_state.h"
 #include "vk_driver.h"
+#include "../../../waylandcomp/src/vk_loader.h"
 
 #include <android/native_window.h>
 #include <android/native_window_jni.h>
@@ -45,6 +46,10 @@
 #include "shaders/effect_colorblind_frag.spv.h"
 #include "shaders/effect_pixelate_frag.spv.h"
 #include "shaders/sgsr1_frag.spv.h"
+#include "shaders/anr_spatial_frag.spv.h"
+#include "../../waylandcomp/shaders/upscale_vert.h"
+#include "../../waylandcomp/shaders/fsr_easu_frag.h"
+#include "../../waylandcomp/shaders/fsr_rcas_frag.h"
 
 // ============================================================
 // Forward decls
@@ -75,6 +80,8 @@ static void create_lsfg(VkRenderer* r);
 static void destroy_lsfg(VkRenderer* r);
 static void create_dis(VkRenderer* r);
 static void destroy_dis(VkRenderer* r);
+static void create_snap(VkRenderer* r);
+static void destroy_snap(VkRenderer* r);
 static uint32_t framegen_extra_images(const VkRenderer* r);
 static void framegen_rebuild_swapchain(VkRenderer* r);
 static bool create_quad_vbo(VkRenderer* r);
@@ -834,9 +841,9 @@ static bool create_pipeline_layouts(VkRenderer* r) {
     // Effect: push constants = vec2 resolution + 4 floats (sat, contrast, sharp, mode) = 24 bytes.
     // Other effect shaders only declare the first 16 bytes and ignore the rest.
     VkPushConstantRange pcr_effect = {0};
-    pcr_effect.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pcr_effect.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pcr_effect.offset = 0;
-    pcr_effect.size = 24;
+    pcr_effect.size = 88;
 
     VkPipelineLayoutCreateInfo plci2 = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     plci2.setLayoutCount = 1;
@@ -972,12 +979,17 @@ static bool create_pipelines(VkRenderer* r) {
     VkShaderModule fs_colorblind = load_shader_module(r, effect_colorblind_frag, effect_colorblind_frag_size);
     VkShaderModule fs_pixelate = load_shader_module(r, effect_pixelate_frag, effect_pixelate_frag_size);
     VkShaderModule fs_sgsr1 = load_shader_module(r, sgsr1_frag, sgsr1_frag_size);
+    VkShaderModule fs_anr_spatial = load_shader_module(r, anr_spatial_frag, anr_spatial_frag_size);
+    VkShaderModule vs_upscale = load_shader_module(r, upscale_vert_code, sizeof(upscale_vert_code));
+    VkShaderModule fs_fsr_easu = load_shader_module(r, fsr_easu_code, sizeof(fsr_easu_code));
+    VkShaderModule fs_fsr_rcas = load_shader_module(r, fsr_rcas_code, sizeof(fsr_rcas_code));
     if (!vs_window || !fs_window || !fs_cursor || !vs_quad || !fs_blit
         || !fs_crt || !fs_vivid || !fs_hdr || !fs_natural
         || !fs_toon || !fs_ntsc || !fs_ntsc2 || !fs_coloradj
         || !fs_colorgrade || !fs_sharpen || !fs_scanlines
         || !fs_colorblind || !fs_pixelate
-        || !fs_sgsr1) {
+        || !fs_sgsr1 || !fs_anr_spatial
+        || !vs_upscale || !fs_fsr_easu || !fs_fsr_rcas) {
         return false;
     }
 
@@ -1005,6 +1017,20 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.effect_pipelines[VK_EFFECT_SGSR1] = create_graphics_pipeline(
         r, vs_quad, fs_sgsr1, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
+    r->pipelines.effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
+        r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        false, false, NULL);
+    /* FSR is executed by the dedicated two-pass path below; keep a valid blit fallback
+     * in the generic effect table so the normal pipeline completeness check still passes. */
+    r->pipelines.effect_pipelines[VK_EFFECT_FSR] = create_graphics_pipeline(
+        r, vs_quad, fs_blit, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        false, false, NULL);
+    r->pipelines.fsr_easu_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        true, false, NULL);
+    r->pipelines.fsr_rcas_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_rcas, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
+        true, false, NULL);
     r->pipelines.effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.swapchain_pass,
         false, false, NULL);
@@ -1056,6 +1082,18 @@ static bool create_pipelines(VkRenderer* r) {
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_SGSR1] = create_graphics_pipeline(
         r, vs_quad, fs_sgsr1, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
+    r->pipelines.offscreen_effect_pipelines[VK_EFFECT_ANR_SPATIAL] = create_graphics_pipeline(
+        r, vs_quad, fs_anr_spatial, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        false, false, NULL);
+    r->pipelines.offscreen_effect_pipelines[VK_EFFECT_FSR] = create_graphics_pipeline(
+        r, vs_quad, fs_blit, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        false, false, NULL);
+    r->pipelines.offscreen_fsr_easu_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_easu, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        true, false, NULL);
+    r->pipelines.offscreen_fsr_rcas_pipeline = create_graphics_pipeline(
+        r, vs_upscale, fs_fsr_rcas, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
+        true, false, NULL);
     r->pipelines.offscreen_effect_pipelines[VK_EFFECT_TOON] = create_graphics_pipeline(
         r, vs_quad, fs_toon, r->pipelines.effect_layout, r->pipelines.offscreen_pass,
         false, false, NULL);
@@ -1103,6 +1141,10 @@ static bool create_pipelines(VkRenderer* r) {
     vkDestroyShaderModule(r->device, fs_colorblind, NULL);
     vkDestroyShaderModule(r->device, fs_pixelate, NULL);
     vkDestroyShaderModule(r->device, fs_sgsr1, NULL);
+    vkDestroyShaderModule(r->device, fs_anr_spatial, NULL);
+    vkDestroyShaderModule(r->device, vs_upscale, NULL);
+    vkDestroyShaderModule(r->device, fs_fsr_easu, NULL);
+    vkDestroyShaderModule(r->device, fs_fsr_rcas, NULL);
 
     if (!r->pipelines.window_pipeline || !r->pipelines.cursor_pipeline
         || !r->pipelines.blit_pipeline
@@ -1135,6 +1177,10 @@ static void destroy_pipelines(VkRenderer* r) {
             r->pipelines.offscreen_effect_pipelines[i] = VK_NULL_HANDLE;
         }
     }
+    if (r->pipelines.fsr_easu_pipeline) vkDestroyPipeline(r->device, r->pipelines.fsr_easu_pipeline, NULL);
+    if (r->pipelines.fsr_rcas_pipeline) vkDestroyPipeline(r->device, r->pipelines.fsr_rcas_pipeline, NULL);
+    if (r->pipelines.offscreen_fsr_easu_pipeline) vkDestroyPipeline(r->device, r->pipelines.offscreen_fsr_easu_pipeline, NULL);
+    if (r->pipelines.offscreen_fsr_rcas_pipeline) vkDestroyPipeline(r->device, r->pipelines.offscreen_fsr_rcas_pipeline, NULL);
     if (r->pipelines.window_pipeline) vkDestroyPipeline(r->device, r->pipelines.window_pipeline, NULL);
     if (r->pipelines.cursor_pipeline) vkDestroyPipeline(r->device, r->pipelines.cursor_pipeline, NULL);
     if (r->pipelines.blit_pipeline)   vkDestroyPipeline(r->device, r->pipelines.blit_pipeline, NULL);
@@ -1315,7 +1361,7 @@ static bool create_swapchain(VkRenderer* r, uint32_t fallback_width, uint32_t fa
         sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // blit source for the encoder mirror
     }
     bool transfer_dst_capable = (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0;
-    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested) && transfer_dst_capable;
+    r->swapchain_transfer_dst = (r->framegen_requested || r->dis_requested || r->snap_requested) && transfer_dst_capable;
     if (r->swapchain_transfer_dst) sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     r->swapchain_storage = r->framegen_requested
@@ -1945,8 +1991,33 @@ static void create_dis(VkRenderer* r) {
     vkr_dis_set_debug_flow(r->dis, r->dis_debug_flow);
 }
 
+static void destroy_snap(VkRenderer* r) {
+    if (!r->snap) return;
+    snap_frame_vk_destroy(r->snap);
+    r->snap = NULL;
+    r->framegen_real_frames = 0;
+    r->framegen_made_frames = 0;
+}
+
+static void create_snap(VkRenderer* r) {
+    if (r->snap || !r->device || !r->physical_device || !r->snap_dispatch_available) return;
+    r->snap = snap_frame_vk_create(r->device, r->physical_device);
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, r->snap_debug_mode);
+    if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, r->snap_candidate_reconstruction_mode);
+    if (r->snap) snap_frame_vk_set_ai_mode(r->snap, r->snap_ai_mode);
+    if (!r->snap) {
+        VK_LOGW("SnapFrame Vulkan backend unavailable on this X11 device");
+        return;
+    }
+    VK_LOGI("SnapFrame Vulkan backend created on existing X11 device/queue");
+}
+
 static uint32_t framegen_extra_images(const VkRenderer* r) {
-    if (!r->framegen_requested && !r->dis_requested) return 0;
+    if (!r->framegen_requested && !r->dis_requested && !r->snap_requested) return 0;
+    if (r->snap_requested) {
+        uint32_t n = r->framegen_multiplier > 1 ? r->framegen_multiplier - 1 : 1;
+        return n > 3u ? 3u : n;
+    }
     if (r->dis_requested) return VKR_DIS_MAX_GENERATIONS;
     if (r->framegen_target_rate != 0) return VKR_LSFG_MAX_GENERATIONS;
 
@@ -2412,7 +2483,94 @@ static void run_effect(VkRenderer* r, VkCommandBuffer cmd, VkEffectSlot* eff,
 }
 
 static bool scene_starts_with_sgsr1(const VkScene* s) {
-    return s->effect_count > 0 && s->effects[0].type == VK_EFFECT_SGSR1;
+    if (s->effect_count == 0) return false;
+    return s->effects[0].type == VK_EFFECT_SGSR1
+        || s->effects[0].type == VK_EFFECT_ANR_SPATIAL
+        || s->effects[0].type == VK_EFFECT_FSR;
+}
+
+static bool scene_starts_with_fsr(const VkScene* s) {
+    return s->effect_count > 0 && s->effects[0].type == VK_EFFECT_FSR;
+}
+
+struct FsrEasuPush {
+    float ndc[4];
+    uint32_t con0[4], con1[4], con2[4], con3[4];
+    float outW, outH;
+};
+struct FsrRcasPush {
+    float ndc[4];
+    uint32_t con[4];
+    float outW, outH;
+};
+
+static uint32_t fsr_pack_float(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static void fsr_build_easu_constants(struct FsrEasuPush* pc,
+                                     uint32_t in_w, uint32_t in_h,
+                                     uint32_t out_w, uint32_t out_h) {
+    const float iw = (float)in_w, ih = (float)in_h;
+    const float ow = (float)out_w, oh = (float)out_h;
+    pc->ndc[0] = -1.0f; pc->ndc[1] = -1.0f;
+    pc->ndc[2] = 1.0f; pc->ndc[3] = 1.0f;
+    pc->con0[0] = fsr_pack_float(iw / ow);
+    pc->con0[1] = fsr_pack_float(ih / oh);
+    pc->con0[2] = fsr_pack_float(0.5f * iw / ow - 0.5f);
+    pc->con0[3] = fsr_pack_float(0.5f * ih / oh - 0.5f);
+    pc->con1[0] = fsr_pack_float(1.0f / iw); pc->con1[1] = fsr_pack_float(1.0f / ih);
+    pc->con1[2] = fsr_pack_float(1.0f / iw); pc->con1[3] = fsr_pack_float(-1.0f / ih);
+    pc->con2[0] = fsr_pack_float(-1.0f / iw); pc->con2[1] = fsr_pack_float(2.0f / ih);
+    pc->con2[2] = fsr_pack_float(1.0f / iw); pc->con2[3] = fsr_pack_float(2.0f / ih);
+    pc->con3[0] = 0; pc->con3[1] = fsr_pack_float(4.0f / ih);
+    pc->con3[2] = 0; pc->con3[3] = 0;
+    pc->outW = ow; pc->outH = oh;
+}
+
+static void fsr_build_rcas_constants(struct FsrRcasPush* pc,
+                                     float sharpness, uint32_t out_w, uint32_t out_h) {
+    if (sharpness < 0.0f) sharpness = 0.0f;
+    if (sharpness > 1.0f) sharpness = 1.0f;
+    pc->ndc[0] = -1.0f; pc->ndc[1] = -1.0f;
+    pc->ndc[2] = 1.0f; pc->ndc[3] = 1.0f;
+    pc->con[0] = fsr_pack_float(sharpness);
+    pc->con[1] = pc->con[2] = pc->con[3] = 0;
+    pc->outW = (float)out_w; pc->outH = (float)out_h;
+}
+
+_Static_assert(sizeof(struct FsrEasuPush) == 88, "FSR EASU push constants layout mismatch");
+_Static_assert(sizeof(struct FsrRcasPush) == 40, "FSR RCAS push constants layout mismatch");
+
+static void run_fsr_pass(VkRenderer* r, VkCommandBuffer cmd, VkPipeline pipe,
+                         VkDescriptorSet src_set, uint32_t in_w, uint32_t in_h,
+                         uint32_t out_w, uint32_t out_h, bool easu, float sharpness) {
+    if (!pipe || !src_set || out_w == 0 || out_h == 0) return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+    VkViewport vp = {0, 0, (float)out_w, (float)out_h, 0.0f, 1.0f};
+    VkRect2D sc = {{0, 0}, {out_w, out_h}};
+    vkCmdSetViewport(cmd, 0, 1, &vp);
+    vkCmdSetScissor(cmd, 0, 1, &sc);
+    if (easu) {
+        struct FsrEasuPush pc;
+        fsr_build_easu_constants(&pc, in_w, in_h, out_w, out_h);
+        vkCmdPushConstants(cmd, r->pipelines.effect_layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    } else {
+        struct FsrRcasPush pc;
+        fsr_build_rcas_constants(&pc, sharpness, out_w, out_h);
+        vkCmdPushConstants(cmd, r->pipelines.effect_layout,
+            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    }
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        r->pipelines.effect_layout, 0, 1, &src_set, 0, NULL);
+    /* The FSR vertex pipeline is configured as a triangle strip. Bind the shared quad
+     * buffer as well, although the SPIR-V derives positions from gl_VertexIndex. */
+    VkDeviceSize vertex_offset = 0;
+    vkCmdBindVertexBuffers(cmd, 0, 1, &r->quad_vbo, &vertex_offset);
+    vkCmdDraw(cmd, 4, 1, 0, 0);
 }
 
 static void wait_inflight_frames(VkRenderer* r) {
@@ -2444,6 +2602,15 @@ static VkExtent2D compute_sgsr1_source_extent(VkRenderer* r, const VkScene* s) {
         source_w < out.width ? source_w : out.width,
         source_h < out.height ? source_h : out.height,
     };
+    if (s->effect_count > 0 && (s->effects[0].type == VK_EFFECT_ANR_SPATIAL
+        || s->effects[0].type == VK_EFFECT_FSR)) {
+        float scale = s->effects[0].param0;
+        if (!(scale > 0.0f)) scale = 0.75f;
+        if (scale < 0.25f) scale = 0.25f;
+        if (scale > 1.50f) scale = 1.50f;
+        source.width = (uint32_t)((float)source.width * scale + 0.5f);
+        source.height = (uint32_t)((float)source.height * scale + 0.5f);
+    }
     if (source.width < 1) source.width = 1;
     if (source.height < 1) source.height = 1;
     return source;
@@ -2510,7 +2677,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
 
-    vkWaitForFences(r->device, 1, &f->in_flight, VK_TRUE, UINT64_MAX);
+    VkResult frame_wait_result = vkWaitForFences(r->device, 1, &f->in_flight, VK_TRUE, UINT64_MAX);
+    if (frame_wait_result == VK_SUCCESS && f->framegen_compute_pending) {
+        r->framegen_compute_completed_total += f->framegen_compute_pending;
+        f->framegen_compute_pending = 0;
+    } else if (frame_wait_result != VK_SUCCESS) {
+        VK_LOGW("frame fence wait failed (%d); pending compute is not counted as completed",
+                (int)frame_wait_result);
+        f->framegen_compute_pending = 0;
+    }
 
     // Snapshot the scene under scene_mutex (cheap memcpy of a few KB), then release it so
     // scene producers (texture destroys, X server window updates) don't stall behind the
@@ -2532,13 +2707,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
     destroy_graveyard_textures(r, dead, dead_count);
 
     bool wants_sgsr1 = scene_starts_with_sgsr1(&snap);
+    bool wants_fsr = scene_starts_with_fsr(&snap);
     bool needs_fullres_offscreen = snap.effect_count > 0
-        && (!wants_sgsr1 || snap.effect_count > 1);
+        && (wants_fsr || !wants_sgsr1 || snap.effect_count > 1);
     // offscreen[1] is reached only once the chain writes two distinct offscreen buffers: the
     // effect loop's dst_idx starts at 1 for a non-SGSR chain but at 0 for an SGSR1-led one
     // (scene goes to the separate SGSR source), so the threshold is >1 normally, >2 for SGSR.
     bool needs_second_offscreen = needs_fullres_offscreen
-        && snap.effect_count > (wants_sgsr1 ? 2u : 1u);
+        && (wants_fsr ? snap.effect_count > 1u
+                      : snap.effect_count > (wants_sgsr1 ? 2u : 1u));
     VkExtent2D sgsr1_source_extent = wants_sgsr1
         ? compute_sgsr1_source_extent(r, &snap)
         : r->swapchain_extent;
@@ -2612,8 +2789,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
         destroy_sgsr1_resources(r);
     }
 
-    const bool framegen_on = r->framegen_requested || r->dis_requested;
+    const bool framegen_on = r->framegen_requested || r->dis_requested || r->snap_requested;
     const bool use_dis = r->dis != NULL;
+    const bool use_snap = r->snap != NULL;
     bool via_composite = framegen_on && r->framegen_supported
                       && r->swapchain_transfer_dst;
 
@@ -2634,9 +2812,9 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t framegen_capacity = 0;
-    if (via_composite && (r->lsfg || r->dis) && r->swapchain_image_count > 2) {
+    if (via_composite && (r->lsfg || r->dis || r->snap) && r->swapchain_image_count > 2) {
         framegen_capacity = r->swapchain_image_count - 2;
-        const uint32_t engine_max = r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS;
+        const uint32_t engine_max = r->snap ? 3u : (r->dis ? VKR_DIS_MAX_GENERATIONS : VKR_LSFG_MAX_GENERATIONS);
         if (framegen_capacity > engine_max) framegen_capacity = engine_max;
         if (VK_FRAMES_IN_FLIGHT + framegen_capacity > VK_MAX_COMPOSITE_TARGETS) {
             framegen_capacity = VK_MAX_COMPOSITE_TARGETS - VK_FRAMES_IN_FLIGHT;
@@ -2657,6 +2835,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             || (r->dis && vkr_dis_needs_rebuild(r->dis, composite_extent.width,
                                                 composite_extent.height, r->swapchain_format,
                                                 dis_content));
+        if (r->snap && r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM) {
+            VK_LOGW("SnapFrame currently requires an RGBA8 X11 swapchain format");
+            framegen_capacity = 0;
+        }
         if (composite_stale || chain_stale) {
             if (r->dis) {
                 vkDeviceWaitIdle(r->device);
@@ -2682,6 +2864,13 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                      dis_content)) {
                     framegen_capacity = 0;
                 }
+            } else if (r->snap) {
+                if (!snap_frame_vk_prepare(r->snap, composite_extent.width,
+                                           composite_extent.height, r->swapchain_format,
+                                           (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+                    VK_LOGW("SnapFrame resource preparation failed for X11 output");
+                    framegen_capacity = 0;
+                }
             }
         }
     } else if (r->composite_built) {
@@ -2689,7 +2878,30 @@ static bool record_and_submit_frame(VkRenderer* r) {
         destroy_composite_targets(r);
     }
 
+    if (via_composite && r->snap
+        && !snap_frame_vk_prepare(r->snap, composite_extent.width, composite_extent.height,
+                                  r->swapchain_format,
+                                  (uint32_t)(r->framegen_flow_scale * 100.0f))) {
+        VK_LOGW("SnapFrame X11 frame resources are unavailable");
+        framegen_capacity = 0;
+    }
+
     uint32_t framegen_planned = 0;
+    /*
+     * The multiplier selected in the X11 drawer is an explicit user request.
+     * Snap AI may recommend a lower multiplier for its Auto policy, but it must
+     * never silently override the manual x2/x3/x4 selection. AI multiplier
+     * control is applied only by the explicit Auto policy (wired separately);
+     * until that policy is selected, preserve the requested multiplier.
+     */
+    uint32_t snap_effective_multiplier = r->framegen_multiplier;
+    if (r->snap) {
+        /* Only Auto policy exposes a recommendation; Off/On return zero and
+         * always preserve the selected x2/x3/x4 multiplier. */
+        const uint32_t ai_multiplier = snap_frame_vk_get_recommended_multiplier(r->snap);
+        if (ai_multiplier >= 2u && ai_multiplier < snap_effective_multiplier)
+            snap_effective_multiplier = ai_multiplier;
+    }
     if (via_composite) {
         const int32_t pending_mhz = __atomic_load_n(&r->framegen_refresh_mhz, __ATOMIC_RELAXED);
         r->framegen_refresh_rate = pending_mhz > 0 ? (float)pending_mhz / 1000.0f : 0.0f;
@@ -2703,6 +2915,12 @@ static bool record_and_submit_frame(VkRenderer* r) {
             framegen_planned = vkr_dis_plan(r->dis, framegen_capacity,
                                             __atomic_load_n(&r->framegen_source_frames,
                                                             __ATOMIC_RELAXED));
+        } else if (r->snap) {
+            framegen_planned = snap_frame_vk_has_history(r->snap)
+                                   ? (snap_effective_multiplier > 1
+                                          ? snap_effective_multiplier - 1 : 0) : 0;
+            if (framegen_planned > 3u) framegen_planned = 3u;
+            if (framegen_planned > framegen_capacity) framegen_planned = framegen_capacity;
         }
     }
 
@@ -2742,20 +2960,37 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     uint32_t gen_count = 0;
+    uint32_t gen_presented_count = 0, gen_present_fail_count = 0;
     uint32_t gen_image_index[VK_FRAMEGEN_MAX_GENERATIONS] = {0};
+    r->framegen_planned_total += framegen_planned;
     for (uint32_t g = 0; g < framegen_planned; g++) {
         uint32_t idx = 0;
-        VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, gen_acquire_timeout,
+        const uint64_t slot_timeout = g == 0 ? gen_acquire_timeout : 1000000ULL;
+        const uint64_t acquire_begin_ns = vkr_monotonic_ns();
+        VkResult ga = vkAcquireNextImageKHR(r->device, r->swapchain, slot_timeout,
                                             f->image_available_gen[g], VK_NULL_HANDLE, &idx);
+        const uint64_t acquire_end_ns = vkr_monotonic_ns();
+        if (acquire_end_ns >= acquire_begin_ns) {
+            const uint64_t acquire_elapsed_ns = acquire_end_ns - acquire_begin_ns;
+            r->framegen_acquire_ns += acquire_elapsed_ns;
+            if (g < 7u) {
+                r->framegen_acquire_slot_ns[g] += acquire_elapsed_ns;
+                r->framegen_acquire_slot_calls[g]++;
+            }
+        }
         if (ga != VK_SUCCESS && ga != VK_SUBOPTIMAL_KHR) {
-            if (r->framegen_acquire_misses++ % 120 == 0) {
+            r->framegen_acquire_misses++;
+            if (ga == VK_TIMEOUT || ga == VK_NOT_READY) r->framegen_acquire_timeouts++;
+            else r->framegen_acquire_errors++;
+            if (r->framegen_acquire_misses % 120 == 1) {
                 VK_LOGW("Generated frame %u/%u dropped: acquire returned %d "
-                        "(swapchain images=%u capacity=%u)",
+                        "(swapchain images=%u capacity=%u timeout=%llu ns)",
                         g + 1, framegen_planned, (int)ga, r->swapchain_image_count,
-                        framegen_capacity);
+                        framegen_capacity, (unsigned long long)slot_timeout);
             }
             break;
         }
+        r->framegen_acquired_total++;
         gen_image_index[gen_count++] = idx;
     }
 
@@ -2806,7 +3041,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
         bool full_ok = !needs_fullres_offscreen
             || (r->offscreen_built
                 && (!needs_second_offscreen || r->offscreen[1].image != VK_NULL_HANDLE));
-        has_effects = full_ok && (!wants_sgsr1 || r->sgsr1.built);
+        has_effects = full_ok && (!wants_sgsr1 || r->sgsr1.built)
+            && (!wants_fsr || (r->pipelines.offscreen_fsr_easu_pipeline
+                && r->pipelines.offscreen_fsr_rcas_pipeline
+                && r->pipelines.fsr_rcas_pipeline));
     }
 
     VkRenderPass final_pass = composite ? r->pipelines.composite_pass
@@ -2845,9 +3083,45 @@ static bool record_and_submit_frame(VkRenderer* r) {
         // first, the first source is low-res and SGSR1 writes full-res output.
         VkOffscreen* src_offscreen = scene_target;
         uint32_t dst_idx = (scene_target == &r->offscreen[0]) ? 1u : 0u;
+        if (wants_fsr) dst_idx = 0u; /* offscreen[0] is the dedicated EASU intermediate */
         for (uint32_t i = 0; i < snap.effect_count; i++) {
             bool last = (i == snap.effect_count - 1);
             VkEffectSlot* eff = &snap.effects[i];
+
+            if (eff->type == VK_EFFECT_FSR && i == 0 && r->offscreen[0].image != VK_NULL_HANDLE) {
+                /* FSR1 two-pass chain: source -> EASU intermediate -> RCAS final/next target. */
+                VkOffscreen* easu_target = &r->offscreen[0];
+                rpbi.renderPass = r->pipelines.offscreen_pass;
+                rpbi.framebuffer = easu_target->framebuffer;
+                rpbi.renderArea.extent.width = easu_target->width;
+                rpbi.renderArea.extent.height = easu_target->height;
+                vkCmdBeginRenderPass(f->cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+                run_fsr_pass(r, f->cmd, r->pipelines.offscreen_fsr_easu_pipeline,
+                    src_offscreen->descriptor_set, src_offscreen->width, src_offscreen->height,
+                    easu_target->width, easu_target->height, true, 0.0f);
+                vkCmdEndRenderPass(f->cmd);
+
+                const bool rcas_last = (snap.effect_count == 1);
+                VkOffscreen* rcas_target = rcas_last ? NULL : &r->offscreen[1];
+                rpbi.renderPass = rcas_last ? final_pass : r->pipelines.offscreen_pass;
+                rpbi.framebuffer = rcas_last ? final_fb : rcas_target->framebuffer;
+                rpbi.renderArea.extent = rcas_last ? final_extent
+                    : (VkExtent2D){rcas_target->width, rcas_target->height};
+                vkCmdBeginRenderPass(f->cmd, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+                run_fsr_pass(r, f->cmd,
+                    rcas_last ? r->pipelines.fsr_rcas_pipeline : r->pipelines.offscreen_fsr_rcas_pipeline,
+                    easu_target->descriptor_set, easu_target->width, easu_target->height,
+                    rcas_last ? final_extent.width : rcas_target->width,
+                    rcas_last ? final_extent.height : rcas_target->height,
+                    false, eff->param1);
+                vkCmdEndRenderPass(f->cmd);
+
+                if (!rcas_last) {
+                    src_offscreen = rcas_target;
+                    dst_idx = 0u;
+                }
+                continue;
+            }
 
             if (last) {
                 rpbi.renderPass = final_pass;
@@ -2883,8 +3157,15 @@ static bool record_and_submit_frame(VkRenderer* r) {
     }
 
     if (composite) {
-        if ((use_dis || r->lsfg) && framegen_capacity > 0) {
-            if (use_dis) {
+        if ((use_dis || r->lsfg || use_snap) && framegen_capacity > 0) {
+            if (use_snap) {
+                uint32_t snap_process_count = gen_count;
+                /* UINT32_MAX requests a flow-only update when no extra swapchain image was acquired. */
+                if (r->snap_debug_flow && snap_process_count == 0)
+                    snap_process_count = UINT32_MAX;
+                if (!snap_frame_vk_process(r->snap, f->cmd, composite->image,
+                                           composite->view, snap_process_count)) gen_count = 0;
+            } else if (use_dis) {
                 vkr_dis_process(r->dis, f->cmd, composite->image,
                                 composite->width, composite->height, gen_count);
             } else {
@@ -2895,7 +3176,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
             for (uint32_t g = 0; g < gen_count; g++) {
                 const uint32_t idx = gen_image_index[g];
                 if (r->swapchain_storage) {
-                    if (use_dis) {
+                    if (use_snap) {
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count,
+                                               r->swapchain_images[idx], r->swapchain_views[idx]);
+                    } else if (use_dis) {
                         vkr_dis_generate_into(r->dis, f->cmd, g, idx,
                                               r->swapchain_images[idx], r->swapchain_views[idx],
                                               r->swapchain_extent.width,
@@ -2930,15 +3214,28 @@ static bool record_and_submit_frame(VkRenderer* r) {
                                       VK_ACCESS_TRANSFER_WRITE_BIT, 0);
                 } else {
                     VkCompositeTarget* gt = &r->composite[VK_FRAMES_IN_FLIGHT + g];
-                    vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
-                                           gt->image, gt->view,
-                                           r->swapchain_extent.width,
-                                           r->swapchain_extent.height);
+                    if (use_snap) {
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_UNDEFINED,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                                          VK_ACCESS_SHADER_WRITE_BIT);
+                        snap_frame_vk_generate(r->snap, f->cmd, g, gen_count, gt->image, gt->view);
+                        vkr_image_barrier(f->cmd, gt->image, VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_IMAGE_LAYOUT_GENERAL,
+                                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                          VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                          VK_ACCESS_SHADER_WRITE_BIT,
+                                          VK_ACCESS_TRANSFER_READ_BIT);
+                    } else {
+                        vkr_lsfg_generate_into(r->lsfg, f->cmd, g, VK_FRAMES_IN_FLIGHT + g,
+                                               gt->image, gt->view,
+                                               r->swapchain_extent.width,
+                                               r->swapchain_extent.height);
+                    }
                     blit_composite_to_swapchain(r, f->cmd, gt, r->swapchain_images[idx]);
                 }
             }
-            r->framegen_real_frames++;
-            r->framegen_made_frames += gen_count;
             if ((r->framegen_real_frames % 120) == 0) {
                 const uint64_t d_real = r->framegen_real_frames - r->framegen_log_real;
                 const uint64_t d_made = r->framegen_made_frames - r->framegen_log_made;
@@ -2950,20 +3247,75 @@ static bool record_and_submit_frame(VkRenderer* r) {
                 r->framegen_draw_ns = 0;
                 r->framegen_gap_ns = 0;
                 r->framegen_timed_frames = 0;
-                VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned=%u got=%u "
-                        "misses=%llu timeout=%.1fms images=%u capacity=%u draw=%.2fms gap=%.2fms",
+                if (use_snap) {
+                    float snap_stages[6], snap_total = 0.0f;
+                    if (snap_frame_vk_get_telemetry(r->snap, snap_stages, &snap_total)) {
+                        VK_LOGI("SnapFrame GPU ms: luma=%.3f pyramid=%.3f flow=%.3f consistency=%.3f warp=%.3f candidate=%.3f total=%.3f",
+                                snap_stages[0], snap_stages[1], snap_stages[2],
+                                snap_stages[3], snap_stages[4], snap_stages[5], snap_total);
+                    }
+                    float snap_metrics[4];
+                    if (snap_frame_vk_get_flow_metrics(r->snap, snap_metrics)) {
+                        VK_LOGI("SnapFrame latest completed flow metrics: motion=%.3f complexity=%.3f confidence=%.3f confident_inconsistency=%.3f (normalized)",
+                                snap_metrics[0], snap_metrics[1], snap_metrics[2], snap_metrics[3]);
+                    }
+                }
+                const double acquire_ms = (double)r->framegen_acquire_ns / 1.0e6;
+                const double submit_ms = (double)r->framegen_submit_ns / 1.0e6;
+                const double present_avg_ms = r->framegen_present_calls
+                    ? (double)r->framegen_present_ns / (double)r->framegen_present_calls / 1.0e6 : 0.0;
+                VK_LOGI("framegen delivered real=%llu made=%llu ratio=%.2f planned_now=%u planned_total=%llu "
+                        "acquired_now=%u acquired_total=%llu compute_recorded=%llu compute_completed=%llu submitted=%llu "
+                        "acquire_miss=%llu timeout=%llu acquire_err=%llu "
+                        "acquire_total=%.2fms submit_total=%.2fms generated_present_avg=%.3fms "
+                        "acquire_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms "
+                        "present_fail=%llu source_present_fail=%llu draw=%.2fms renderer_gap=%.2fms",
                         (unsigned long long)r->framegen_real_frames,
                         (unsigned long long)r->framegen_made_frames,
                         d_real ? (double)d_made / (double)d_real : 0.0,
-                        framegen_planned, gen_count,
+                        framegen_planned, (unsigned long long)r->framegen_planned_total,
+                        gen_count, (unsigned long long)r->framegen_acquired_total,
+                        (unsigned long long)r->framegen_compute_total,
+                        (unsigned long long)r->framegen_compute_completed_total,
+                        (unsigned long long)r->framegen_submitted_total,
                         (unsigned long long)r->framegen_acquire_misses,
-                        (double)gen_acquire_timeout / 1000000.0,
-                        r->swapchain_image_count, framegen_capacity,
-                        draw_ms, gap_ms);
+                        (unsigned long long)r->framegen_acquire_timeouts,
+                        (unsigned long long)r->framegen_acquire_errors,
+                        acquire_ms, submit_ms, present_avg_ms,
+                        r->framegen_acquire_slot_calls[0] ? (double)r->framegen_acquire_slot_ns[0] / (double)r->framegen_acquire_slot_calls[0] / 1.0e6 : 0.0,
+                        r->framegen_acquire_slot_calls[1] ? (double)r->framegen_acquire_slot_ns[1] / (double)r->framegen_acquire_slot_calls[1] / 1.0e6 : 0.0,
+                        r->framegen_acquire_slot_calls[2] ? (double)r->framegen_acquire_slot_ns[2] / (double)r->framegen_acquire_slot_calls[2] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[0] ? (double)r->framegen_present_slot_ns[0] / (double)r->framegen_present_slot_calls[0] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[1] ? (double)r->framegen_present_slot_ns[1] / (double)r->framegen_present_slot_calls[1] / 1.0e6 : 0.0,
+                        r->framegen_present_slot_calls[2] ? (double)r->framegen_present_slot_ns[2] / (double)r->framegen_present_slot_calls[2] / 1.0e6 : 0.0,
+                        (unsigned long long)r->framegen_present_failures,
+                        (unsigned long long)r->framegen_source_present_failures, draw_ms, gap_ms);
+                r->framegen_acquire_ns = 0;
+                memset(r->framegen_acquire_slot_ns, 0, sizeof(r->framegen_acquire_slot_ns));
+                memset(r->framegen_acquire_slot_calls, 0, sizeof(r->framegen_acquire_slot_calls));
+                memset(r->framegen_present_slot_ns, 0, sizeof(r->framegen_present_slot_ns));
+                memset(r->framegen_present_slot_calls, 0, sizeof(r->framegen_present_slot_calls));
+                r->framegen_submit_ns = 0;
+                r->framegen_present_ns = 0;
+                r->framegen_present_calls = 0;
             }
         }
 
-        if (use_dis && r->dis_debug_flow) {
+        // Keep the flow viewer latched to the latest completed flow field. Generated-frame
+        // acquisition is opportunistic; tying diagnostics to gen_count made the view blink
+        // whenever the swapchain could not supply an extra image.
+        if (use_snap && r->snap_debug_flow) {
+            vkr_image_barrier(f->cmd, composite->image,
+                              VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                              VK_ACCESS_SHADER_WRITE_BIT);
+            snap_frame_vk_debug_into(r->snap, f->cmd, composite->image, composite->view,
+                                     composite->width, composite->height);
+            blit_composite_to_swapchain(r, f->cmd, composite, r->swapchain_images[image_index]);
+        } else if (use_dis && r->dis_debug_flow) {
             vkr_dis_debug_into(r->dis, f->cmd, r->swapchain_images[image_index],
                                r->swapchain_extent.width, r->swapchain_extent.height);
             vkr_image_barrier(f->cmd, r->swapchain_images[image_index],
@@ -3042,7 +3394,10 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
 
-    vkEndCommandBuffer(f->cmd);
+    VkResult end_cmd_result = vkEndCommandBuffer(f->cmd);
+    /* Count generated images only when Vulkan accepted the completed command buffer. */
+    if (end_cmd_result == VK_SUCCESS) r->framegen_compute_total += gen_count;
+    else VK_LOGE("vkEndCommandBuffer -> %d", (int)end_cmd_result);
 
     #define VK_MAX_FRAME_SEMAPHORES (2 + VK_FRAMEGEN_MAX_GENERATIONS)
     VkSemaphore wait_sems[VK_MAX_FRAME_SEMAPHORES];
@@ -3083,11 +3438,22 @@ static bool record_and_submit_frame(VkRenderer* r) {
     si.signalSemaphoreCount = signal_count;
     si.pSignalSemaphores = signal_sems;
 
+    const uint64_t submit_begin_ns = vkr_monotonic_ns();
     pthread_mutex_lock(&r->queue_mutex);
     VkResult sr = vkQueueSubmit(r->graphics_queue, 1, &si, f->in_flight);
     pthread_mutex_unlock(&r->queue_mutex);
+    const uint64_t submit_end_ns = vkr_monotonic_ns();
+    if (submit_end_ns >= submit_begin_ns) r->framegen_submit_ns += submit_end_ns - submit_begin_ns;
     if (sr != VK_SUCCESS) {
+        f->framegen_compute_pending = 0;
         VK_LOGE("vkQueueSubmit -> %d", sr);
+        if (use_snap) {
+            const float acquire_pressure = framegen_planned
+                ? (float)(framegen_planned - gen_count) / (float)framegen_planned : 0.0f;
+            snap_frame_vk_set_wsi_feedback(r->snap, r->framegen_multiplier,
+                                           snap_effective_multiplier, 0.0f,
+                                           acquire_pressure, 1.0f, 0.0f);
+        }
         // The frame fence was reset before submit. If submit fails, nothing will ever signal
         // it, so restore a signaled fence before returning or the next frame can block forever.
         vkDestroyFence(r->device, f->in_flight, NULL);
@@ -3118,6 +3484,8 @@ static bool record_and_submit_frame(VkRenderer* r) {
         return false;
     }
 
+    r->framegen_submitted_total += gen_count;
+    f->framegen_compute_pending = gen_count;
     VkPresentInfoKHR pi = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     pi.waitSemaphoreCount = 1;
     pi.pWaitSemaphores = &render_finished;
@@ -3134,20 +3502,37 @@ static bool record_and_submit_frame(VkRenderer* r) {
         gpi.swapchainCount = 1;
         gpi.pSwapchains = &r->swapchain;
         gpi.pImageIndices = &gen_image_index[g];
+        const uint64_t present_begin_ns = vkr_monotonic_ns();
         VkResult gpr = vkQueuePresentKHR(r->graphics_queue, &gpi);
+        const uint64_t present_end_ns = vkr_monotonic_ns();
+        if (present_end_ns >= present_begin_ns) {
+            const uint64_t present_elapsed_ns = present_end_ns - present_begin_ns;
+            r->framegen_present_ns += present_elapsed_ns;
+            if (g < 7u) {
+                r->framegen_present_slot_ns[g] += present_elapsed_ns;
+                r->framegen_present_slot_calls[g]++;
+            }
+        }
+        r->framegen_present_calls++;
         if (gpr != VK_SUCCESS && gpr != VK_SUBOPTIMAL_KHR) {
+            gen_present_fail_count++;
             if (gpr == VK_ERROR_OUT_OF_DATE_KHR) gen_present_out_of_date = true;
             if (r->framegen_present_failures++ % 120 == 0) {
                 VK_LOGW("generated frame present failed (%d, failures=%llu)", gpr,
                         (unsigned long long)r->framegen_present_failures);
             }
         } else {
+            gen_presented_count++;
+            r->framegen_made_frames++;
             __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
         }
     }
     VkResult pr = vkQueuePresentKHR(r->graphics_queue, &pi);
     if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
+        r->framegen_real_frames++;
         __atomic_fetch_add(&r->presented_frames, 1, __ATOMIC_RELAXED);
+    } else {
+        r->framegen_source_present_failures++;
     }
     // Present the mirror separately so its result doesn't disturb the display recreate logic below.
     if (rec_this_frame) {
@@ -3164,6 +3549,22 @@ static bool record_and_submit_frame(VkRenderer* r) {
         }
     }
     pthread_mutex_unlock(&r->queue_mutex);
+
+    if (use_snap) {
+        const float delivery_ratio = framegen_planned
+            ? (float)gen_presented_count / (float)framegen_planned : 1.0f;
+        const float acquire_pressure = framegen_planned
+            ? (float)(framegen_planned - gen_count) / (float)framegen_planned : 0.0f;
+        const float present_pressure = gen_count
+            ? (float)gen_present_fail_count / (float)gen_count : 0.0f;
+        const float frame_period_ms = r->framegen_refresh_rate > 1.0f
+            ? 1000.0f / r->framegen_refresh_rate : 16.667f;
+        const float submit_pressure = frame_period_ms > 0.0f
+            ? (float)(submit_end_ns - submit_begin_ns) / 1000000.0f / frame_period_ms : 0.0f;
+        snap_frame_vk_set_wsi_feedback(r->snap, r->framegen_multiplier,
+                                       snap_effective_multiplier, delivery_ratio,
+                                       acquire_pressure, submit_pressure, present_pressure);
+    }
 
     bool present_suboptimal = (pr == VK_SUBOPTIMAL_KHR) && !r->ignore_suboptimal;
     if (recreate_after_present || pr == VK_ERROR_OUT_OF_DATE_KHR || present_suboptimal
@@ -3234,6 +3635,11 @@ JNIEXPORT jlong JNICALL JNI_FN(nativeCreate)(JNIEnv* env, jclass clazz,
     if (!create_instance(r)) goto fail;
     if (!pick_physical_device(r)) goto fail;
     if (!create_device(r)) goto fail;
+    r->snap_dispatch_available = vk_loader_bind_external(vkd.GetInstanceProcAddr, r->instance, r->device) == 0;
+    if (!r->snap_dispatch_available) {
+        /* SnapFrame is optional: a missing compute entry point must never abort X11 startup. */
+        VK_LOGW("SnapFrame Vulkan dispatch unavailable; X11 renderer will continue without SnapFrame");
+    }
     query_device_caps(r);
     if (!create_command_pool(r)) goto fail;
     if (!create_descriptor_pool(r, r->caps.descriptor_pool_capacity)) goto fail;
@@ -3302,6 +3708,7 @@ JNIEXPORT void JNICALL JNI_FN(nativeDestroy)(JNIEnv* env, jclass clazz, jlong ha
     if (!r) return;
 
     if (r->device) vkDeviceWaitIdle(r->device);
+    destroy_snap(r);
 
     // Drain any in-flight uploads and tear down the staging pool before destroying images.
     vkr_staging_pool_destroy(r);
@@ -3638,13 +4045,13 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeRenderFrame)(JNIEnv* env, jclass clazz, 
 #define SCENE_OFF_SCREEN_H           608
 #define SCENE_OFF_EFFECT_COUNT       612
 #define SCENE_OFF_EFFECT_TYPES       616      /* int32 × VK_MAX_EFFECTS */
-#define SCENE_OFF_EFFECT_PARAMS      648      /* float32 × VK_MAX_EFFECTS × 4 */
-#define SCENE_OFF_WINDOW_GEOM        776      /* int32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
-#define SCENE_OFF_WINDOW_UV          1800     /* float32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
-#define SCENE_OFF_SWAP_RB            2824
-#define SCENE_OFF_SOURCE_W           2828
-#define SCENE_OFF_SOURCE_H           2832
-#define SCENE_BUF_SIZE               2836
+#define SCENE_OFF_EFFECT_PARAMS      680      /* float32 × VK_MAX_EFFECTS × 4 */
+#define SCENE_OFF_WINDOW_GEOM        936      /* int32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
+#define SCENE_OFF_WINDOW_UV          1960     /* float32 × VK_MAX_RENDERABLE_WINDOWS × 4 */
+#define SCENE_OFF_SWAP_RB            2984
+#define SCENE_OFF_SOURCE_W           2988
+#define SCENE_OFF_SOURCE_H           2992
+#define SCENE_BUF_SIZE               2996
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetScene)(JNIEnv* env, jclass clazz, jlong handle,
                                               jobject sceneBuf)
@@ -3846,6 +4253,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationEnabled)(JNIEnv* env, jcla
         wait_inflight_frames(r);
         destroy_lsfg(r);
     } else if (r->device && r->lsfg_cache_path) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_dis(r);
         r->dis_requested = false;
         create_lsfg(r);
@@ -3862,6 +4271,106 @@ JNIEXPORT jboolean JNICALL JNI_FN(nativeIsFrameGenerationSupported)(JNIEnv* env,
     VkRenderer* r = (VkRenderer*)(intptr_t)handle;
     if (!r) return JNI_FALSE;
     return r->framegen_supported ? JNI_TRUE : JNI_FALSE;
+}
+
+/* This probe must work before FG is enabled; it checks surface/format capabilities,
+ * not the current framegen_requested or swapchain_transfer_dst state. */
+JNIEXPORT jboolean JNICALL JNI_FN(nativeIsSnapFrameGenerationAvailable)(JNIEnv* env, jclass clazz,
+                                                                        jlong handle) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r || !r->snap_dispatch_available || !r->physical_device || !r->device || !r->framegen_supported
+        || r->swapchain_format != VK_FORMAT_R8G8B8A8_UNORM
+        || r->swapchain_image_count <= 2u) return JNI_FALSE;
+    VkPhysicalDeviceProperties props;
+    memset(&props, 0, sizeof(props));
+    vkGetPhysicalDeviceProperties(r->physical_device, &props);
+    if (!props.limits.timestampComputeAndGraphics || props.limits.timestampPeriod <= 0.0f)
+        return JNI_FALSE;
+    const VkFormat formats[] = { VK_FORMAT_R16_SFLOAT,
+        VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM };
+    const VkFormatFeatureFlags need = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+                                    | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+    for (uint32_t i = 0; i < 3; i++) {
+        VkFormatProperties fp;
+        memset(&fp, 0, sizeof(fp));
+        vkGetPhysicalDeviceFormatProperties(r->physical_device, formats[i], &fp);
+        if ((fp.optimalTilingFeatures & need) != need) return JNI_FALSE;
+    }
+    return JNI_TRUE;
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameGenerationEnabled)(JNIEnv* env, jclass clazz,
+                                                                    jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    const bool want = enabled == JNI_TRUE;
+    if (r->snap_requested == want) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_requested = want;
+    if (!want) {
+        wait_inflight_frames(r);
+        destroy_snap(r);
+    } else if (r->device) {
+        destroy_lsfg(r);
+        destroy_dis(r);
+        r->framegen_requested = false;
+        r->dis_requested = false;
+        create_snap(r);
+        if (!r->snap) r->snap_requested = false;
+    }
+    framegen_rebuild_swapchain(r);
+    pthread_mutex_unlock(&r->render_mutex);
+    VK_LOGI("SnapFrame X11 path %s (backend=%s)", want ? "enabled" : "disabled",
+            r->snap ? "ready" : "unavailable");
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugFlow)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jboolean enabled) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_flow = enabled == JNI_TRUE;
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameDebugMode)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_debug_mode = selected;
+    if (r->snap) snap_frame_vk_set_debug_mode(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameAiMode)(JNIEnv* env, jclass clazz,
+                                                            jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_ai_mode = selected;
+    if (r->snap) snap_frame_vk_set_ai_mode(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
+}
+
+JNIEXPORT void JNICALL JNI_FN(nativeSetSnapFrameCandidateReconstruction)(JNIEnv* env, jclass clazz,
+                                                                          jlong handle, jint mode) {
+    (void)env; (void)clazz;
+    VkRenderer* r = (VkRenderer*)(intptr_t)handle;
+    if (!r) return;
+    uint32_t selected = mode < 0 || mode > 2 ? 0u : (uint32_t)mode;
+    pthread_mutex_lock(&r->render_mutex);
+    r->snap_candidate_reconstruction_mode = selected;
+    if (r->snap) snap_frame_vk_set_candidate_reconstruction(r->snap, selected);
+    pthread_mutex_unlock(&r->render_mutex);
 }
 
 JNIEXPORT void JNICALL JNI_FN(nativeSetFrameGenerationShaders)(JNIEnv* env, jclass clazz,
@@ -3943,6 +4452,8 @@ JNIEXPORT void JNICALL JNI_FN(nativeSetDisFrameGenerationEnabled)(JNIEnv* env, j
         wait_inflight_frames(r);
         destroy_dis(r);
     } else if (r->device) {
+        destroy_snap(r);
+        r->snap_requested = false;
         destroy_lsfg(r);
         r->framegen_requested = false;
         create_dis(r);

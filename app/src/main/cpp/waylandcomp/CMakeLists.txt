@@ -19,6 +19,7 @@ add_library(wnwayland SHARED
         src/blend_pass.c
         src/framegen_bridge.c
         src/framegen_jni.c
+        ../thirdparty/snapframe/src/snap_frame.cpp
         generated/color-management-v1-protocol.c
         generated/xdg-shell-protocol.c
         generated/linux-dmabuf-v1-protocol.c
@@ -37,6 +38,8 @@ target_include_directories(wnwayland PRIVATE
         generated
         prebuilt/include
         src
+        ../thirdparty/snapframe/include
+        ../snapframe/include
         # Committed SPIR-V of the screen-effect chain (src/effects_chain.c, src/hdr_compose.c).
         shaders
         ${CMAKE_CURRENT_SOURCE_DIR}/../adrenotools/include
@@ -81,9 +84,11 @@ set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
 
 # Vulkan is loaded at runtime through adrenotools (Turnip), never linked: the compositor needs the
 # driver's dma-buf import path, which the system Adreno driver lacks.
+target_compile_features(wnwayland PRIVATE cxx_std_17)
 target_link_libraries(wnwayland
         wayland-server
         adrenotools
+        snapframe_vk
         dl
         log
         android
