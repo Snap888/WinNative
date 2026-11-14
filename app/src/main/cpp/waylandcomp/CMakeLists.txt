@@ -88,4 +88,5 @@ target_link_libraries(wnwayland
         dl
         log
         android
+        m
 )
