@@ -54,11 +54,31 @@ void main() {
     vec4 curr = texture(currentColor, currentUv);
     vec4 warped = mix(prev, curr, t);
 
-    // IMPORTANT: do not average unwarped frames when motion is uncertain.
-    // That creates double edges/blur during even a slow camera pan. Prefer a
-    // sharp real-frame sample in ambiguous regions; this trades local temporal
-    // smoothness for spatial clarity until a reliable vector is available.
+    // Occlusion/disocclusion guard: even a geometrically plausible flow pair
+    // can cross a newly exposed silhouette. Large disagreement between the
+    // two independently warped colors is evidence that they do not describe
+    // the same visible surface. Do not average those colors: that is the
+    // characteristic double-edge/ghosting failure mode.
+    float warpedLumaPrev = dot(prev.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float warpedLumaCurr = dot(curr.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float warpedDisagreement = abs(warpedLumaPrev - warpedLumaCurr);
+    float occlusionAgreement = 1.0 - smoothstep(0.035, 0.14, warpedDisagreement);
+
+    // If the two projections disagree, select the better-supported endpoint
+    // instead of blending both surfaces. Confidence includes the FB/visibility
+    // mask, so a disoccluded or out-of-bounds projection loses this choice.
+    float previousSupport = clamp(fwd.z * consistency, 0.0, 1.0);
+    float currentSupport = clamp(bwd.z * consistency, 0.0, 1.0);
+    float chooseCurrent = currentSupport > previousSupport ? 1.0 :
+                          (previousSupport > currentSupport ? 0.0 : step(0.5, t));
+    vec4 occlusionFallback = mix(prev, curr, chooseCurrent);
     vec4 fallback = texture(currentColor, uv);
+
+    // Normal interpolation is allowed only where flow and appearance agree.
+    // At an occlusion boundary use a single warped endpoint; where flow itself
+    // is unreliable use the unwarped current frame as the sharp spatial fallback.
     float motionWeight = smoothstep(0.18, 0.70, confidence);
-    imageStore(midpointOutput, p, mix(fallback, warped, motionWeight));
+    float safeBlend = motionWeight * occlusionAgreement;
+    vec4 guardedWarp = mix(occlusionFallback, warped, occlusionAgreement);
+    imageStore(midpointOutput, p, mix(fallback, guardedWarp, max(safeBlend, motionWeight * 0.35)));
 }
