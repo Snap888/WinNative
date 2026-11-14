@@ -83,6 +83,7 @@ set_target_properties(wayland-server PROPERTIES IMPORTED_LOCATION
 # driver's dma-buf import path, which the system Adreno driver lacks.
 target_link_libraries(wnwayland
         wayland-server
+        framelab
         adrenotools
         dl
         log
