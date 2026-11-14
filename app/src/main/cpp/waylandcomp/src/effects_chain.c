@@ -97,7 +97,7 @@ void vkp_effects_set_screen(float brightness, float contrast, float gamma, float
     g_set.color_on = on;
     g_set.b_raw = brightness; g_set.c_raw = contrast; g_set.s_raw = saturation;
     g_set.brightness = clampf(brightness / 100.0f, -1.0f, 1.0f);
-    g_set.contrast = clampf(contrast / 100.0f, 0.0f, 2.0f);
+    g_set.contrast = clampf(1.0f + contrast / 100.0f, 0.0f, 2.0f);
     g_set.saturation = clampf(saturation / 100.0f, 0.0f, 2.0f);
     g_set.gamma = clampf(gamma, 0.1f, 5.0f);
     g_set.fxaa = fxaa ? 1 : 0; g_set.toon = toon ? 1 : 0; g_set.crt = crt ? 1 : 0; g_set.ntsc = ntsc ? 1 : 0;
