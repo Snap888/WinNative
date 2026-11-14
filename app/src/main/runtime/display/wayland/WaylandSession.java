@@ -59,7 +59,7 @@ public final class WaylandSession {
         public int outputHeight;
         public int fpsLimit;
         public boolean zeroCopy;
-        public boolean ubwc = true;
+        public boolean ubwc = false; // Prefer linear dma-bufs until UBWC import is validated on the compositor GPU.
         public boolean noRenderNode;
         public int scaleMode = WaylandCompositor.SCALE_FIT;
         public File logDir;
