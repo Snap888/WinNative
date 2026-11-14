@@ -48,7 +48,7 @@ struct SnapFrameVk {
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; float search_radius_scale; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
-    uint64_t frame_serial,query_frame_id[4]; uint32_t temporal_generation,query_generation[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
+    uint64_t frame_serial,query_frame_id[4]; uint32_t temporal_generation,query_generation[4]; VkFence query_fence[4]; uint8_t query_fence_required[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
     uint32_t reuse_previous_flow;
     float stage_gpu_ms[6],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
     uint64_t telemetry_query_drops,candidate_timestamp_drops,ai_updates,ai_fallback_updates;
@@ -296,7 +296,7 @@ int snap_frame_vk_prepare(SnapFrameVk*e,uint32_t w,uint32_t h,VkFormat fmt,uint3
     e->width=w;e->height=h;e->format=fmt;e->flow_percent=scale;e->manual_flow_percent=scale;
     snap_frame_vk_flow_extent(fw,fh,scale,&e->active_flow_w,&e->active_flow_h);
     snap_frame_vk_lifecycle_update(&e->lifecycle,1,w,h,fmt,1,0);
-    e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */e->wsi_metrics_valid=0;e->wsi_delivery_ratio=1.0f;e->wsi_acquire_pressure=0.0f;e->wsi_submit_pressure=0.0f;e->wsi_present_pressure=0.0f;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
+    e->prepared=1;e->history_valid=0;e->reuse_previous_flow=0;e->lifecycle.history_valid=0;/* frame_serial is lifetime-monotonic: AI rejects stale/replayed IDs. */e->wsi_metrics_valid=0;e->wsi_delivery_ratio=1.0f;e->wsi_acquire_pressure=0.0f;e->wsi_submit_pressure=0.0f;e->wsi_present_pressure=0.0f;memset(e->query_pending,0,sizeof(e->query_pending));memset(e->query_fence,0,sizeof(e->query_fence));memset(e->query_fence_required,0,sizeof(e->query_fence_required));memset(e->metrics_pending,0,sizeof(e->metrics_pending));
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;e->flow_metrics_valid=0;e->last_gpu_ms=0.0f;memset(e->stage_gpu_ms,0,sizeof(e->stage_gpu_ms));memset(e->flow_metrics,0,sizeof(e->flow_metrics));pthread_mutex_unlock(&e->telemetry_mutex);
     snap_ai_set_enabled(e->ai, e->ai_mode != 1u);
     SF_LOGI("prepared extent=%ux%u format=%u flow_scale=%u flow_extent=%ux%u candidate_mode=%u metrics=%d",
@@ -326,6 +326,8 @@ void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
     e->candidate_reconstruction_enabled=(mode==SNAP_FRAME_CANDIDATE_FORCE_ON)||
         (mode==SNAP_FRAME_CANDIDATE_AI_AUTO&&e->ai_quality_mode);
 }
+int snap_frame_vk_current_query_slot(const SnapFrameVk*e){return e&&e->query_pending[e->query_slot]?(int)e->query_slot:-1;}
+void snap_frame_vk_set_submission_fence(SnapFrameVk*e,VkFence fence){if(!e||!e->query_pending[e->query_slot])return;e->query_fence[e->query_slot]=fence;e->query_fence_required[e->query_slot]=(uint8_t)(fence!=VK_NULL_HANDLE);}
 void snap_frame_vk_reset_history(SnapFrameVk*e){
     if(!e)return;
     e->history_valid=0;e->lifecycle.history_valid=0;
@@ -340,6 +342,11 @@ void snap_frame_vk_reset_history(SnapFrameVk*e){
 }
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
+    if(e->query_fence_required[slot]){
+        VkResult fence_status=g_vk.GetFenceStatus?g_vk.GetFenceStatus(e->device,e->query_fence[slot]):VK_ERROR_INITIALIZATION_FAILED;
+        if(fence_status!=VK_SUCCESS){e->query_pending[slot]=0;e->candidate_pending[slot]=0;e->query_fence[slot]=VK_NULL_HANDLE;e->query_fence_required[slot]=0;e->telemetry_query_drops++;return;}
+        e->query_fence[slot]=VK_NULL_HANDLE;e->query_fence_required[slot]=0;
+    }
     /* A failed/unavailable telemetry retirement must never leave a stale reuse decision armed. */
     e->reuse_previous_flow=0;
     uint64_t values[20];memset(values,0,sizeof(values));
