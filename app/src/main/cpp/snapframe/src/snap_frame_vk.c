@@ -48,7 +48,7 @@ struct SnapFrameVk {
     uint32_t width,height,flow_percent,manual_flow_percent,active_flow_w,active_flow_h,debug_mode; float search_radius_scale; VkFormat format;
     VkImage pending_source; VkImageView pending_source_view;
     VkQueryPool query_pool; float timestamp_period_ms;
-    uint64_t frame_serial,query_frame_id[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
+    uint64_t frame_serial,query_frame_id[4]; uint32_t temporal_generation,query_generation[4]; uint8_t query_pending[4],candidate_pending[4]; uint32_t query_slot;
     uint32_t reuse_previous_flow;
     float stage_gpu_ms[6],last_gpu_ms,flow_metrics[4]; int telemetry_valid,flow_metrics_valid;
     uint64_t telemetry_query_drops,candidate_timestamp_drops,ai_updates,ai_fallback_updates;
@@ -326,7 +326,18 @@ void snap_frame_vk_set_candidate_reconstruction(SnapFrameVk*e,uint32_t mode){
     e->candidate_reconstruction_enabled=(mode==SNAP_FRAME_CANDIDATE_FORCE_ON)||
         (mode==SNAP_FRAME_CANDIDATE_AI_AUTO&&e->ai_quality_mode);
 }
-void snap_frame_vk_reset_history(SnapFrameVk*e){if(e){e->history_valid=0;e->lifecycle.history_valid=0;/* Keep AI temporal state and monotonic frame IDs; history validity is handled by SnapFrame. */}}
+void snap_frame_vk_reset_history(SnapFrameVk*e){
+    if(!e)return;
+    e->history_valid=0;e->lifecycle.history_valid=0;
+    if(++e->temporal_generation==0)e->temporal_generation=1;
+    e->reuse_previous_flow=0;e->flow_percent=e->manual_flow_percent;
+    e->search_radius_scale=1.0f;e->ai_quality_mode=0;
+    if(e->candidate_reconstruction_mode==SNAP_FRAME_CANDIDATE_AI_AUTO)
+        e->candidate_reconstruction_enabled=0;
+    pthread_mutex_lock(&e->telemetry_mutex);
+    e->telemetry_valid=0;e->flow_metrics_valid=0;
+    pthread_mutex_unlock(&e->telemetry_mutex);
+}
 static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
     if(!e->query_pending[slot])return;
     /* A failed/unavailable telemetry retirement must never leave a stale reuse decision armed. */
@@ -342,6 +353,11 @@ static void collect_query_slot(SnapFrameVk*e,uint32_t slot){
         if((e->telemetry_query_drops%60u)==1u)
             SF_LOGI("GPU timestamp sample dropped frame=%llu result=%d drops=%llu; AI update waits for a completed GPU sample",
                 (unsigned long long)e->query_frame_id[slot],(int)r,(unsigned long long)e->telemetry_query_drops);
+        return;
+    }
+    /* Results from a pre-cut/pre-resize temporal epoch must never steer the new scene. */
+    if(e->query_generation[slot]!=e->temporal_generation){
+        e->candidate_pending[slot]=0;
         return;
     }
     float total=0.0f,stage_values[6]={0};
@@ -489,7 +505,7 @@ int snap_frame_vk_process(SnapFrameVk*e,VkCommandBuffer cmd,VkImage src,VkImageV
     pthread_mutex_lock(&e->telemetry_mutex);e->telemetry_valid=0;pthread_mutex_unlock(&e->telemetry_mutex);
     e->query_slot=(uint32_t)(e->frame_serial%4u);collect_query_slot(e,e->query_slot);
     g_vk.CmdResetQueryPool(cmd,e->query_pool,e->query_slot*12u,12u);
-    e->query_frame_id[e->query_slot]=++e->frame_serial;e->query_pending[e->query_slot]=1;
+    e->query_frame_id[e->query_slot]=++e->frame_serial;e->query_generation[e->query_slot]=e->temporal_generation;e->query_pending[e->query_slot]=1;
     e->candidate_pending[e->query_slot]=(uint8_t)(e->candidate_reconstruction_enabled!=0);
     snap_frame_vk_flow_extent(e->forward.w,e->forward.h,e->flow_percent,&e->active_flow_w,&e->active_flow_h);
     VkImageView v[6];
