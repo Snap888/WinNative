@@ -336,7 +336,7 @@ static int g_zero_copy_fx_skip_said;
  * in the game allocates UBWC swapchain images instead of resolving each frame to a linear copy.
  * BANNER_WAYLAND_UBWC=0 in the container's environment turns the advertisement off (A/B switch). Set
  * from the app before the compositor starts; read at every zwp_linux_dmabuf_v1 bind. */
-volatile int g_ubwc = 1;
+volatile int g_ubwc = 0; /* Linear is the safe default; the app can opt into UBWC after validation. */
 
 /* Debug (BANNER_WAYLAND_NO_RENDER_NODE=1): name no DRM device in the dma-buf feedback, as a phone
  * that exposes no /dev/dri node to apps does, to reproduce its OpenGL path here. Set from the app
