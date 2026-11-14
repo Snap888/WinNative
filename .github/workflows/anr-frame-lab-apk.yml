@@ -28,6 +28,14 @@ jobs:
         uses: android-actions/setup-android@v3
       - name: Install NDK and CMake
         run: sdkmanager "ndk;27.3.13750724" "cmake;3.22.1"
+      - name: Compile and smoke-test Frame Lab writer
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -pthread \\
+            -Iapp/src/main/cpp/framelab/include \\
+            app/src/main/cpp/framelab/src/anr_frame_lab.c \\
+            app/src/main/cpp/framelab/tests/framelab_smoke.c \\
+            -o /tmp/framelab-smoke
+          /tmp/framelab-smoke
       - name: Build Standard debug APK
         run: ./gradlew --no-daemon --stacktrace assembleStandardDebug
       - name: Upload test APK
