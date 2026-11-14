@@ -100,10 +100,10 @@ static void estimate_translation(const uint8_t *prev, const uint8_t *cur,
         for (int dx = -radius_x; dx <= radius_x; ++dx) {
             long double sad = 0.0L;
             uint64_t count = 0;
-            const uint32_t y0 = dy < 0 ? (uint32_t)-dy : 0u;
-            const uint32_t x0 = dx < 0 ? (uint32_t)-dx : 0u;
-            const uint32_t y1 = dy > 0 ? h - (uint32_t)dy : h;
-            const uint32_t x1 = dx > 0 ? w - (uint32_t)dx : w;
+            const uint32_t y0 = dy > 0 ? (uint32_t)dy : 0u;
+            const uint32_t x0 = dx > 0 ? (uint32_t)dx : 0u;
+            const uint32_t y1 = dy < 0 ? h - (uint32_t)-dy : h;
+            const uint32_t x1 = dx < 0 ? w - (uint32_t)-dx : w;
             for (uint32_t y = y0; y < y1; y += FL_MOTION_SAMPLE_STEP) {
                 const uint32_t py = (uint32_t)((int)y - dy);
                 for (uint32_t x = x0; x < x1; x += FL_MOTION_SAMPLE_STEP) {
