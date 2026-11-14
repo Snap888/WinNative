@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - anr-frame-lab
+  pull_request:
+    branches:
+      - anr-frame-lab
   workflow_dispatch:
 
 permissions:
