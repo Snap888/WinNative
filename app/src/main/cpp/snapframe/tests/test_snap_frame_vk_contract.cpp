@@ -13,6 +13,16 @@ int main() {
     assert(std::fabs(snap_frame_vk_phase_time(1,3)-0.50f)<0.0001f);
     assert(std::fabs(snap_frame_vk_phase_time(2,3)-0.75f)<0.0001f);
     assert(snap_frame_vk_phase_time(3,3)<0.0f);
+    assert(snap_frame_vk_phase_time(3,3)<0.0f);
+    assert(snap_frame_vk_gap_limit_ns(16666667ull)==100000000ull);
+    assert(!snap_frame_vk_timestamp_gap_exceeded(1000000000ull,1090000000ull,16666667ull));
+    assert(snap_frame_vk_timestamp_gap_exceeded(1000000000ull,1120000000ull,16666667ull));
+    assert(snap_frame_vk_gap_limit_ns(33333333ull)==133333332ull);
+    assert(!snap_frame_vk_timestamp_gap_exceeded(1000000000ull,1120000000ull,33333333ull));
+    assert(snap_frame_vk_timestamp_gap_exceeded(1000000000ull,1140000000ull,33333333ull));
+    assert(snap_frame_vk_gap_limit_ns(100000000ull)==300000000ull);
+    assert(snap_frame_vk_timestamp_gap_exceeded(1000000000ull,1000000001ull,0ull)==0);
+    assert(snap_frame_vk_timestamp_gap_exceeded(1000000000ull,999999999ull,16666667ull));
     uint32_t w=0,h=0;
     assert(snap_frame_vk_flow_extent(120,68,50,&w,&h)==50 && w==60 && h==34);
     assert(snap_frame_vk_flow_extent(120,68,1,&w,&h)==25 && w==30 && h==17);
