@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include "anr_frame_lab.h"
 #include <errno.h>
 #include <stdio.h>
