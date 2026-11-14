@@ -558,27 +558,7 @@ private fun SnapFrameOptions(
             onSelected = { onFlowScaleChanged(it.flowScale) },
             paneScale = paneScale,
         )
-        NavBooleanRow(
-            title = stringResource(R.string.session_drawer_dis_debug_flow),
-            checked = debugFlow,
-            onCheckedChange = onDebugFlowChanged,
-        )
-        if (debugFlow) {
-            FrameGenFieldLabel("Flow Viewer", paneScale)
-            ChipFlow {
-                listOf("Motion", "Confidence", "Consistency").forEachIndexed { index, label ->
-                    HUDToggleChip(
-                        label = label,
-                        checked = debugMode == index,
-                        onClick = { onDebugModeChanged(index) },
-                        modifier = Modifier.paneNavItem(
-                            cornerRadius = (16f * paneScale).dp,
-                            onActivate = { onDebugModeChanged(index) },
-                        ),
-                    )
-                }
-            }
-        }
+        // SnapFrame Wayland flow viewer is hidden until its preference is independent of DIS.
         FrameGenNote(stringResource(R.string.session_drawer_dis_debug_flow_note), paneScale)
         if (aiMode >= 0) {
             FrameGenFieldLabel("Snap AI policy", paneScale)
