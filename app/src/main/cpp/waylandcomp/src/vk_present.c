@@ -1037,6 +1037,11 @@ struct vkp_image *vkp_image_import_dmabuf(int fd, uint32_t drm_format, uint64_t 
         g_vk.FreeMemory(g_dev, img->mem, NULL); g_vk.DestroyImage(g_dev, img->image, NULL);
         free(img); return NULL;
     }
+    wnc_log("color-diag",
+            "dma-buf import OK: DRM FourCC=%c%c%c%c (0x%08x) -> VkFormat=%d, size=%dx%d stride=%u offset=%u modifier=%s sampled=%d blit_dst=%d",
+            drm_format & 0xff, (drm_format >> 8) & 0xff, (drm_format >> 16) & 0xff,
+            (drm_format >> 24) & 0xff, drm_format, (int)img->fmt, w, h, stride, offset,
+            vkp_modifier_name(modifier), img->sampled, img->blit_dst);
     return img;
 }
 
