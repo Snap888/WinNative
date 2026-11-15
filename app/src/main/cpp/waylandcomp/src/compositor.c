@@ -296,6 +296,7 @@ struct surface {
     char *title;                            /* xdg_toplevel title, for the session log */
     int announced_vulkan;                   /* logged its first dmabuf frame */
     uint32_t hdr_fmt_logged;                /* HDR session: the buffer format last named in the log */
+    unsigned shm_format_logged : 1;          /* first wl_shm format/sample recorded for diagnostics */
 };
 
 static struct wl_list g_surfaces;           /* every surface */
@@ -687,8 +688,25 @@ static void take_shm(struct surface *s, struct wl_shm_buffer *shm, struct wl_res
     if (!s->shm_img) s->shm_img = vkp_image_create_shm(w, h);
     if (s->shm_img) {
         wl_shm_buffer_begin_access(shm);
-        vkp_image_upload_shm(s->shm_img, wl_shm_buffer_get_data(shm), stride);
+        const uint8_t *pixels = (const uint8_t *)wl_shm_buffer_get_data(shm);
+        if (!s->shm_format_logged && pixels && stride >= 4) {
+            uint32_t format = wl_shm_buffer_get_format(shm);
+            wnc_log("color-diag",
+                    "wl_shm source: format=0x%08x (%s), size=%dx%d stride=%d, first-pixel bytes=%02x %02x %02x %02x; Vulkan upload target=VK_FORMAT_B8G8R8A8_UNORM",
+                    format,
+                    format == WL_SHM_FORMAT_ARGB8888 ? "ARGB8888" :
+                    format == WL_SHM_FORMAT_XRGB8888 ? "XRGB8888" :
+                    format == WL_SHM_FORMAT_ABGR8888 ? "ABGR8888" :
+                    format == WL_SHM_FORMAT_XBGR8888 ? "XBGR8888" : "other",
+                    w, h, stride, pixels[0], pixels[1], pixels[2], pixels[3]);
+            s->shm_format_logged = 1;
+        }
+        vkp_image_upload_shm(s->shm_img, pixels, stride);
         wl_shm_buffer_end_access(shm);
+    } else if (!s->shm_format_logged) {
+        wnc_log("color-diag", "wl_shm image allocation failed: size=%dx%d stride=%d format=0x%08x",
+                w, h, stride, wl_shm_buffer_get_format(shm));
+        s->shm_format_logged = 1;
     }
     wl_buffer_send_release(buffer);
     s->buf_w = w;
