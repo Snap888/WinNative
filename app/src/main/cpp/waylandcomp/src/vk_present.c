@@ -1829,7 +1829,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
             VkResult ark;
             const int64_t acquire_begin_ns = perf_now();
             if (acquire_image(k, 0, &img, &ark) != 0) {
-                wnc_log("framegen", "present %d/%d: no swapchain image; the frame ends early", k + 1, presents);
+                wnc_log("framegen", "present %d/%d: no swapchain image; skipping this slot", k + 1, presents);
                 const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
                 if (k < ngen) {
                     generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
@@ -1842,7 +1842,18 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                         generated_acquire_errors++; g_fg_acquire_error_total++;
                     }
                 }
-                pr = VK_ERROR_OUT_OF_DATE_KHR;
+                /*
+                 * A timeout is a missed presentation opportunity, not a surface failure.
+                 * In particular, never translate it into VK_ERROR_OUT_OF_DATE_KHR: the
+                 * final result below controls swapchain teardown. If a generated slot
+                 * times out, skip the remaining generated slots but still try the source
+                 * frame. If the source slot itself times out, finish this frame without
+                 * presenting it and keep the current swapchain alive.
+                 */
+                if (k < ngen && (ark == VK_TIMEOUT || ark == VK_NOT_READY)) {
+                    k = ngen - 1;
+                    continue;
+                }
                 break;
             }
             const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
@@ -1917,12 +1928,18 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR || pr == VK_ERROR_DEVICE_LOST) break;
     }
     if (!fence_submitted) {
-        /* Ended early: an empty submit carrying the fence is ordered after everything queued
-         * above, so the wait below still means "this frame's work is done". */
+        /* Ended early: signal the fence selected for this frame (including SnapFrame's
+         * readback slot), ordered after any generated-frame work already queued. */
         VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO};
-        g_vk.QueueSubmit(g_queue, 1, &si, g_fence);
+        VkResult empty_submit = g_vk.QueueSubmit(g_queue, 1, &si, frame_fence);
+        if (empty_submit == VK_SUCCESS) {
+            fence_submitted = 1;
+        } else {
+            if (empty_submit == VK_ERROR_DEVICE_LOST) device_lost("empty frame-fence submit");
+            else LOGE("present: empty frame-fence submit failed (%d)", (int)empty_submit);
+        }
     }
-    VkResult fr = timed_wait(g_fence, UINT64_MAX);
+    VkResult fr = fence_submitted ? timed_wait(frame_fence, UINT64_MAX) : VK_ERROR_UNKNOWN;
     if (fr == VK_SUCCESS) g_fg_compute_completed_total += (uint64_t)ngen;
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
