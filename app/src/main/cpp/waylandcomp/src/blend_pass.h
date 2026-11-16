@@ -24,5 +24,8 @@ void blendp_begin_frame(void);
  * `blit` is the draw as the blit path maps it. 0 = recorded, -1 = unavailable (nothing recorded). */
 int blendp_draw(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
                 VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit);
+/* Opaque sampled copy: identical geometry and layouts, but disables alpha blending. */
+int blendp_copy_opaque(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
+                       VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit);
 
 #endif
