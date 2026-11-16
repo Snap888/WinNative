@@ -1221,18 +1221,28 @@ static int draw_to_scene_blit(const struct vkp_draw *d, int scene_w, int scene_h
 static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkImageBlit *blit, VkImage target,
                         VkFormat target_fmt, int target_w, int target_h, VkFilter filter) {
     struct vkp_image *im = d->img;
-    const int shader_path = d->blend && im->sampled;
+    /* Imported DMA-BUFs are guaranteed to be sampled by the import contract, but may not
+     * support transfer-source blits on every modifier/driver. Prefer a shader copy for every
+     * sampled client image; alpha surfaces use source-over, opaque surfaces replace the target. */
+    const int shader_path = im->sampled;
     if (!im->draw_path_logged) {
         wnc_log("color-diag",
                 "draw path: FourCC/VkFormat=%d size=%dx%d modifier-backed=%d blend=%d sampled=%d path=%s",
                 (int)im->fmt, im->w, im->h, im->dmabuf, d->blend, im->sampled,
-                shader_path ? "sampled-alpha-shader (if pipeline succeeds)" : "vkCmdBlitImage");
+                shader_path ? (d->blend ? "sampled-alpha-shader" : "sampled-opaque-shader")
+                            : "vkCmdBlitImage (unsampled fallback)");
         im->draw_path_logged = 1;
     }
-    if (shader_path &&
-        blendp_draw(cmd, im->image, im->fmt, im->w, im->h, !im->dmabuf, target, target_fmt, target_w, target_h,
-                    blit) == 0)
-        return;
+    if (shader_path) {
+        int sr = d->blend
+            ? blendp_draw(cmd, im->image, im->fmt, im->w, im->h, !im->dmabuf,
+                          target, target_fmt, target_w, target_h, blit)
+            : blendp_copy_opaque(cmd, im->image, im->fmt, im->w, im->h, !im->dmabuf,
+                                 target, target_fmt, target_w, target_h, blit);
+        if (sr == 0) return;
+        wnc_log("color-diag", "sampled shader path unavailable for %s image; falling back to blit",
+                d->blend ? "alpha" : "opaque");
+    }
     g_vk.CmdBlitImage(cmd, im->image, im->dmabuf ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
                       target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, blit, filter);
 }
