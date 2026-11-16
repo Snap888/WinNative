@@ -7074,9 +7074,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
                 WaylandCompositor.nativeSetUpscaleSharpness(fsrEnabled ? fsrSharpness : (anrEnabled ? anrSharpness : sgsrSharpness));
                 WaylandCompositor.nativeSetANRQuality(anrQuality);
 
-                float effectiveSaturation = saturation / 100.0f;
+                // Native vkp_effects_set_screen() accepts slider units (0..200 %) and
+                // performs the single percent-to-shader conversion itself. Keep this value
+                // in percent here; pre-normalizing it would divide saturation by 100 twice
+                // and turn the default 100 % into 1 % (a nearly monochrome picture).
+                float effectiveSaturation = (float) saturation;
                 if (vividEnabled) {
-                    effectiveSaturation = Math.min(2.0f, effectiveSaturation * (1.0f + Math.max(0, vividStrength) / 100.0f));
+                    effectiveSaturation = Math.min(200.0f,
+                            effectiveSaturation * (1.0f + Math.max(0, vividStrength) / 100.0f));
                 }
                 boolean profileHdr = colorProfile == 1;
                 boolean profileCrt = colorProfile == 3;
