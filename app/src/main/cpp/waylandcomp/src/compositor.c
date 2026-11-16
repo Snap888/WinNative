@@ -165,9 +165,8 @@ static int log_budget(void) {
 #define BTN_RIGHT 0x111
 #endif
 
-/* Java sends pointer coordinates in this space, covering the whole output surface. */
-#define INPUT_SPACE_W 1920
-#define INPUT_SPACE_H 1080
+/* Java sends pointer coordinates in the logical wl_output mode. Keep this space tied to
+ * the mode advertised to clients instead of assuming every container is 1920x1080. */
 
 static struct wl_display *g_display;
 
@@ -296,6 +295,7 @@ struct surface {
     char *title;                            /* xdg_toplevel title, for the session log */
     int announced_vulkan;                   /* logged its first dmabuf frame */
     uint32_t hdr_fmt_logged;                /* HDR session: the buffer format last named in the log */
+    unsigned shm_format_logged : 1;          /* first wl_shm format/sample recorded for diagnostics */
 };
 
 static struct wl_list g_surfaces;           /* every surface */
@@ -350,6 +350,8 @@ volatile int g_output_refresh_mhz;
 /* The advertised output size: the container's screen (what the app's X server reports on X11),
  * so Wine's display-mode list stops at the desktop size. 0 = 1920x1080. */
 volatile int g_output_w, g_output_h;
+static int input_space_w(void) { return g_output_w > 0 ? g_output_w : 1920; }
+static int input_space_h(void) { return g_output_h > 0 ? g_output_h : 1080; }
 struct pending_release {
     struct wl_resource *buffer;
     struct wl_listener destroy;
@@ -687,8 +689,25 @@ static void take_shm(struct surface *s, struct wl_shm_buffer *shm, struct wl_res
     if (!s->shm_img) s->shm_img = vkp_image_create_shm(w, h);
     if (s->shm_img) {
         wl_shm_buffer_begin_access(shm);
-        vkp_image_upload_shm(s->shm_img, wl_shm_buffer_get_data(shm), stride);
+        const uint8_t *pixels = (const uint8_t *)wl_shm_buffer_get_data(shm);
+        if (!s->shm_format_logged && pixels && stride >= 4) {
+            uint32_t format = wl_shm_buffer_get_format(shm);
+            wnc_log("color-diag",
+                    "wl_shm source: format=0x%08x (%s), size=%dx%d stride=%d, first-pixel bytes=%02x %02x %02x %02x; Vulkan upload target=VK_FORMAT_B8G8R8A8_UNORM",
+                    format,
+                    format == WL_SHM_FORMAT_ARGB8888 ? "ARGB8888" :
+                    format == WL_SHM_FORMAT_XRGB8888 ? "XRGB8888" :
+                    format == WL_SHM_FORMAT_ABGR8888 ? "ABGR8888" :
+                    format == WL_SHM_FORMAT_XBGR8888 ? "XBGR8888" : "other",
+                    w, h, stride, pixels[0], pixels[1], pixels[2], pixels[3]);
+            s->shm_format_logged = 1;
+        }
+        vkp_image_upload_shm(s->shm_img, pixels, stride);
         wl_shm_buffer_end_access(shm);
+    } else if (!s->shm_format_logged) {
+        wnc_log("color-diag", "wl_shm image allocation failed: size=%dx%d stride=%d format=0x%08x",
+                w, h, stride, wl_shm_buffer_get_format(shm));
+        s->shm_format_logged = 1;
     }
     wl_buffer_send_release(buffer);
     s->buf_w = w;
@@ -1871,7 +1890,7 @@ static void scene_size(int *w, int *h) {
         surface_size(s, &sw, &sh);
         if ((long long)sw * sh > best) { best = (long long)sw * sh; *w = sw; *h = sh; }
     }
-    if (*w <= 0 || *h <= 0) { *w = INPUT_SPACE_W; *h = INPUT_SPACE_H; }
+    if (*w <= 0 || *h <= 0) { *w = input_space_w(); *h = input_space_h(); }
 }
 
 static void fire_all_frames(void) {
@@ -2989,9 +3008,9 @@ static void deliver_pointer(const struct input_msg *m) {
     scene_size(&w, &h);
     vkp_output_size(&ow, &oh);
     if (ow <= 0 || oh <= 0 ||
-        !vkp_output_to_scene((double)m->p2 * ow / INPUT_SPACE_W, (double)m->p3 * oh / INPUT_SPACE_H, &x, &y)) {
-        x = (double)m->p2 * w / INPUT_SPACE_W; /* nothing drawn yet: plain stretch */
-        y = (double)m->p3 * h / INPUT_SPACE_H;
+        !vkp_output_to_scene((double)m->p2 * ow / input_space_w(), (double)m->p3 * oh / input_space_h(), &x, &y)) {
+        x = (double)m->p2 * w / input_space_w(); /* nothing drawn yet: plain stretch */
+        y = (double)m->p3 * h / input_space_h();
     }
     if (x < 0) x = 0;
     if (y < 0) y = 0;

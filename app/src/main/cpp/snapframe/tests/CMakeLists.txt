@@ -11,6 +11,17 @@ add_test(NAME snapframe_wsi_ownership
         -DSOURCE_FILE=${CMAKE_CURRENT_LIST_DIR}/../src/snap_frame_vk.c
         -P ${CMAKE_CURRENT_LIST_DIR}/check_wsi_ownership.cmake)
 
+add_test(NAME wayland_wsi_timeout_recovery
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/vk_present.c
+        -P ${CMAKE_CURRENT_LIST_DIR}/check_wayland_wsi_timeout.cmake)
+
+add_test(NAME wayland_color_saturation_units
+    COMMAND ${CMAKE_COMMAND}
+        -DJAVA_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../runtime/display/XServerDisplayActivity.java
+        -DNATIVE_FILE=${CMAKE_CURRENT_LIST_DIR}/../../waylandcomp/src/effects_chain.c
+        -P ${CMAKE_CURRENT_LIST_DIR}/check_wayland_saturation_units.cmake)
+
 add_test(NAME snapframe_candidate_reconstruction_contract
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_DIR=${CMAKE_CURRENT_LIST_DIR}/..
