@@ -35,6 +35,7 @@ struct vkp_image {
     int in_general;           /* shm images: moved from PREINITIALIZED to GENERAL */
     VkFormat fmt;
     int sampled;              /* created with SAMPLED usage: the alpha pass can read it */
+    int draw_path_logged;      /* one diagnostic line per imported/client image */
 };
 
 static ANativeWindow *g_window;  /* the window frames go to; compositor thread only */
@@ -937,7 +938,13 @@ int vkp_dmabuf_modifiers(uint32_t drm_format, uint64_t *out, int max) {
     for (uint32_t i = 0; i < list.drmFormatModifierCount; i++) {
         uint64_t m = props[i].drmFormatModifier;
         const char *why = NULL;
-        if (m != VKP_MOD_LINEAR && m != VKP_MOD_QCOM_COMPRESSED) why = "unknown layout";
+        /* Diagnostic workaround for the Adreno 740 Wayland grayscale report: do not tell
+         * clients that UBWC is an acceptable import layout until the linear path is verified.
+         * The compositor can still import an already-created UBWC buffer, but new clients should
+         * select linear when the protocol feedback is respected. X11 is not involved here. */
+        if (m == VKP_MOD_QCOM_COMPRESSED)
+            why = "temporarily disabled: Wayland color diagnostic requires linear dma-bufs";
+        else if (m != VKP_MOD_LINEAR) why = "unknown layout";
         else if (props[i].drmFormatModifierPlaneCount != 1) why = "not single-plane";
         else if (!(props[i].drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) why = "no blit source";
         else if (!modifier_importable(fmt, m, VK_IMAGE_USAGE_TRANSFER_SRC_BIT)) why = "not importable as a dma-buf";
@@ -1169,8 +1176,16 @@ static int draw_to_scene_blit(const struct vkp_draw *d, int scene_w, int scene_h
  * alpha pass where that can read it, everything else - and any surface it cannot take - as a blit. */
 static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkImageBlit *blit, VkImage target,
                         VkFormat target_fmt, int target_w, int target_h, VkFilter filter) {
-    const struct vkp_image *im = d->img;
-    if (d->blend && im->sampled &&
+    struct vkp_image *im = d->img;
+    const int shader_path = d->blend && im->sampled;
+    if (!im->draw_path_logged) {
+        wnc_log("color-diag",
+                "draw path: FourCC/VkFormat=%d size=%dx%d modifier-backed=%d blend=%d sampled=%d path=%s",
+                (int)im->fmt, im->w, im->h, im->dmabuf, d->blend, im->sampled,
+                shader_path ? "sampled-alpha-shader (if pipeline succeeds)" : "vkCmdBlitImage");
+        im->draw_path_logged = 1;
+    }
+    if (shader_path &&
         blendp_draw(cmd, im->image, im->fmt, im->w, im->h, !im->dmabuf, target, target_fmt, target_w, target_h,
                     blit) == 0)
         return;
