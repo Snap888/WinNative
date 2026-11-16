@@ -35,6 +35,7 @@ struct vkp_image {
     int in_general;           /* shm images: moved from PREINITIALIZED to GENERAL */
     VkFormat fmt;
     int sampled;              /* created with SAMPLED usage: the alpha pass can read it */
+    int draw_path_logged;      /* one diagnostic line per imported/client image */
 };
 
 static ANativeWindow *g_window;  /* the window frames go to; compositor thread only */
@@ -54,6 +55,9 @@ static VkCommandPool g_pool;
 static VkCommandBuffer g_cmds[MAX_PRESENTS];
 static VkSemaphore g_acqs[MAX_PRESENTS], g_rnds[MAX_PRESENTS];
 static VkFence g_fence;
+#define SNAP_READBACK_SLOTS 4
+static VkFence g_snap_readback_fences[SNAP_READBACK_SLOTS];
+static int g_snap_readback_fences_ready;
 /* Extra swapchain images this swapchain was built with (frame generation: one per generated
  * frame, so all presents of a scene frame queue without waiting for a vblank). */
 static int g_swap_extra;
@@ -101,6 +105,12 @@ static VkSemaphore g_wait_sem;
 
 /* The 10 s perf line's counters (vkp_perf_take). Compositor thread only. */
 static struct vkp_perf g_perf;
+/* Frame-generation lifecycle totals. Compositor-thread only; each stage is counted separately. */
+static uint64_t g_fg_planned_total, g_fg_acquired_total, g_fg_compute_recorded_total;
+static uint64_t g_fg_compute_completed_total;
+static uint64_t g_fg_submit_success_total, g_fg_submit_failure_total;
+static uint64_t g_fg_present_success_total, g_fg_present_failure_total, g_fg_source_present_failure_total;
+static uint64_t g_fg_acquire_timeout_total, g_fg_acquire_error_total;
 static int64_t perf_now(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -123,12 +133,12 @@ static VkResult timed_wait(VkFence fence, uint64_t timeout) {
 /* The scene image (effects path only): every draw composited 1:1 at scene size, the input of the
  * screen-effect chain (effects_chain.c) — and of frame generation once that lands. Recreated on a
  * scene size change; frames are fenced, so never while the GPU reads it. */
-static struct { VkImage img; VkDeviceMemory mem; int w, h; } g_scene;
+static struct { VkImage img; VkDeviceMemory mem; VkImageView view; int w, h; } g_scene;
 
 /* HDR composition (hdr_compose.h): the 10-bit image every draw is blitted into 1:1 in its own encoding
  * ("mixed"), and the 10-bit HDR picture the encode pass makes of it for the game's display layer. Only
  * ever created while an HDR game shares the scene with something the display layer cannot show alone. */
-struct vkp_img_slot { VkImage img; VkDeviceMemory mem; int w, h; VkFormat fmt; };
+struct vkp_img_slot { VkImage img; VkDeviceMemory mem; VkImageView view; int w, h; VkFormat fmt; };
 static struct vkp_img_slot g_mixed, g_hdrscene, g_fgscene;
 #define HDR_FMT VK_FORMAT_A2B10G10R10_UNORM_PACK32
 /* Frame generation with HDR frames through an HDR10 swapchain: the scene, the effects and the engine's
@@ -526,6 +536,18 @@ static int dev_init(void) {
     g_vk.AllocateCommandBuffers(g_dev, &cai, g_cmds);
     VkFenceCreateInfo fci = {.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     g_vk.CreateFence(g_dev, &fci, NULL, &g_fence);
+    g_snap_readback_fences_ready = 1;
+    for (uint32_t i = 0; i < SNAP_READBACK_SLOTS; i++) {
+        if (g_vk.CreateFence(g_dev, &fci, NULL, &g_snap_readback_fences[i]) != VK_SUCCESS) {
+            g_snap_readback_fences_ready = 0;
+            for (uint32_t j = 0; j <= i; j++) {
+                if (g_snap_readback_fences[j]) g_vk.DestroyFence(g_dev, g_snap_readback_fences[j], NULL);
+                g_snap_readback_fences[j] = VK_NULL_HANDLE;
+            }
+            LOGE("present: SnapFrame per-slot fence ring unavailable; using legacy frame fence");
+            break;
+        }
+    }
 
     vkp_effects_bind_device(g_dev, g_pd, &g_memprops);
     hdrc_bind_device(g_dev, &g_memprops);
@@ -916,7 +938,13 @@ int vkp_dmabuf_modifiers(uint32_t drm_format, uint64_t *out, int max) {
     for (uint32_t i = 0; i < list.drmFormatModifierCount; i++) {
         uint64_t m = props[i].drmFormatModifier;
         const char *why = NULL;
-        if (m != VKP_MOD_LINEAR && m != VKP_MOD_QCOM_COMPRESSED) why = "unknown layout";
+        /* Diagnostic workaround for the Adreno 740 Wayland grayscale report: do not tell
+         * clients that UBWC is an acceptable import layout until the linear path is verified.
+         * The compositor can still import an already-created UBWC buffer, but new clients should
+         * select linear when the protocol feedback is respected. X11 is not involved here. */
+        if (m == VKP_MOD_QCOM_COMPRESSED)
+            why = "temporarily disabled: Wayland color diagnostic requires linear dma-bufs";
+        else if (m != VKP_MOD_LINEAR) why = "unknown layout";
         else if (props[i].drmFormatModifierPlaneCount != 1) why = "not single-plane";
         else if (!(props[i].drmFormatModifierTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) why = "no blit source";
         else if (!modifier_importable(fmt, m, VK_IMAGE_USAGE_TRANSFER_SRC_BIT)) why = "not importable as a dma-buf";
@@ -1016,6 +1044,11 @@ struct vkp_image *vkp_image_import_dmabuf(int fd, uint32_t drm_format, uint64_t 
         g_vk.FreeMemory(g_dev, img->mem, NULL); g_vk.DestroyImage(g_dev, img->image, NULL);
         free(img); return NULL;
     }
+    wnc_log("color-diag",
+            "dma-buf import OK: DRM FourCC=%c%c%c%c (0x%08x) -> VkFormat=%d, size=%dx%d stride=%u offset=%u modifier=%s sampled=%d blit_dst=%d",
+            drm_format & 0xff, (drm_format >> 8) & 0xff, (drm_format >> 16) & 0xff,
+            (drm_format >> 24) & 0xff, drm_format, (int)img->fmt, w, h, stride, offset,
+            vkp_modifier_name(modifier), img->sampled, img->blit_dst);
     return img;
 }
 
@@ -1143,8 +1176,16 @@ static int draw_to_scene_blit(const struct vkp_draw *d, int scene_w, int scene_h
  * alpha pass where that can read it, everything else - and any surface it cannot take - as a blit. */
 static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkImageBlit *blit, VkImage target,
                         VkFormat target_fmt, int target_w, int target_h, VkFilter filter) {
-    const struct vkp_image *im = d->img;
-    if (d->blend && im->sampled &&
+    struct vkp_image *im = d->img;
+    const int shader_path = d->blend && im->sampled;
+    if (!im->draw_path_logged) {
+        wnc_log("color-diag",
+                "draw path: FourCC/VkFormat=%d size=%dx%d modifier-backed=%d blend=%d sampled=%d path=%s",
+                (int)im->fmt, im->w, im->h, im->dmabuf, d->blend, im->sampled,
+                shader_path ? "sampled-alpha-shader (if pipeline succeeds)" : "vkCmdBlitImage");
+        im->draw_path_logged = 1;
+    }
+    if (shader_path &&
         blendp_draw(cmd, im->image, im->fmt, im->w, im->h, !im->dmabuf, target, target_fmt, target_w, target_h,
                     blit) == 0)
         return;
@@ -1155,6 +1196,7 @@ static void record_draw(VkCommandBuffer cmd, const struct vkp_draw *d, const VkI
 static void destroy_scene_image(void) {
     if (g_scene.img) hdrc_forget_image(g_scene.img); /* the HDR pass may have drawn into it */
     if (g_scene.img) blendp_forget_image(g_scene.img);
+    if (g_scene.view) g_vk.DestroyImageView(g_dev, g_scene.view, NULL);
     if (g_scene.img) g_vk.DestroyImage(g_dev, g_scene.img, NULL);
     if (g_scene.mem) g_vk.FreeMemory(g_dev, g_scene.mem, NULL);
     memset(&g_scene, 0, sizeof(g_scene));
@@ -1170,7 +1212,7 @@ static int ensure_scene_image(int w, int h) {
         .format = VK_FORMAT_R8G8B8A8_UNORM, .extent = {(uint32_t)w, (uint32_t)h, 1}, .mipLevels = 1, .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT, .tiling = VK_IMAGE_TILING_OPTIMAL,
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /* the HDR encode pass writes it (frame generation) */
+                 VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, /* SnapFrame flow viewer writes its diagnostic here */
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
     VkResult r = g_vk.CreateImage(g_dev, &ici, NULL, &g_scene.img);
     if (r != VK_SUCCESS) { LOGE("effects: scene image %dx%d: vkCreateImage %s", w, h, vk_result_name(r)); g_scene.img = VK_NULL_HANDLE; return -1; }
@@ -1183,6 +1225,11 @@ static int ensure_scene_image(int w, int h) {
     r = g_vk.AllocateMemory(g_dev, &mai, NULL, &g_scene.mem);
     if (r != VK_SUCCESS) { LOGE("effects: scene image %dx%d: vkAllocateMemory %s", w, h, vk_result_name(r)); destroy_scene_image(); return -1; }
     g_vk.BindImageMemory(g_dev, g_scene.img, g_scene.mem, 0);
+    VkImageViewCreateInfo vci = {.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,.image=g_scene.img,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,.format=VK_FORMAT_R8G8B8A8_UNORM,
+        .subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+    r = g_vk.CreateImageView(g_dev,&vci,NULL,&g_scene.view);
+    if (r != VK_SUCCESS) { destroy_scene_image(); return -1; }
     g_scene.w = w; g_scene.h = h;
     wnc_log("effects", "scene image %dx%d for the effect chain", w, h);
     return 0;
@@ -1193,6 +1240,7 @@ static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImag
     if (s->img && s->w == w && s->h == h && s->fmt == fmt) return 0;
     if (s->img) hdrc_forget_image(s->img);
     if (s->img) blendp_forget_image(s->img);
+    if (s->view) g_vk.DestroyImageView(g_dev,s->view,NULL);
     if (s->img) g_vk.DestroyImage(g_dev, s->img, NULL);
     if (s->mem) g_vk.FreeMemory(g_dev, s->mem, NULL);
     memset(s, 0, sizeof(*s));
@@ -1217,6 +1265,10 @@ static int ensure_img(struct vkp_img_slot *s, int w, int h, VkFormat fmt, VkImag
         return -1;
     }
     g_vk.BindImageMemory(g_dev, s->img, s->mem, 0);
+    VkImageViewCreateInfo vci = {.sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,.image=s->img,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,.format=fmt,.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1}};
+    r = g_vk.CreateImageView(g_dev,&vci,NULL,&s->view);
+    if (r != VK_SUCCESS) { g_vk.DestroyImage(g_dev,s->img,NULL); g_vk.FreeMemory(g_dev,s->mem,NULL); memset(s,0,sizeof(*s)); return -1; }
     s->w = w; s->h = h; s->fmt = fmt;
     char fname[24];
     vk_format_short(fmt, fname, sizeof(fname));
@@ -1377,21 +1429,24 @@ static void record_screen_blit(VkCommandBuffer cmd, VkImage src, int src_w, int 
  * a recreate that would have succeeded. Later slots have presents in flight on this swapchain,
  * so they never rebuild; they fail and the frame ends early. 0 on success. */
 static int acquire_image(int k, int first, uint32_t *img, VkResult *ar_out) {
+    if (ar_out) *ar_out = VK_ERROR_UNKNOWN;
     for (int attempt = 0; ; attempt++) {
         if (!g_swapchain && (!first || swap_init() != 0)) return -1;
         /* A bounded wait: a surface that went away without telling us must not park the
          * compositor thread forever (clients are paced from this thread). */
         const int64_t t_acq = perf_now();
-        VkResult ar = g_vk.AcquireNextImageKHR(g_dev, g_swapchain, 1000000000ULL, g_acqs[k], VK_NULL_HANDLE, img);
+        VkResult ar = g_vk.AcquireNextImageKHR(g_dev, g_swapchain, vkp_framegen_acquire_timeout_ns(k), g_acqs[k], VK_NULL_HANDLE, img);
         perf_add(&g_perf.acquire_ns, &g_perf.acquire_max_ns, &g_perf.acquires, perf_now() - t_acq);
         if (ar == VK_SUCCESS || ar == VK_SUBOPTIMAL_KHR) { *ar_out = ar; return 0; }
-        if (ar == VK_ERROR_DEVICE_LOST) { device_lost("acquire"); return -1; }
+        if (ar == VK_ERROR_DEVICE_LOST) { if (ar_out) *ar_out = ar; device_lost("acquire"); return -1; }
         if (ar == VK_ERROR_OUT_OF_DATE_KHR || ar == VK_ERROR_SURFACE_LOST_KHR) {
+            if (ar_out) *ar_out = ar;
             wnc_log("gpu", "screen surface %s on acquire: rebuilding the swapchain", vk_result_name(ar));
             destroy_swapchain();
             if (first && attempt == 0) continue;
             return -1;
         }
+        if (ar_out) *ar_out = ar;
         wnc_log("error", "present: acquire %d failed (%s %d)", k, vk_result_name(ar), (int)ar);
         if (ar == VK_TIMEOUT || ar == VK_NOT_READY) return -1;
         destroy_swapchain(); /* anything else: start over next frame */
@@ -1542,7 +1597,9 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
 
     uint32_t img = 0;
     VkResult ar;
+    const int64_t initial_acquire_begin_ns = perf_now();
     if (acquire_image(0, 1, &img, &ar) != 0) return -1;
+    const int64_t initial_acquire_ns = perf_now() - initial_acquire_begin_ns;
     update_map(scene_w, scene_h);
     /* A new HDR10 swapchain, or a new image description on it: hand the game's metadata over. */
     if (g_swap_is_hdr && hf && hf->color && hf->color->identity != g_swap_md_identity) {
@@ -1560,7 +1617,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     /* HDR frames with frame generation through an HDR10 swapchain: the scene, the effects and the
      * engine's frames in FP16 (FG_HDR_FMT) where the engine can take that format - more than 8 bits of
      * PQ through interpolation - else the 8-bit scene, as before. */
-    const int deep = hf && n > 0 && fg && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
+    const int deep = hf && n > 0 && fg && !vkp_framegen_debug_flow_active() && g_swap_is_hdr && !hf->tonemap && vkp_framegen_format_ok(FG_HDR_FMT) &&
                      ensure_img(&g_fgscene, scene_w, scene_h, FG_HDR_FMT,
                                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -1686,6 +1743,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     int ngen = 0;
     VkImage gens[VKP_FG_MAX_GENERATIONS] = {VK_NULL_HANDLE};
     VkImage result = scene_img;
+    VkImageView result_view = deep ? g_fgscene.view : g_scene.view;
     int rw = scene_w, rh = scene_h;
     if (!pass) {
         VkImageMemoryBarrier b_present = {
@@ -1706,6 +1764,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
              * base under an HDR picture) must not flip the chain's format back every frame. */
             vkp_effects_set_formats(scene_fmt, scene_fmt);
             result = vkp_effects_run(cmd, scene_img, scene_w, scene_h, mapped_w, mapped_h, &rw, &rh);
+            result_view = vkp_effects_view(result);
             result_layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         }
         /* Hand-off: from here the frame lives in GENERAL - the frame-generation engines copy and
@@ -1725,31 +1784,99 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         /* 3. Frame generation (the hook): the result is frame N; the engine interpolates between
          *    N-1 and N and hands back the frames that belong in between. Shown first, N last. */
         if (fg) {
-            ngen = vkp_framegen_run(cmd, result, VK_NULL_HANDLE, rw, rh, scene_fmt, gens);
+            ngen = vkp_framegen_run(cmd, result, result_view, rw, rh, scene_fmt, gens);
             if (ngen < 0) ngen = 0;
             if (ngen > VKP_FG_MAX_GENERATIONS) ngen = VKP_FG_MAX_GENERATIONS;
+        }
+
+        /* Match the X11 flow viewer: when enabled, compute a fresh flow field even on frames
+         * where WSI could not acquire an interpolation slot, then draw that diagnostic into the
+         * scene image before it is blitted to the display. */
+        if (fg && vkp_framegen_debug_flow_active()) {
+            VkImageMemoryBarrier debug_barrier = {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+                .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_GENERAL, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                .image = result,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+            g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                    0, 0, NULL, 0, NULL, 1, &debug_barrier);
+            vkp_framegen_debug_into(cmd, result, result_view, (uint32_t)rw, (uint32_t)rh);
         }
 
         /* 4. Mapping/blit: the first present carries generated frame 0, or the result itself. */
         record_screen_blit(cmd, ngen ? gens[0] : result, rw, rh, scene_w, scene_h, img, blit_filter);
     }
-    g_vk.EndCommandBuffer(cmd);
+    VkResult end_cmd_result = g_vk.EndCommandBuffer(cmd);
+    if (end_cmd_result == VK_SUCCESS) g_fg_compute_recorded_total += (uint64_t)ngen;
+    else LOGE("present: scene command buffer end failed (%d)", (int)end_cmd_result);
 
     /* One submit + present per slot: generated frames first, the real frame last. The frame
      * fence rides on the last submit (a fence signal is ordered after everything submitted
      * earlier on the queue, so it still covers all of this frame's work). With FIFO the
      * presentation engine shows them on consecutive vblanks: that IS the pacing, no sleeps. */
     const int presents = 1 + ngen;
-    int fence_submitted = 0, presented_gen = 0;
+    int fence_submitted = 0, presented_gen = 0, source_present_attempted = 0;
+    int generated_acquired = ngen > 0 ? 1 : 0;
+    g_fg_planned_total += (uint64_t)ngen;
+    g_fg_acquired_total += (uint64_t)generated_acquired;
+    int generated_present_failures = 0, generated_submit_calls = 0, generated_present_calls = 0;
+    int generated_acquire_timeouts = 0, generated_acquire_errors = 0;
+    int generated_submit_failures = 0, source_present_failures = 0;
+    uint64_t generated_acquire_ns = ngen > 0 ? (uint64_t)initial_acquire_ns : 0u;
+    uint64_t generated_submit_ns = 0, generated_present_ns = 0;
+    float generated_acquire_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    float generated_submit_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    float generated_present_slot_ms[VKP_FG_MAX_GENERATIONS] = {0};
+    if (ngen > 0) generated_acquire_slot_ms[0] = (float)initial_acquire_ns / 1.0e6f;
     VkResult pr = VK_SUCCESS;
-    g_vk.ResetFences(g_dev, 1, &g_fence);
+    const int readback_slot = vkp_framegen_readback_slot();
+    VkFence frame_fence = (g_snap_readback_fences_ready && readback_slot >= 0 && readback_slot < SNAP_READBACK_SLOTS)
+        ? g_snap_readback_fences[readback_slot] : g_fence;
+    g_vk.ResetFences(g_dev, 1, &frame_fence);
+    if (frame_fence != g_fence) vkp_framegen_set_submission_fence(frame_fence);
     for (int k = 0; k < presents; k++) {
         if (k > 0) {
             VkResult ark;
+            const int64_t acquire_begin_ns = perf_now();
             if (acquire_image(k, 0, &img, &ark) != 0) {
-                wnc_log("framegen", "present %d/%d: no swapchain image; the frame ends early", k + 1, presents);
-                pr = VK_ERROR_OUT_OF_DATE_KHR;
+                wnc_log("framegen", "present %d/%d: no swapchain image; skipping this slot", k + 1, presents);
+                const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
+                if (k < ngen) {
+                    generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
+                    generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
+                }
+                if (k < ngen) {
+                    if (ark == VK_TIMEOUT || ark == VK_NOT_READY) {
+                        generated_acquire_timeouts++; g_fg_acquire_timeout_total++;
+                    } else {
+                        generated_acquire_errors++; g_fg_acquire_error_total++;
+                    }
+                }
+                /*
+                 * A timeout is a missed presentation opportunity, not a surface failure.
+                 * In particular, never translate it into VK_ERROR_OUT_OF_DATE_KHR: the
+                 * final result below controls swapchain teardown. If a generated slot
+                 * times out, skip the remaining generated slots but still try the source
+                 * frame. If the source slot itself times out, finish this frame without
+                 * presenting it and keep the current swapchain alive.
+                 */
+                if (k < ngen && (ark == VK_TIMEOUT || ark == VK_NOT_READY)) {
+                    k = ngen - 1;
+                    continue;
+                }
                 break;
+            }
+            const int64_t acquire_elapsed_ns = perf_now() - acquire_begin_ns;
+            if (k < ngen) {
+                generated_acquired++;
+                g_fg_acquired_total++;
+                generated_acquire_ns += (uint64_t)acquire_elapsed_ns;
+                generated_acquire_slot_ms[k] = (float)acquire_elapsed_ns / 1.0e6f;
             }
             if (ark == VK_SUBOPTIMAL_KHR) ar = ark;
             VkCommandBuffer ck = g_cmds[k];
@@ -1763,34 +1890,109 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .waitSemaphoreCount = 1,
                            .pWaitSemaphores = &g_acqs[k], .pWaitDstStageMask = &wait, .commandBufferCount = 1,
                            .pCommandBuffers = &g_cmds[k], .signalSemaphoreCount = 1, .pSignalSemaphores = &g_rnds[k]};
-        VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? g_fence : VK_NULL_HANDLE);
+        const int64_t submit_begin_ns = perf_now();
+        VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? frame_fence : VK_NULL_HANDLE);
+        const int64_t submit_elapsed_ns = perf_now() - submit_begin_ns;
+        if (k < ngen) {
+            generated_submit_calls++;
+            generated_submit_ns += (uint64_t)submit_elapsed_ns;
+            generated_submit_slot_ms[k] = (float)submit_elapsed_ns / 1.0e6f;
+        }
         if (qr != VK_SUCCESS) {
+            if (k < ngen) { generated_submit_failures++; g_fg_submit_failure_total++; }
             if (qr == VK_ERROR_DEVICE_LOST) device_lost("submit");
             else LOGE("present: submit %d/%d failed (%d)", k + 1, presents, (int)qr);
+            /* Feed the actual partial WSI result back to Snap AI before leaving this frame. */
+            const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
+            const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
+            const float present_pressure = generated_present_calls
+                ? (float)generated_present_failures / (float)generated_present_calls : 0.0f;
+            const float submit_pressure = k < ngen ? 1.0f :
+                (generated_submit_calls && frame_period_ms > 0.0f
+                    ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f);
+            vkp_framegen_set_wsi_feedback(
+                ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f,
+                acquire_pressure, submit_pressure, present_pressure);
+            vkp_framegen_presented(presented_gen, 0);
             /* The acquired image is never presented; the swapchain would be stuck with it. */
             if (g_dev_state != -2) destroy_swapchain();
             return -1;
         }
+        if (k < ngen) g_fg_submit_success_total++;
         fence_submitted = last;
         VkPresentInfoKHR pi = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .waitSemaphoreCount = 1,
                                .pWaitSemaphores = &g_rnds[k], .swapchainCount = 1,
                                .pSwapchains = &g_swapchain, .pImageIndices = &img};
+        if (k == ngen) source_present_attempted = 1;
         const int64_t t_pres = perf_now();
         pr = g_vk.QueuePresentKHR(g_queue, &pi);
-        perf_add(&g_perf.present_ns, &g_perf.present_max_ns, &g_perf.presents, perf_now() - t_pres);
-        if (k < ngen) presented_gen++;
+        const int64_t present_elapsed_ns = perf_now() - t_pres;
+        perf_add(&g_perf.present_ns, &g_perf.present_max_ns, &g_perf.presents, present_elapsed_ns);
+        if (k < ngen) {
+            generated_present_calls++;
+            generated_present_ns += (uint64_t)present_elapsed_ns;
+            generated_present_slot_ms[k] = (float)present_elapsed_ns / 1.0e6f;
+        }
+        if (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR) {
+            if (k < ngen) { presented_gen++; g_fg_present_success_total++; }
+        } else if (k < ngen) {
+            generated_present_failures++; g_fg_present_failure_total++;
+            wnc_log("framegen", "generated present %d/%d failed (%s %d)",
+                    k + 1, ngen, vk_result_name(pr), (int)pr);
+        }
         if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR || pr == VK_ERROR_DEVICE_LOST) break;
     }
     if (!fence_submitted) {
-        /* Ended early: an empty submit carrying the fence is ordered after everything queued
-         * above, so the wait below still means "this frame's work is done". */
+        /* Ended early: signal the fence selected for this frame (including SnapFrame's
+         * readback slot), ordered after any generated-frame work already queued. */
         VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO};
-        g_vk.QueueSubmit(g_queue, 1, &si, g_fence);
+        VkResult empty_submit = g_vk.QueueSubmit(g_queue, 1, &si, frame_fence);
+        if (empty_submit == VK_SUCCESS) {
+            fence_submitted = 1;
+        } else {
+            if (empty_submit == VK_ERROR_DEVICE_LOST) device_lost("empty frame-fence submit");
+            else LOGE("present: empty frame-fence submit failed (%d)", (int)empty_submit);
+        }
     }
-    VkResult fr = timed_wait(g_fence, UINT64_MAX);
+    VkResult fr = fence_submitted ? timed_wait(frame_fence, UINT64_MAX) : VK_ERROR_UNKNOWN;
+    if (fr == VK_SUCCESS) g_fg_compute_completed_total += (uint64_t)ngen;
     /* Counted on every screen frame, not just generating ones: the HUD's output-frame source
      * reads these totals even when the engine is off (a panel-side interpolator is still on). */
-    vkp_framegen_presented(presented_gen);
+    const int source_presented = source_present_attempted &&
+        (pr == VK_SUCCESS || pr == VK_SUBOPTIMAL_KHR);
+    if (source_present_attempted && !source_presented) {
+        source_present_failures++; g_fg_source_present_failure_total++;
+    }
+    const float frame_period_ms = (float)vkp_framegen_acquire_timeout_ns(0) / 1.0e6f;
+    const float delivery_ratio = ngen > 0 ? (float)presented_gen / (float)ngen : 1.0f;
+    const float acquire_pressure = ngen > 0 ? (float)(ngen - generated_acquired) / (float)ngen : 0.0f;
+    const float submit_pressure = generated_submit_calls && frame_period_ms > 0.0f
+        ? ((float)generated_submit_ns / (float)generated_submit_calls / 1.0e6f) / frame_period_ms : 0.0f;
+    const float present_pressure = generated_present_calls
+        ? (float)generated_present_failures / (float)generated_present_calls : 0.0f;
+    vkp_framegen_set_wsi_feedback(
+        delivery_ratio, acquire_pressure, submit_pressure, present_pressure);
+    static uint64_t fg_wsi_log_frames;
+    if (++fg_wsi_log_frames % 120u == 0u && ngen > 0) {
+        wnc_log("framegen", "WSI planned=%d acquired=%d presented=%d acquire_timeout=%d acquire_error=%d submit_fail=%d present_fail=%d source_present_fail=%d totals[plan=%llu acquire=%llu compute_recorded=%llu compute_completed=%llu submit_ok=%llu submit_fail=%llu present_ok=%llu present_fail=%llu source_present_fail=%llu acquire_timeout=%llu acquire_error=%llu] acquire_total=%.3fms submit_total=%.3fms present_total=%.3fms acquire_slots=%.3f/%.3f/%.3fms submit_slots=%.3f/%.3f/%.3fms present_slots=%.3f/%.3f/%.3fms delivery=%.3f",
+            ngen, generated_acquired, presented_gen,
+            generated_acquire_timeouts, generated_acquire_errors, generated_submit_failures,
+            generated_present_failures, source_present_failures,
+            (unsigned long long)g_fg_planned_total, (unsigned long long)g_fg_acquired_total,
+            (unsigned long long)g_fg_compute_recorded_total,
+            (unsigned long long)g_fg_compute_completed_total,
+            (unsigned long long)g_fg_submit_success_total, (unsigned long long)g_fg_submit_failure_total,
+            (unsigned long long)g_fg_present_success_total, (unsigned long long)g_fg_present_failure_total,
+            (unsigned long long)g_fg_source_present_failure_total,
+            (unsigned long long)g_fg_acquire_timeout_total, (unsigned long long)g_fg_acquire_error_total,
+            (double)generated_acquire_ns / 1.0e6, (double)generated_submit_ns / 1.0e6,
+            (double)generated_present_ns / 1.0e6,
+            generated_acquire_slot_ms[0], generated_acquire_slot_ms[1], generated_acquire_slot_ms[2],
+            generated_submit_slot_ms[0], generated_submit_slot_ms[1], generated_submit_slot_ms[2],
+            generated_present_slot_ms[0], generated_present_slot_ms[1], generated_present_slot_ms[2],
+            delivery_ratio);
+    }
+    vkp_framegen_presented(presented_gen, source_presented);
     if (fr == VK_ERROR_DEVICE_LOST || pr == VK_ERROR_DEVICE_LOST) { device_lost("present"); return -1; }
     if (pr == VK_ERROR_OUT_OF_DATE_KHR || pr == VK_ERROR_SURFACE_LOST_KHR) {
         /* The surface changed or went away under this frame: rebuild before the next one. */

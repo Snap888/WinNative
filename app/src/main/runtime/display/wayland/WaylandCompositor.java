@@ -196,8 +196,20 @@ public final class WaylandCompositor {
     public static native void nativeHdrNoteHeadroomRequest(float ratio);
 
     // Screen effects run by the compositor between the composed scene and the output blit.
-    public static native void nativeSetUpscaler(int mode);
+    /** SnapFrame candidate reconstruction: 0=AI automatic, 1=forced off, 2=forced on. */
+    public static final int SNAPFRAME_RECONSTRUCTION_AUTO = 0;
+    public static final int SNAPFRAME_RECONSTRUCTION_OFF = 1;
+    public static final int SNAPFRAME_RECONSTRUCTION_ON = 2;
+    public static native void nativeSetSnapFrameCandidateReconstruction(int mode);
+    /** Snap AI policy: 0=Auto, 1=Off, 2=On. */
+    public static native void nativeSetSnapFrameAiMode(int mode);
+    public static native void nativeSetSnapFrameDebugFlow(boolean enabled);
+    /** Flow viewer: 0=Motion, 1=Confidence, 2=Consistency. */
+    public static native void nativeSetSnapFrameDebugMode(int mode);
+
+    public static native void nativeSetUpscaler(int mode); // mode 9 = shared ANR Spatial shader
     public static native void nativeSetUpscaleSharpness(int sharpness);
+    public static native void nativeSetANRQuality(int quality);
     public static native void nativeSetCas(boolean enabled, int sharpness);
     public static native void nativeSetHdr(boolean enabled);
     public static native void nativeSetDeband(boolean enabled, int strength);
@@ -205,10 +217,11 @@ public final class WaylandCompositor {
                                                      boolean fxaa, boolean toon, boolean crt, boolean ntsc);
     public static native void nativeSetLookName(String name);
 
-    // Frame generation. kind is ENGINE_LSFG or ENGINE_DIS; every setter is a store the compositor
+    // Frame generation. Every setter is a store the compositor
     // thread picks up on its next frame, so they are safe to call before the compositor is up.
     public static final int ENGINE_LSFG = 0;
     public static final int ENGINE_DIS = 1;
+    public static final int ENGINE_SNAPFRAME = 2;
 
     public static native void nativeSetFrameGenEngine(int kind);
     public static native void nativeSetFrameGenArmed(boolean armed, int multiplier);
@@ -216,6 +229,7 @@ public final class WaylandCompositor {
     public static native void nativeSetFrameGenTuning(float flowScale, float refreshHz);
     public static native void nativeSetEngineTuning(int flowMinSide, int targetFps);
     public static native int nativeFrameGenProblem();
+    public static native boolean nativeFrameGenEngineAvailable(int kind);
     public static native String nativeFrameGenCapsReason();
     public static native float[] nativeFrameGenStats();
     public static native long nativeFrameGenPresentedFrames();

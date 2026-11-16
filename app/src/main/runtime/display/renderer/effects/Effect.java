@@ -15,6 +15,8 @@ public abstract class Effect {
     public static final int TYPE_NTSC2     = 11;
     public static final int TYPE_COLORBLIND = 12;
     public static final int TYPE_PIXELATE  = 13;
+    public static final int TYPE_ANR_SPATIAL = 14;
+    public static final int TYPE_FSR = 15;
 
     public abstract int getNativeType();
 

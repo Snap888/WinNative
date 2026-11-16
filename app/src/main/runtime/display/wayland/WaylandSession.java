@@ -59,7 +59,7 @@ public final class WaylandSession {
         public int outputHeight;
         public int fpsLimit;
         public boolean zeroCopy;
-        public boolean ubwc = true;
+        public boolean ubwc = false; // Prefer linear dma-bufs until UBWC import is validated on the compositor GPU.
         public boolean noRenderNode;
         public int scaleMode = WaylandCompositor.SCALE_FIT;
         public File logDir;
@@ -79,9 +79,9 @@ public final class WaylandSession {
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private WaylandTextInput.SurfaceInputView surfaceView;
-    /** The space nativeSendPointer takes its coordinates in, over the whole output. */
-    private static final int INPUT_SPACE_WIDTH = 1920;
-    private static final int INPUT_SPACE_HEIGHT = 1080;
+    /** Logical wl_output coordinate space; set from the container mode for each fresh session. */
+    private int inputSpaceWidth = 1920;
+    private int inputSpaceHeight = 1080;
     private ImageView cursorView;
     private WaylandClipboardSync clipboard;
     private WaylandTextInput textInput;
@@ -121,6 +121,8 @@ public final class WaylandSession {
         final boolean fresh = !reattach || !sessionActive;
         sessionActive = true;
         scaleMode = cfg.scaleMode;
+        if (cfg.outputWidth > 0) inputSpaceWidth = cfg.outputWidth;
+        if (cfg.outputHeight > 0) inputSpaceHeight = cfg.outputHeight;
         if (fresh) {
             WaylandCompositor.nativeSetLogDir(cfg.logDir != null ? cfg.logDir.getPath() : "");
             WaylandCompositor.nativeSetHideShell(cfg.hideShell);
@@ -195,7 +197,9 @@ public final class WaylandSession {
         clipboard.start();
         textInput = new WaylandTextInput(activity, view);
         textInput.start();
-        Log.i(TAG, (fresh ? "session started" : "session reattached") + " (scale mode " + scaleMode + ")");
+        Log.i(TAG, (fresh ? "session started" : "session reattached")
+                + " (logical output " + inputSpaceWidth + "x" + inputSpaceHeight
+                + ", scale mode " + scaleMode + ")");
     }
 
     /**
@@ -207,10 +211,10 @@ public final class WaylandSession {
         if (!attached || sv == null || sv.getWidth() <= 0 || sv.getHeight() <= 0) return false;
         int[] origin = new int[2];
         sv.getLocationOnScreen(origin);
-        int x = Math.round((rawX - origin[0]) * INPUT_SPACE_WIDTH / sv.getWidth());
-        int y = Math.round((rawY - origin[1]) * INPUT_SPACE_HEIGHT / sv.getHeight());
+        int x = Math.round((rawX - origin[0]) * inputSpaceWidth / sv.getWidth());
+        int y = Math.round((rawY - origin[1]) * inputSpaceHeight / sv.getHeight());
         WaylandCompositor.nativeSendPointer(action,
-                Math.max(0, Math.min(INPUT_SPACE_WIDTH - 1, x)), Math.max(0, Math.min(INPUT_SPACE_HEIGHT - 1, y)));
+                Math.max(0, Math.min(inputSpaceWidth - 1, x)), Math.max(0, Math.min(inputSpaceHeight - 1, y)));
         return true;
     }
 
