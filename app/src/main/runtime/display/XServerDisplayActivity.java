@@ -9656,8 +9656,16 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity
         } catch (Exception e) {
             cfg.refreshHz = 60f;
         }
-        cfg.outputWidth = xServer.screenInfo.width;
-        cfg.outputHeight = xServer.screenInfo.height;
+        // AUTO resolution policy: advertise the container's logical desktop mode, not the
+        // SGSR/FSR/ANR render-sized XServer screen. The game may create a smaller swapchain
+        // (for example 1280x720) while the Wayland output remains 1920x1080; the compositor
+        // scales that scene to the Android Surface instead of shrinking the desktop mode.
+        ScreenInfo desktopMode = new ScreenInfo(sgsrBaseScreenSize);
+        cfg.outputWidth = desktopMode.width;
+        cfg.outputHeight = desktopMode.height;
+        Log.i(TAG, "wayland: resolution policy=AUTO desktop=" + cfg.outputWidth + "x"
+                + cfg.outputHeight + " render=" + xServer.screenInfo.width + "x"
+                + xServer.screenInfo.height);
         cfg.fpsLimit = runtimeFpsLimit;
         EnvVars env = effectiveUserEnv();
         cfg.zeroCopy = envFlag(env, "BANNER_WAYLAND_ZERO_COPY", false);
