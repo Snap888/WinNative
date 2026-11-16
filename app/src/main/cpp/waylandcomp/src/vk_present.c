@@ -1656,6 +1656,10 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
      * the swapchain image on the direct path, the scene image on the compositor pass (the
      * per-present blits transition the swapchain images themselves there). */
     VkImageMemoryBarrier *bars = calloc((size_t)n + 1, sizeof(*bars));
+    if (!bars) {
+        LOGE("present: cannot allocate %d source-image barriers", n);
+        return -1;
+    }
     int nb = 0;
     bars[nb++] = (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1669,8 +1673,12 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         for (int j = 0; j < i; j++) if (draws[j].img == im) { seen = 1; break; }
         if (seen || !im) continue;
         if (im->dmabuf) {
+            /* A linux-dmabuf buffer arrives with its contents owned by the external
+             * producer. UNDEFINED here discards those contents and can produce stale,
+             * partially updated or corrupted frames. The producer/consumer hand-off uses
+             * GENERAL as the external layout; acquire it into TRANSFER_SRC for this frame. */
             bars[nb++] = (VkImageMemoryBarrier){
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
                 .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT, .dstQueueFamilyIndex = g_qfam,
                 .image = im->image, .subresourceRange = range, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT};
@@ -1687,7 +1695,9 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
     g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT |
                                  (pass ? VK_PIPELINE_STAGE_ALL_COMMANDS_BIT : 0),
                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, (uint32_t)nb, bars);
-    free(bars);
+    /* Keep the barrier storage until the source images have been consumed. Each
+     * imported dma-buf must be handed back to the external queue family before the
+     * client is allowed to render into/reuse that wl_buffer. */
 
     /* Clear the composition target to black (the letterbox on the direct path, the desktop's
      * background on the pass) before the draws land on it. A draw that covers the whole scene
@@ -1739,6 +1749,34 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
                     pass ? VK_FILTER_LINEAR : blit_filter);
         drawn++;
     }
+
+    /* Return every imported client image to the external producer after its last read.
+     * This pairs the FOREIGN -> compositor acquire above. Without the release ownership
+     * transfer, the next client render can race the compositor's read and tear the image.
+     * blendp_draw restores sampled images to TRANSFER_SRC_OPTIMAL before this point. */
+    nb = 0;
+    for (int i = 0; i < n; i++) {
+        struct vkp_image *im = draws[i].img;
+        int seen = 0;
+        for (int j = 0; j < i; j++) if (draws[j].img == im) { seen = 1; break; }
+        if (seen || !im || !im->dmabuf) continue;
+        bars[nb++] = (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .srcQueueFamilyIndex = g_qfam,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_FOREIGN_EXT,
+            .image = im->image,
+            .subresourceRange = range,
+            .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT
+        };
+    }
+    if (nb > 0) {
+        g_vk.CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                0, 0, NULL, 0, NULL, (uint32_t)nb, bars);
+    }
+    free(bars);
 
     int ngen = 0;
     VkImage gens[VKP_FG_MAX_GENERATIONS] = {VK_NULL_HANDLE};
