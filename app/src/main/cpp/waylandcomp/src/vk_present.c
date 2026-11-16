@@ -53,7 +53,12 @@ static VkCommandPool g_pool;
  * pending signals. Slot 0 is also the layer-mode blit's command buffer. */
 #define MAX_PRESENTS (1 + VKP_FG_MAX_GENERATIONS)
 static VkCommandBuffer g_cmds[MAX_PRESENTS];
-static VkSemaphore g_acqs[MAX_PRESENTS], g_rnds[MAX_PRESENTS];
+/* Acquire semaphores are frame-slot scoped; render-finished semaphores are image scoped.
+ * A submit fence does not prove that the presentation engine has consumed a wait semaphore.
+ * Reusing a frame-slot semaphore can therefore race a still-pending present wait. */
+static VkSemaphore g_acqs[MAX_PRESENTS];
+static VkSemaphore *g_present_ready;
+static uint32_t g_present_ready_count;
 static VkFence g_fence;
 #define SNAP_READBACK_SLOTS 4
 static VkFence g_snap_readback_fences[SNAP_READBACK_SLOTS];
@@ -232,16 +237,43 @@ static void reset_sync(void) {
     VkSemaphoreCreateInfo semci = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     for (int k = 0; k < MAX_PRESENTS; k++) {
         if (g_acqs[k]) g_vk.DestroySemaphore(g_dev, g_acqs[k], NULL);
-        if (g_rnds[k]) g_vk.DestroySemaphore(g_dev, g_rnds[k], NULL);
+        g_acqs[k] = VK_NULL_HANDLE;
         g_vk.CreateSemaphore(g_dev, &semci, NULL, &g_acqs[k]);
-        g_vk.CreateSemaphore(g_dev, &semci, NULL, &g_rnds[k]);
     }
+}
+
+static void destroy_present_ready(void) {
+    if (g_dev && g_present_ready) {
+        for (uint32_t i = 0; i < g_present_ready_count; i++)
+            if (g_present_ready[i]) g_vk.DestroySemaphore(g_dev, g_present_ready[i], NULL);
+    }
+    free(g_present_ready);
+    g_present_ready = NULL;
+    g_present_ready_count = 0;
+}
+
+static int create_present_ready(uint32_t count) {
+    VkSemaphoreCreateInfo semci = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    destroy_present_ready();
+    if (!count) return -1;
+    g_present_ready = calloc(count, sizeof(*g_present_ready));
+    if (!g_present_ready) return -1;
+    for (uint32_t i = 0; i < count; i++) {
+        if (g_vk.CreateSemaphore(g_dev, &semci, NULL, &g_present_ready[i]) != VK_SUCCESS) {
+            g_present_ready_count = count;
+            destroy_present_ready();
+            return -1;
+        }
+    }
+    g_present_ready_count = count;
+    return 0;
 }
 
 static void destroy_swapchain(void) {
     g_base_black = 0; /* a new swapchain starts with nothing on it */
     if (g_dev_state != 1) return;
     g_vk.DeviceWaitIdle(g_dev);
+    destroy_present_ready();
     reset_sync();
     for (uint32_t i = 0; i < g_nimg; i++) blendp_forget_image(g_images[i]);
     if (g_swapchain) g_vk.DestroySwapchainKHR(g_dev, g_swapchain, NULL);
@@ -785,9 +817,21 @@ static int swap_init_locked(void) {
         SWLOGE("present: vkCreateSwapchainKHR failed (%d)", (int)cr);
         return -1;
     }
-    g_vk.GetSwapchainImagesKHR(g_dev, g_swapchain, &g_nimg, NULL);
+    VkResult images_result = g_vk.GetSwapchainImagesKHR(g_dev, g_swapchain, &g_nimg, NULL);
+    if (images_result != VK_SUCCESS || g_nimg == 0) {
+        SWLOGE("present: cannot query swapchain images (%d)", (int)images_result);
+        return -1;
+    }
     g_images = calloc(g_nimg, sizeof(VkImage));
-    g_vk.GetSwapchainImagesKHR(g_dev, g_swapchain, &g_nimg, g_images);
+    if (!g_images) {
+        SWLOGE("present: cannot allocate swapchain image list");
+        return -1;
+    }
+    images_result = g_vk.GetSwapchainImagesKHR(g_dev, g_swapchain, &g_nimg, g_images);
+    if (images_result != VK_SUCCESS || create_present_ready(g_nimg) != 0) {
+        SWLOGE("present: cannot initialize per-image present semaphores (%d)", (int)images_result);
+        return -1;
+    }
 
     wnc_log("gpu", "screen output %ux%u, %u buffers, vsync%s", g_extent.width, g_extent.height, g_nimg,
                g_swap_extra ? " (frame generation: several presents per frame)" : "");
@@ -1927,7 +1971,8 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         VkPipelineStageFlags wait = VK_PIPELINE_STAGE_TRANSFER_BIT;
         VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .waitSemaphoreCount = 1,
                            .pWaitSemaphores = &g_acqs[k], .pWaitDstStageMask = &wait, .commandBufferCount = 1,
-                           .pCommandBuffers = &g_cmds[k], .signalSemaphoreCount = 1, .pSignalSemaphores = &g_rnds[k]};
+                           .pCommandBuffers = &g_cmds[k], .signalSemaphoreCount = 1,
+                           .pSignalSemaphores = &g_present_ready[img]};
         const int64_t submit_begin_ns = perf_now();
         VkResult qr = g_vk.QueueSubmit(g_queue, 1, &si, last ? frame_fence : VK_NULL_HANDLE);
         const int64_t submit_elapsed_ns = perf_now() - submit_begin_ns;
@@ -1959,7 +2004,7 @@ static int render_impl(int scene_w, int scene_h, const struct vkp_draw *draws, i
         if (k < ngen) g_fg_submit_success_total++;
         fence_submitted = last;
         VkPresentInfoKHR pi = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR, .waitSemaphoreCount = 1,
-                               .pWaitSemaphores = &g_rnds[k], .swapchainCount = 1,
+                               .pWaitSemaphores = &g_present_ready[img], .swapchainCount = 1,
                                .pSwapchains = &g_swapchain, .pImageIndices = &img};
         if (k == ngen) source_present_attempted = 1;
         const int64_t t_pres = perf_now();
