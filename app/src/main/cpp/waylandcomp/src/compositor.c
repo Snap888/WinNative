@@ -287,7 +287,8 @@ struct surface {
     struct wl_list children;                /* bottom to top */
     struct wl_list child_link;
     int sub_x, sub_y, sub_pending_x, sub_pending_y, sub_pending;
-    int sub_sync;                           /* wl_subsurface mode: its frames reach the screen with the parent's commit */
+    int sub_sync;
+    int pending_commit;                 /* a synchronized subsurface committed; apply with its parent */                           /* wl_subsurface mode: its frames reach the screen with the parent's commit */
     int hud_frame;                          /* a GPU frame arrived in this window since the HUD last counted one */
     int below_parent;
     int fullscreen;                         /* xdg_toplevel.set_fullscreen: no client decorations */
@@ -935,10 +936,19 @@ static void surface_set_opaque(struct wl_client *c, struct wl_resource *r,
 static void surface_set_input(struct wl_client *c, struct wl_resource *r,
                               struct wl_resource *region) {}
 
-static void surface_commit(struct wl_client *c, struct wl_resource *r) {
-    struct surface *s = wl_resource_get_user_data(r);
+/* A synchronized subsurface's commit is cached until its parent commits. A desynchronized
+ * child below a synchronized ancestor is synchronized too (Wayland subsurface rules). */
+static int surface_effectively_sync(const struct surface *s) {
+    if (!s || !s->parent) return 0;
+    return s->sub_sync || surface_effectively_sync(s->parent);
+}
+
+/* Apply a commit whose synchronization point has been reached. The parent applies its own state
+ * and then every child commit that was cached since the previous parent commit. */
+static void surface_apply_commit(struct surface *s) {
     struct surface *child;
 
+    s->pending_commit = 0;
     if (s->pending_src_set) {
         s->src_set = s->pending_src[2] > 0;
         memcpy(s->src, s->pending_src, sizeof(s->src));
@@ -984,13 +994,19 @@ static void surface_commit(struct wl_client *c, struct wl_resource *r) {
         }
     }
 
-    /* Subsurface positions are applied when the parent commits. */
+    /* Subsurface positions are double-buffered and become active on the parent's commit. */
     wl_list_for_each(child, &s->children, child_link) {
         if (child->sub_pending) {
             child->sub_x = child->sub_pending_x;
             child->sub_y = child->sub_pending_y;
             child->sub_pending = 0;
         }
+    }
+
+    /* Commits from synchronized descendants are latched atomically with this parent frame. */
+    wl_list_for_each(child, &s->children, child_link) {
+        if (child->pending_commit && surface_effectively_sync(child))
+            surface_apply_commit(child);
     }
 
     wl_list_insert_list(s->frames.prev, &s->pending_frames);
@@ -1009,6 +1025,14 @@ static void surface_commit(struct wl_client *c, struct wl_resource *r) {
         else unmap_toplevel(s);
     }
     schedule_render();
+}
+
+static void surface_commit(struct wl_client *c, struct wl_resource *r) {
+    struct surface *s = wl_resource_get_user_data(r);
+    if (!s) return;
+    s->pending_commit = 1;
+    if (surface_effectively_sync(s)) return;
+    surface_apply_commit(s);
 }
 static void surface_set_buffer_transform(struct wl_client *c, struct wl_resource *r, int32_t t) {}
 static void surface_set_buffer_scale(struct wl_client *c, struct wl_resource *r, int32_t s) {}
