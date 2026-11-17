@@ -57,6 +57,16 @@ public final class SGSRResolutionUtils {
         return evenDimension(scaledW) + "x" + evenDimension(scaledH);
     }
 
+    public static String applyRenderScale(String baseScreenSize, float renderScale) {
+        if (baseScreenSize == null || baseScreenSize.isEmpty()) return baseScreenSize;
+        int[] base = parseScreenSize(baseScreenSize);
+        if (base == null) return baseScreenSize;
+        float scale = Math.max(0.25f, Math.min(1.50f, renderScale));
+        int scaledW = Math.max(320, Math.round(base[0] * scale));
+        int scaledH = Math.max(180, Math.round(base[1] * scale));
+        return evenDimension(scaledW) + "x" + evenDimension(scaledH);
+    }
+
     private static int evenDimension(int value) {
         return (value & 1) == 0 ? value : value + 1;
     }

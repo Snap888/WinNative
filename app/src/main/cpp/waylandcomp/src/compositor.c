@@ -165,9 +165,8 @@ static int log_budget(void) {
 #define BTN_RIGHT 0x111
 #endif
 
-/* Java sends pointer coordinates in this space, covering the whole output surface. */
-#define INPUT_SPACE_W 1920
-#define INPUT_SPACE_H 1080
+/* Java sends pointer coordinates in the logical wl_output mode. Keep this space tied to
+ * the mode advertised to clients instead of assuming every container is 1920x1080. */
 
 static struct wl_display *g_display;
 
@@ -288,7 +287,8 @@ struct surface {
     struct wl_list children;                /* bottom to top */
     struct wl_list child_link;
     int sub_x, sub_y, sub_pending_x, sub_pending_y, sub_pending;
-    int sub_sync;                           /* wl_subsurface mode: its frames reach the screen with the parent's commit */
+    int sub_sync;
+    int pending_commit;                 /* a synchronized subsurface committed; apply with its parent */                           /* wl_subsurface mode: its frames reach the screen with the parent's commit */
     int hud_frame;                          /* a GPU frame arrived in this window since the HUD last counted one */
     int below_parent;
     int fullscreen;                         /* xdg_toplevel.set_fullscreen: no client decorations */
@@ -296,6 +296,7 @@ struct surface {
     char *title;                            /* xdg_toplevel title, for the session log */
     int announced_vulkan;                   /* logged its first dmabuf frame */
     uint32_t hdr_fmt_logged;                /* HDR session: the buffer format last named in the log */
+    unsigned shm_format_logged : 1;          /* first wl_shm format/sample recorded for diagnostics */
 };
 
 static struct wl_list g_surfaces;           /* every surface */
@@ -336,7 +337,7 @@ static int g_zero_copy_fx_skip_said;
  * in the game allocates UBWC swapchain images instead of resolving each frame to a linear copy.
  * BANNER_WAYLAND_UBWC=0 in the container's environment turns the advertisement off (A/B switch). Set
  * from the app before the compositor starts; read at every zwp_linux_dmabuf_v1 bind. */
-volatile int g_ubwc = 1;
+volatile int g_ubwc = 0; /* Linear is the safe default; the app can opt into UBWC after validation. */
 
 /* Debug (BANNER_WAYLAND_NO_RENDER_NODE=1): name no DRM device in the dma-buf feedback, as a phone
  * that exposes no /dev/dri node to apps does, to reproduce its OpenGL path here. Set from the app
@@ -350,6 +351,8 @@ volatile int g_output_refresh_mhz;
 /* The advertised output size: the container's screen (what the app's X server reports on X11),
  * so Wine's display-mode list stops at the desktop size. 0 = 1920x1080. */
 volatile int g_output_w, g_output_h;
+static int input_space_w(void) { return g_output_w > 0 ? g_output_w : 1920; }
+static int input_space_h(void) { return g_output_h > 0 ? g_output_h : 1080; }
 struct pending_release {
     struct wl_resource *buffer;
     struct wl_listener destroy;
@@ -687,8 +690,25 @@ static void take_shm(struct surface *s, struct wl_shm_buffer *shm, struct wl_res
     if (!s->shm_img) s->shm_img = vkp_image_create_shm(w, h);
     if (s->shm_img) {
         wl_shm_buffer_begin_access(shm);
-        vkp_image_upload_shm(s->shm_img, wl_shm_buffer_get_data(shm), stride);
+        const uint8_t *pixels = (const uint8_t *)wl_shm_buffer_get_data(shm);
+        if (!s->shm_format_logged && pixels && stride >= 4) {
+            uint32_t format = wl_shm_buffer_get_format(shm);
+            wnc_log("color-diag",
+                    "wl_shm source: format=0x%08x (%s), size=%dx%d stride=%d, first-pixel bytes=%02x %02x %02x %02x; Vulkan upload target=VK_FORMAT_B8G8R8A8_UNORM",
+                    format,
+                    format == WL_SHM_FORMAT_ARGB8888 ? "ARGB8888" :
+                    format == WL_SHM_FORMAT_XRGB8888 ? "XRGB8888" :
+                    format == WL_SHM_FORMAT_ABGR8888 ? "ABGR8888" :
+                    format == WL_SHM_FORMAT_XBGR8888 ? "XBGR8888" : "other",
+                    w, h, stride, pixels[0], pixels[1], pixels[2], pixels[3]);
+            s->shm_format_logged = 1;
+        }
+        vkp_image_upload_shm(s->shm_img, pixels, stride);
         wl_shm_buffer_end_access(shm);
+    } else if (!s->shm_format_logged) {
+        wnc_log("color-diag", "wl_shm image allocation failed: size=%dx%d stride=%d format=0x%08x",
+                w, h, stride, wl_shm_buffer_get_format(shm));
+        s->shm_format_logged = 1;
     }
     wl_buffer_send_release(buffer);
     s->buf_w = w;
@@ -916,10 +936,19 @@ static void surface_set_opaque(struct wl_client *c, struct wl_resource *r,
 static void surface_set_input(struct wl_client *c, struct wl_resource *r,
                               struct wl_resource *region) {}
 
-static void surface_commit(struct wl_client *c, struct wl_resource *r) {
-    struct surface *s = wl_resource_get_user_data(r);
+/* A synchronized subsurface's commit is cached until its parent commits. A desynchronized
+ * child below a synchronized ancestor is synchronized too (Wayland subsurface rules). */
+static int surface_effectively_sync(const struct surface *s) {
+    if (!s || !s->parent) return 0;
+    return s->sub_sync || surface_effectively_sync(s->parent);
+}
+
+/* Apply a commit whose synchronization point has been reached. The parent applies its own state
+ * and then every child commit that was cached since the previous parent commit. */
+static void surface_apply_commit(struct surface *s) {
     struct surface *child;
 
+    s->pending_commit = 0;
     if (s->pending_src_set) {
         s->src_set = s->pending_src[2] > 0;
         memcpy(s->src, s->pending_src, sizeof(s->src));
@@ -965,13 +994,19 @@ static void surface_commit(struct wl_client *c, struct wl_resource *r) {
         }
     }
 
-    /* Subsurface positions are applied when the parent commits. */
+    /* Subsurface positions are double-buffered and become active on the parent's commit. */
     wl_list_for_each(child, &s->children, child_link) {
         if (child->sub_pending) {
             child->sub_x = child->sub_pending_x;
             child->sub_y = child->sub_pending_y;
             child->sub_pending = 0;
         }
+    }
+
+    /* Commits from synchronized descendants are latched atomically with this parent frame. */
+    wl_list_for_each(child, &s->children, child_link) {
+        if (child->pending_commit && surface_effectively_sync(child))
+            surface_apply_commit(child);
     }
 
     wl_list_insert_list(s->frames.prev, &s->pending_frames);
@@ -990,6 +1025,14 @@ static void surface_commit(struct wl_client *c, struct wl_resource *r) {
         else unmap_toplevel(s);
     }
     schedule_render();
+}
+
+static void surface_commit(struct wl_client *c, struct wl_resource *r) {
+    struct surface *s = wl_resource_get_user_data(r);
+    if (!s) return;
+    s->pending_commit = 1;
+    if (surface_effectively_sync(s)) return;
+    surface_apply_commit(s);
 }
 static void surface_set_buffer_transform(struct wl_client *c, struct wl_resource *r, int32_t t) {}
 static void surface_set_buffer_scale(struct wl_client *c, struct wl_resource *r, int32_t s) {}
@@ -1871,7 +1914,7 @@ static void scene_size(int *w, int *h) {
         surface_size(s, &sw, &sh);
         if ((long long)sw * sh > best) { best = (long long)sw * sh; *w = sw; *h = sh; }
     }
-    if (*w <= 0 || *h <= 0) { *w = INPUT_SPACE_W; *h = INPUT_SPACE_H; }
+    if (*w <= 0 || *h <= 0) { *w = input_space_w(); *h = input_space_h(); }
 }
 
 static void fire_all_frames(void) {
@@ -2989,9 +3032,9 @@ static void deliver_pointer(const struct input_msg *m) {
     scene_size(&w, &h);
     vkp_output_size(&ow, &oh);
     if (ow <= 0 || oh <= 0 ||
-        !vkp_output_to_scene((double)m->p2 * ow / INPUT_SPACE_W, (double)m->p3 * oh / INPUT_SPACE_H, &x, &y)) {
-        x = (double)m->p2 * w / INPUT_SPACE_W; /* nothing drawn yet: plain stretch */
-        y = (double)m->p3 * h / INPUT_SPACE_H;
+        !vkp_output_to_scene((double)m->p2 * ow / input_space_w(), (double)m->p3 * oh / input_space_h(), &x, &y)) {
+        x = (double)m->p2 * w / input_space_w(); /* nothing drawn yet: plain stretch */
+        y = (double)m->p3 * h / input_space_h();
     }
     if (x < 0) x = 0;
     if (y < 0) y = 0;

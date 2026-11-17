@@ -24,7 +24,7 @@ static unsigned g_frame = 1;
 /* One render pass + pipeline per target format: the screen swapchain's, the scene image's, the HDR
  * composition's. */
 #define NFMT 4
-static struct { VkFormat fmt; VkRenderPass rp; VkPipeline pipe; } g_out[NFMT];
+static struct { VkFormat fmt; VkRenderPass rp; VkPipeline pipe; VkPipeline opaque_pipe; } g_out[NFMT];
 
 #define NSRC 32
 static struct { VkImage img; VkImageView view; VkDescriptorSet ds; unsigned frame; } g_src[NSRC];
@@ -92,7 +92,7 @@ static VkRenderPass make_rp(VkFormat fmt) {
     return rp;
 }
 
-static VkPipeline make_pipe(VkRenderPass rp) {
+static VkPipeline make_pipe(VkRenderPass rp, int alpha_blend) {
     VkPipelineShaderStageCreateInfo st[2] = {
         {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT,
          .module = g_vert, .pName = "main"},
@@ -113,7 +113,7 @@ static VkPipeline make_pipe(VkRenderPass rp) {
                                                .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT};
     /* The target's alpha is left alone: the screen is opaque whatever is drawn onto it. */
     VkPipelineColorBlendAttachmentState ba = {
-        .blendEnable = VK_TRUE, .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+        .blendEnable = alpha_blend ? VK_TRUE : VK_FALSE, .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
         .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, .colorBlendOp = VK_BLEND_OP_ADD,
         .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE, .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
         .alphaBlendOp = VK_BLEND_OP_ADD,
@@ -180,15 +180,18 @@ fail:
 
 static int out_slot(VkFormat fmt) {
     int i;
-    for (i = 0; i < NFMT && g_out[i].pipe; i++) if (g_out[i].fmt == fmt) return i;
+    for (i = 0; i < NFMT && g_out[i].rp; i++) if (g_out[i].fmt == fmt) return i;
     if (i == NFMT) return -1;
     VkRenderPass rp = make_rp(fmt);
-    VkPipeline pipe = rp ? make_pipe(rp) : VK_NULL_HANDLE;
-    if (!pipe) {
+    VkPipeline pipe = rp ? make_pipe(rp, 1) : VK_NULL_HANDLE;
+    VkPipeline opaque = rp ? make_pipe(rp, 0) : VK_NULL_HANDLE;
+    if (!pipe || !opaque) {
+        if (pipe) g_vk.DestroyPipeline(g_dev, pipe, NULL);
+        if (opaque) g_vk.DestroyPipeline(g_dev, opaque, NULL);
         if (rp) g_vk.DestroyRenderPass(g_dev, rp, NULL);
         return -1;
     }
-    g_out[i].fmt = fmt; g_out[i].rp = rp; g_out[i].pipe = pipe;
+    g_out[i].fmt = fmt; g_out[i].rp = rp; g_out[i].pipe = pipe; g_out[i].opaque_pipe = opaque;
     return i;
 }
 
@@ -272,8 +275,8 @@ static void src_layout(VkCommandBuffer cmd, VkImage img, VkImageLayout from, VkI
                             0, 0, NULL, 0, NULL, 1, &b);
 }
 
-int blendp_draw(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
-                VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit) {
+static int blendp_draw_mode(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
+                            VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit, int opaque) {
     if (!src || !dst || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0 || objects_ensure() != 0) return -1;
     int slot = out_slot(dst_fmt);
     if (slot < 0) return -1;
@@ -305,11 +308,21 @@ int blendp_draw(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, i
     g_vk.CmdBeginRenderPass(cmd, &rpi, VK_SUBPASS_CONTENTS_INLINE);
     g_vk.CmdSetViewport(cmd, 0, 1, &vp);
     g_vk.CmdSetScissor(cmd, 0, 1, &rpi.renderArea);
-    g_vk.CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_out[slot].pipe);
+    g_vk.CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, opaque ? g_out[slot].opaque_pipe : g_out[slot].pipe);
     g_vk.CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g_pl, 0, 1, &ds, 0, NULL);
     g_vk.CmdPushConstants(cmd, g_pl, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
     g_vk.CmdDraw(cmd, 4, 1, 0, 0);
     g_vk.CmdEndRenderPass(cmd);
     if (!src_general) src_layout(cmd, src, sampled, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
     return 0;
+}
+
+int blendp_draw(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
+                VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit) {
+    return blendp_draw_mode(cmd, src, src_fmt, src_w, src_h, src_general, dst, dst_fmt, dst_w, dst_h, blit, 0);
+}
+
+int blendp_copy_opaque(VkCommandBuffer cmd, VkImage src, VkFormat src_fmt, int src_w, int src_h, int src_general,
+                       VkImage dst, VkFormat dst_fmt, int dst_w, int dst_h, const VkImageBlit *blit) {
+    return blendp_draw_mode(cmd, src, src_fmt, src_w, src_h, src_general, dst, dst_fmt, dst_w, dst_h, blit, 1);
 }

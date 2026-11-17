@@ -172,6 +172,19 @@ jobs:
         # APK contents are already compressed; deflating ~560MB again wastes CPU.
         compression-level: 0
 
+  snapframe-contract-tests:
+    name: SnapFrame contract and WSI tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Configure contract tests
+        run: cmake -S app/src/main/cpp/snapframe/tests -B build/snapframe-contract -DCMAKE_BUILD_TYPE=Release
+      - name: Build contract tests
+        run: cmake --build build/snapframe-contract --parallel
+      - name: Run contract and semaphore ownership tests
+        run: ctest --test-dir build/snapframe-contract --output-on-failure
+
   cleanup-caches:
     needs: build
     if: ${{ always() && github.event_name == 'push' }}

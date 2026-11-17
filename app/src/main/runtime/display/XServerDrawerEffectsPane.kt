@@ -236,6 +236,100 @@ internal fun ScreenEffectsPaneContent(
                     }
                 }
 
+                Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                    PaneSectionLabel("AMD FSR 1 (EASU + RCAS)")
+                    NavBooleanRow(
+                        title = "FSR upscaling",
+                        checked = state.fsrEnabled,
+                        onCheckedChange = listener::onFSREnabledChanged,
+                    )
+                    AnimatedVisibility(
+                        visible = state.fsrEnabled,
+                        enter = expandVertically(
+                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Top,
+                        ) + fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+                        exit = shrinkVertically(
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Top,
+                        ) + fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                            NavSliderRow(
+                                label = "Render scale",
+                                valueText = "${state.fsrRenderScale}%",
+                                value = state.fsrRenderScale.toFloat(),
+                                valueRange = 25f..150f,
+                                steps = 124,
+                                onValueChange = { listener.onFSRRenderScaleChanged(it.roundToInt().coerceIn(25, 150)) },
+                            )
+                            NavSliderRow(
+                                label = "RCAS sharpness",
+                                valueText = "${state.fsrSharpness}%",
+                                value = state.fsrSharpness.toFloat(),
+                                valueRange = 0f..100f,
+                                steps = 99,
+                                onValueChange = { listener.onFSRSharpnessChanged(it.roundToInt().coerceIn(0, 100)) },
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                    PaneSectionLabel("WinNative ANR")
+                    NavBooleanRow(
+                        title = "WinNative ANR Spatial Reconstruction",
+                        checked = state.anrEnabled,
+                        onCheckedChange = listener::onANREnabledChanged,
+                    )
+                    AnimatedVisibility(
+                        visible = state.anrEnabled,
+                        enter = expandVertically(
+                            animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                            expandFrom = Alignment.Top,
+                        ) + fadeIn(animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)),
+                        exit = shrinkVertically(
+                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                            shrinkTowards = Alignment.Top,
+                        ) + fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing)),
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                            NavSliderRow(
+                                label = "Render scale",
+                                valueText = "${state.anrRenderScale}%",
+                                value = state.anrRenderScale.toFloat(),
+                                valueRange = 25f..150f,
+                                steps = 124,
+                                onValueChange = { listener.onANRRenderScaleChanged(it.roundToInt().coerceIn(25, 150)) },
+                            )
+                            NavSliderRow(
+                                label = "Edge sharpness",
+                                valueText = "${state.anrSharpness}%",
+                                value = state.anrSharpness.toFloat(),
+                                valueRange = 0f..300f,
+                                steps = 299,
+                                onValueChange = { listener.onANRSharpnessChanged(it.roundToInt().coerceIn(0, 300)) },
+                            )
+                            NavSliderRow(
+                                label = "Reconstruction filter",
+                                valueText = when (state.anrQuality) {
+                                    0 -> "Bilinear"
+                                    1 -> "Catmull–Rom"
+                                    2 -> "Lanczos2"
+                                    3 -> "Edge Adaptive"
+                                    4 -> "Edge Adaptive+"
+                                    5 -> "Detail Recovery+"
+                                    else -> "Fine Texture+"
+                                },
+                                value = state.anrQuality.toFloat(),
+                                valueRange = 0f..6f,
+                                steps = 5,
+                                onValueChange = { listener.onANRQualityChanged(it.roundToInt().coerceIn(0, 6)) },
+                            )
+                        }
+                    }
+                }
+
                 ThinDivider()
 
                 Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
